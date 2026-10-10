@@ -151,8 +151,8 @@ def _main(argv: list[str] | None = None) -> None:
     ev = sub.add_parser("eval", help="evaluate agent profiles on a world version")
     ev.add_argument("wv_id")
     ev.add_argument("--profile", action="append", required=True)
-    ev.add_argument("--split", action="append", default=[])
-    ev.add_argument("--repeats", type=int, default=1)
+    ev.add_argument("--split", action="append", default=[], help="train, dev or holdout; default every split")
+    ev.add_argument("--repeats", type=int, default=None, help="default 2")
     ev.add_argument("--budget", type=float)
     ev.add_argument("--watch", action="store_true")
 
@@ -325,7 +325,7 @@ def _main(argv: list[str] | None = None) -> None:
             _print(c.profiles.create(args.name, prompt, **extra))
     elif args.cmd == "eval":
         c = _client()
-        res = c.evaluations.create(args.wv_id, args.profile, args.split or ["dev"], args.repeats, **({"budget_usd": args.budget} if args.budget is not None else {}))
+        res = c.evaluations.create(args.wv_id, args.profile, args.split or None, args.repeats, **({"budget_usd": args.budget} if args.budget is not None else {}))
         _print(res)
         if args.watch:
             _watch(c.runs.events(res["run_id"]))

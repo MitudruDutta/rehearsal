@@ -219,6 +219,7 @@ def run_episode(ctx: JobContext, inst: WorldInstance, manifest: WorldManifest, w
         state=state,
         max_cost_usd=ctx.payload.get("max_episode_cost_usd"),
         max_turns_per_actor=profile.max_turns_per_actor,
+        default_stress=bool(ctx.payload.get("default_stress", True)),
     )
     with telemetry.span(f"episode.{scenario.id}", "CHAIN", session_id=episode_id, run=run_id, profile=f"{profile.name}@v{profile.version}"):
         result = engine.run()

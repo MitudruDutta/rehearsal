@@ -19,8 +19,8 @@ function NewEvaluation({ world }: { world: string | null }) {
   const versions = (worlds.data || []).flatMap((w) => w.versions.filter((v: any) => v.status === "published").map((v: any) => ({ ...v, name: w.name })));
   const [wv, setWv] = useState(world || "");
   const [chosen, setChosen] = useState<string[]>([]);
-  const [splits, setSplits] = useState<string[]>(["dev"]);
-  const [repeats, setRepeats] = useState(1);
+  const [splits, setSplits] = useState<string[]>(["train", "dev", "holdout"]);
+  const [repeats, setRepeats] = useState(2);
   const toggle = (list: string[], set: (x: string[]) => void, v: string) => set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   const selected = wv || versions[0]?.id || "";
   const start = async (e: React.FormEvent) => {
@@ -60,6 +60,7 @@ function NewEvaluation({ world }: { world: string | null }) {
               {["train", "dev", "holdout"].map((s) => <label key={s} className="flex items-center gap-2 text-sm"><Checkbox checked={splits.includes(s)} onCheckedChange={() => toggle(splits, setSplits, s)} /> {s}</label>)}
             </fieldset>
             <div className="grid gap-2"><Label htmlFor="rep">Repeats per scenario</Label><Input id="rep" type="number" min={1} max={20} value={repeats} onChange={(e) => setRepeats(Number(e.target.value))} className="w-28" /></div>
+            <p className="w-full text-xs text-muted-foreground">Every episode is stress-tested: on top of each job&apos;s own revisions and faults, the agent&apos;s first change is refused with &ldquo;too many requests&rdquo; and must be retried.</p>
             <Button type="submit" disabled={!chosen.length || !splits.length || !selected}>Start evaluation</Button>
           </form>
         )}
