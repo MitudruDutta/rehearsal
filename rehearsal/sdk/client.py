@@ -1,7 +1,7 @@
 """Python client for the Rehearsal API.
 
     from rehearsal.sdk import Rehearsal
-    client = Rehearsal()  # REHEARSAL_API_KEY, REHEARSAL_URL
+    client = Rehearsal()  # REHEARSAL_API_KEY and REHEARSAL_URL, else what `rehearsal login` saved
     build = client.worlds.build(application_id)
     job = client.jobs.wait(build["job_id"])
 """
@@ -11,9 +11,42 @@ from __future__ import annotations
 import json
 import os
 import time
+from pathlib import Path
 from typing import Any, Iterator
 
 import httpx
+
+DEFAULT_URL = "http://127.0.0.1:7800"
+
+
+def config_path() -> Path:
+    """Where `rehearsal login` keeps the server URL and API key (readable by this user only)."""
+    return Path(os.environ.get("REHEARSAL_CONFIG") or Path.home() / ".config" / "rehearsal" / "config.json").expanduser()
+
+
+def saved_login() -> dict[str, str]:
+    try:
+        data = json.loads(config_path().read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _env(name: str) -> str | None:
+    """An environment value, ignoring an agent client's placeholder it did not expand (such as ${user_config.api_key})."""
+    value = (os.environ.get(name) or "").strip()
+    return None if not value or value.startswith("${") else value
+
+
+def save_login(url: str, api_key: str) -> Path:
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_suffix(".tmp")
+    tmp.touch(mode=0o600)
+    tmp.chmod(0o600)
+    tmp.write_text(json.dumps({"url": url.rstrip("/"), "api_key": api_key}, indent=2))
+    tmp.replace(path)
+    return path
 
 
 class RehearsalError(Exception):
@@ -142,10 +175,11 @@ class ExternalAgent(_Resource):
 
 class Rehearsal:
     def __init__(self, api_key: str | None = None, base_url: str | None = None, timeout: float = 60):
-        self.api_key = api_key or os.environ.get("REHEARSAL_API_KEY")
+        login = saved_login()  # environment wins; an empty or unexpanded variable (an unset plugin option) counts as unset
+        self.api_key = api_key or _env("REHEARSAL_API_KEY") or login.get("api_key")
         if not self.api_key:
-            raise ValueError("set REHEARSAL_API_KEY or pass api_key")
-        self.base_url = (base_url or os.environ.get("REHEARSAL_URL", "http://127.0.0.1:7800")).rstrip("/")
+            raise ValueError("no Rehearsal API key: run `rehearsal login`, or set REHEARSAL_API_KEY")
+        self.base_url = (base_url or _env("REHEARSAL_URL") or login.get("url") or DEFAULT_URL).rstrip("/")
         self.http = httpx.Client(base_url=self.base_url, headers={"Authorization": f"Bearer {self.api_key}"}, timeout=timeout)
         self.applications = Applications(self)
         self.worlds = Worlds(self)

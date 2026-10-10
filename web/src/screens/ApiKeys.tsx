@@ -69,7 +69,8 @@ export function ApiKeys() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const r = await post("/v1/api-keys", { name: name.trim(), scopes: [scope] });
+      // "Build and evaluate" must also read results and held-out verdicts, or an assistant using the key cannot explain a run
+      const r = await post("/v1/api-keys", { name: name.trim(), scopes: scope === "write" ? ["write", "evaluator"] : [scope] });
       setCreated(r.api_key);
       setName("");
       keys.reload();
@@ -147,7 +148,7 @@ export function ApiKeys() {
                     {active.map((k) => (
                       <TableRow key={k.id}>
                         <TableCell><div className="font-medium">{k.name}</div><div className="font-mono text-xs text-muted-foreground">rh_{k.prefix}_…</div></TableCell>
-                        <TableCell className="text-sm">{(k.scopes || []).map((s: string) => ACCESS[s]?.label ?? s).join(", ")}</TableCell>
+                        <TableCell className="text-sm">{(k.scopes || []).includes("write") ? ACCESS.write.label : (k.scopes || []).map((s: string) => ACCESS[s]?.label ?? s).join(", ")}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{day(k.created_at)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{k.last_used_at ? day(k.last_used_at) : "Never"}</TableCell>
                         <TableCell className="text-right">

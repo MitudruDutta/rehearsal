@@ -1,5 +1,6 @@
 """Runner + gateway + engine + oracle against a real Gitea container (needs Docker)."""
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -11,7 +12,8 @@ from rehearsal.runner.runtime import WorldInstance, new_secrets
 from rehearsal.runner.seed import run_seed
 from tests.fixtures.gitea_world import scenario, world
 
-pytestmark = pytest.mark.skipif(shutil.which("docker") is None, reason="docker required")
+pytestmark = pytest.mark.skipif(shutil.which("docker") is None or os.environ.get("REHEARSAL_DOCKER_TESTS") == "0",
+                                reason="needs Docker and pulls a third-party image (REHEARSAL_DOCKER_TESTS=0 skips it, as CI does)")
 
 
 @pytest.fixture(scope="module")

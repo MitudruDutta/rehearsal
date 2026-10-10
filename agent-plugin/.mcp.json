@@ -1,0 +1,18 @@
+{
+    "mcpServers": {
+        "rehearsal": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "--from",
+                "rehearsal-kit[mcp]>=0.1.1",
+                "rehearsal",
+                "mcp"
+            ],
+            "env": {
+                "REHEARSAL_URL": "${user_config.server_url}",
+                "REHEARSAL_API_KEY": "${user_config.api_key}"
+            }
+        }
+    }
+}

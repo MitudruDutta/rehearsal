@@ -133,15 +133,16 @@ function SectionHead({ title, body }: { title: string; body: string }) {
 export default function Landing() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 md:px-8">
-          <Link href="/" className="flex items-center gap-2"><span className="size-3 rotate-45 rounded-[3px] bg-primary" aria-hidden="true" /><span className="font-heading text-[17px] font-bold">Rehearsal</span></Link>
-          <nav className="flex items-center gap-1">
-            <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex"><a href="#features">Product</a></Button>
-            <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex"><a href="#live">Live build</a></Button>
-            <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex"><a href="#pricing">Pricing</a></Button>
-            <NavActions />
+      {/* A black tab hanging from the top edge. The two pseudo-elements are its concave shoulders; the tab stays black in both themes. */}
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center px-6">
+        <div className="pointer-events-auto relative flex h-[52px] items-center gap-7 rounded-b-[18px] bg-black pl-5 pr-2 text-white [filter:drop-shadow(0_1px_0_rgb(255_255_255/0.14))_drop-shadow(0_14px_30px_rgb(0_0_0/0.45))] before:absolute before:right-full before:top-0 before:size-4 before:bg-[radial-gradient(circle_at_0_100%,transparent_15.5px,#000_16.5px)] after:absolute after:left-full after:top-0 after:size-4 after:bg-[radial-gradient(circle_at_100%_100%,transparent_15.5px,#000_16.5px)]">
+          <Link href="/" className="flex items-center gap-2.5"><span className="size-3 rotate-45 rounded-[3px] bg-primary" aria-hidden="true" /><span className="font-heading text-[16px] font-bold">Rehearsal</span></Link>
+          <nav className="hidden items-center gap-6 text-sm text-white/60 md:flex">
+            <a href="#features" className="transition-colors hover:text-white">Features</a>
+            <a href="#faq" className="transition-colors hover:text-white">FAQ</a>
+            <a href="#pricing" className="transition-colors hover:text-white">Pricing</a>
           </nav>
+          <NavActions />
         </div>
       </header>
 
@@ -149,7 +150,7 @@ export default function Landing() {
       <section className="relative">
         <div className="pointer-events-none absolute inset-0 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_40%,transparent_100%)] opacity-50" />
         <div className="pointer-events-none absolute -top-48 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-primary/20 blur-[130px]" />
-        <div className="relative mx-auto max-w-7xl px-4 pt-16 md:px-8 lg:pt-24">
+        <div className="relative mx-auto max-w-7xl px-4 pt-28 md:px-8 lg:pt-36">
           <div className="mx-auto max-w-4xl text-center">
             <a href="#live" className="inline-flex items-center gap-2 rounded-full border bg-card/60 px-3 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
               <span className="size-1.5 rounded-full bg-success shadow-[0_0_8px_var(--success)]" /> A real build, replayed below

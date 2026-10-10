@@ -1,0 +1,87 @@
+name: Tests
+
+# Every pull request and every push to main runs the whole suite. The publish workflow calls this same workflow,
+# so a release is built only from a commit that passes exactly these checks.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python:
+    name: Unit and integration tests (PostgreSQL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: rehearsal
+          POSTGRES_PASSWORD: rehearsal
+          POSTGRES_DB: rehearsal
+        ports: ["5433:5432"]  # tests/conftest.py uses 127.0.0.1:5433, like `rehearsal up`
+        options: >-
+          --health-cmd "pg_isready -U rehearsal"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      # No credentials reach the tests: they must never call a model, Dodo, or neatlogs.
+      NEATLOGS_API_KEY: ""
+      DODO_PAYMENTS_API_KEY: ""
+      DODO_PAYMENTS_WEBHOOK_KEY: ""
+      LITELLM_API_KEY: ""
+      REHEARSAL_ENV_FILE: /dev/null
+      # The sandbox test pulls a third-party application image and boots it; it runs on developer machines.
+      REHEARSAL_DOCKER_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install package with test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,mcp,telemetry]' langchain langchain-openai
+      - name: Unit tests
+        run: >-
+          python -B -m pytest tests/unit --confcutdir=tests/unit
+          -p no:cacheprovider -p pytest_asyncio.plugin -q
+      - name: Integration tests against PostgreSQL
+        run: python -B -m pytest tests/integration -p no:cacheprovider -p pytest_asyncio.plugin -q -rs
+      - name: Agent plugin files match their sources
+        run: python scripts/build_agent_plugin.py --check
+
+  console:
+    name: Console type check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install pnpm and dependencies
+        run: |
+          npm install --global pnpm@10.33.0
+          pnpm --dir web install --frozen-lockfile
+      - name: Type check
+        run: pnpm --dir web exec tsc --noEmit
+      - name: Build
+        run: pnpm --dir web exec next build
