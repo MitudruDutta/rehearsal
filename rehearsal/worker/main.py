@@ -12,6 +12,7 @@ import time
 import traceback
 from typing import Any, Callable
 
+from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.orm import Session
 
 from .. import telemetry
@@ -159,10 +160,19 @@ def run_worker(kinds: list[str] | None = None, once: bool = False) -> None:
     signal.signal(signal.SIGINT, stop)
     log.info("worker %s started (kinds=%s)", worker_id, kinds or "all")
     telemetry.enabled()
-    swept = 0.0
+    swept, backoff = 0.0, 0.0
     try:
         while not stopping["flag"]:
-            busy = run_one(worker_id, kinds)
+            try:
+                busy = run_one(worker_id, kinds)
+                backoff = 0.0
+            except (OperationalError, InterfaceError) as exc:
+                # The database is unreachable for a moment (network blip, failover, restart). Never let that end the
+                # worker: wait and try again. A job that was running resumes from its checkpoint when its lease expires.
+                backoff = min(30.0, backoff * 2 or 1.0)
+                log.warning("database unreachable (%s); retrying in %.0f s", str(exc).splitlines()[0][:200], backoff)
+                time.sleep(backoff)
+                continue
             if once and not busy:
                 return
             if not busy:

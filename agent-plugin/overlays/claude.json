@@ -1,0 +1,23 @@
+{
+    "//": "Claude Code extras merged by scripts/build_agent_plugin.py. Agent Plugins 1.0.0 has no portable secret mechanism, so these options exist only in the Claude Code manifest. Both are optional: left empty, the MCP server uses what `rehearsal login` saved.",
+    "displayName": "Rehearsal",
+    "userConfig": {
+        "server_url": {
+            "type": "string",
+            "title": "Rehearsal server URL",
+            "description": "Optional. For example https://rehearsal.example.com. Leave empty to use the URL saved by `rehearsal login`.",
+            "default": ""
+        },
+        "api_key": {
+            "type": "string",
+            "title": "Rehearsal API key",
+            "description": "Optional. A key with \"Build and evaluate\" access from the console's API keys page. Leave empty to use the key saved by `rehearsal login`.",
+            "sensitive": true,
+            "default": ""
+        }
+    },
+    "env": {
+        "REHEARSAL_URL": "${user_config.server_url}",
+        "REHEARSAL_API_KEY": "${user_config.api_key}"
+    }
+}

@@ -1,6 +1,8 @@
 """MCP server: lets an AI assistant (Claude Code, Cursor, Codex, ...) use Rehearsal with a Rehearsal API key.
 
-    claude mcp add rehearsal -e REHEARSAL_API_KEY=rh_... -e REHEARSAL_URL=https://... -- rehearsal mcp
+    rehearsal login                      # once: saves the server URL and an API key
+    claude mcp add rehearsal -- rehearsal mcp
+    (or REHEARSAL_API_KEY / REHEARSAL_URL in the server's environment)
 
 The assistant can add applications, build practice worlds, run evaluations, read why episodes failed, and propose a
 better agent version. It can also be the agent under test: an agent created with bring_your_own=True gets its turns
@@ -33,10 +35,27 @@ def _short(text: Any, n: int = 600) -> str:
     return text if len(text) <= n else text[:n] + "..."
 
 
+class _Client:
+    """Connects on first use, so the server starts (and the assistant can explain what to do) before the user signs in."""
+
+    def __init__(self) -> None:
+        self._c: Rehearsal | None = None
+
+    def __getattr__(self, name: str) -> Any:
+        if self._c is None:
+            try:
+                self._c = Rehearsal()
+            except ValueError as exc:
+                raise RuntimeError("Rehearsal is not signed in on this machine. Ask the user to run `rehearsal login` "
+                                   "(or `uvx --from rehearsal-kit rehearsal login`) with an API key from the console's API keys page, "
+                                   "then try again.") from exc
+        return getattr(self._c, name)
+
+
 def build_server(client: Rehearsal | None = None) -> Any:
     from mcp.server.fastmcp import FastMCP
 
-    c = client or Rehearsal()
+    c: Any = client or _Client()
     link = lambda path: f"{c.base_url}{path}"  # noqa: E731
     mcp = FastMCP("rehearsal", instructions=INSTRUCTIONS)
 

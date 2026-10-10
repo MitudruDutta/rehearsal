@@ -22,6 +22,9 @@ from ..db.session import session
 COOKIE = "rh_session"
 SESSION_SECONDS = 12 * 3600
 SCOPES = {"admin", "read", "write", "evaluator", "agent"}
+# A key that may change things may also list them. Held-out jobs and verdicts stay behind "evaluator", which the
+# console's "Build and evaluate" keys carry alongside "write"; agent keys imply nothing.
+IMPLIED: dict[str, set[str]] = {"write": {"read"}, "evaluator": {"read"}}
 
 
 @dataclass
@@ -36,7 +39,8 @@ class Principal:
         return f"user:{self.user_id}" if self.user_id else f"key:{self.key_id}"
 
     def require(self, scope: str) -> None:
-        if "admin" not in self.scopes and scope not in self.scopes:
+        held = set(self.scopes).union(*(IMPLIED.get(x, set()) for x in self.scopes))
+        if "admin" not in held and scope not in held:
             raise HTTPException(403, f"{scope} scope required")
 
 
