@@ -53,6 +53,23 @@ def test_api_requires_auth_and_scopes_by_project(db):
     assert client.get("/v1/applications", headers={"Authorization": "Bearer rh_bad_key"}).status_code == 401
 
 
+def test_write_keys_can_list_and_agent_keys_cannot(db):
+    from rehearsal.api.auth import create_key
+
+    project, admin_key = bootstrap("Scopes", "scopes")
+    with session() as s:
+        write, agent, read = (create_key(s, project, n, [n]) for n in ("write", "agent", "read"))
+        console = create_key(s, project, "console", ["write", "evaluator"])  # what "Build and evaluate" creates
+    client = TestClient(app)
+    h = lambda k: {"Authorization": f"Bearer {k}"}  # noqa: E731
+    assert client.get("/v1/applications", headers=h(write)).status_code == 200  # a write key can list what it changes
+    assert client.get("/v1/dashboard", headers=h(write)).status_code == 403  # but not held-out verdicts on its own
+    assert client.get("/v1/dashboard", headers=h(console)).status_code == 200  # "Build and evaluate" sees them
+    assert client.get("/v1/applications", headers=h(agent)).status_code == 403  # the agent under test sees nothing else
+    assert client.get("/v1/dashboard", headers=h(read)).status_code == 403  # read-only does not see held-out verdicts
+    assert client.post("/v1/api-keys", headers=h(write), json={"name": "x", "scopes": ["admin"]}).status_code == 403  # nor manage keys
+
+
 def test_sse_stream_resumes_from_cursor(db):
     project, key = bootstrap("S", "sse")
     with session() as s:
@@ -248,14 +265,15 @@ def test_sandboxes_of_ended_jobs_are_removed_but_paused_ones_are_kept(db, monkey
     manifest = {"name": "w", "services": [{"name": "app", "image": "x", "port": 80}]}
     rec = lambda i: {"instance_id": i, "manifest": manifest, "secrets": {}, "admin_token": "t", "images": {}}
     project, _ = bootstrap("Sweep", "sweep")
+    a1, a2, b1 = (f"{n}-{project}" for n in ("a1", "a2", "b1"))  # unique per run: the test database outlives runs
     with session() as s:
         stopped = queue.enqueue(s, project_id=project, kind="unit_test_sweep", payload={})
-        stopped.status, stopped.checkpoint = "cancelled", {"instance": rec("a1"), "lanes": [rec("a2")], "done": ["seed"]}
+        stopped.status, stopped.checkpoint = "cancelled", {"instance": rec(a1), "lanes": [rec(a2)], "done": ["seed"]}
         paused = queue.enqueue(s, project_id=project, kind="unit_test_sweep", payload={})
-        paused.status, paused.checkpoint = "paused", {"instance": rec("b1")}
+        paused.status, paused.checkpoint = "paused", {"instance": rec(b1)}
         ids = stopped.id, paused.id
     assert main.sweep() >= 2
-    assert {"a1", "a2"} <= set(removed) and "b1" not in removed
+    assert {a1, a2} <= set(removed) and b1 not in removed
     with session() as s:
         assert s.get(Job, ids[0]).checkpoint == {"done": ["seed"]} and "instance" in s.get(Job, ids[1]).checkpoint
 
@@ -273,13 +291,20 @@ def test_monthly_allowance_caps_every_job_and_refuses_when_used(db, monkeypatch)
 
 
 def _allowance_flow():
+    from sqlalchemy import delete, update
+
+    from rehearsal.db.models import ModelSpend
+
+    with session() as s:  # a self-hosted allowance covers the whole server: start from a server with nothing in flight
+        s.execute(update(Job).where(Job.status.in_(("queued", "running", "paused"))).values(status="cancelled"))
+        s.execute(delete(ModelSpend).where(ModelSpend.month == queue.month_start().strftime("%Y-%m")))
     project, key = bootstrap("Money", "money")
     auth = {"Authorization": f"Bearer {key}"}
     client = TestClient(app)
     with session() as s:
         first = queue.enqueue(s, project_id=project, kind="world_build", payload={}, budget_usd=25.0)
         assert first.budget_usd == 10.0  # never more than the allowance
-        first.spent_usd = 4.0
+        queue.record_spend(s, first, 4.0)  # spend goes through the dated ledger, as workers record it
     with session() as s:  # 4 spent and 6 still committed to the running job: nothing left to promise
         try:
             queue.enqueue(s, project_id=project, kind="evaluation", payload={})

@@ -1,0 +1,10 @@
+{
+    "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+    "mcpServers": {
+        "rehearsal": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": ["--from", "rehearsal-kit[mcp]>=0.1.1", "rehearsal", "mcp"]
+        }
+    }
+}

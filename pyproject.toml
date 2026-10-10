@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rehearsal-kit"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rehearse AI agents on a sandboxed copy of your own application before they reach production."
 readme = "docs/PACKAGE.md"
 requires-python = ">=3.11"

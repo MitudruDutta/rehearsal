@@ -178,3 +178,24 @@ def test_api_commands_keep_owner_changes_in_the_same_locked_transaction(monkeypa
         reopen.assert_called_once_with(s, job)
     else:
         reopen.assert_not_called()
+
+
+def test_worker_survives_the_database_being_unreachable(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    from rehearsal.worker import main
+
+    calls, sleeps = [], []
+
+    def flaky(worker_id, kinds):
+        calls.append(1)
+        if len(calls) <= 2:
+            raise OperationalError("SELECT 1", {}, Exception("SSL SYSCALL error: Network is unreachable"))
+        return False  # the database is back and the queue is empty: with once=True the worker returns
+
+    monkeypatch.setattr(main, "run_one", flaky)
+    monkeypatch.setattr(main.time, "sleep", sleeps.append)
+    monkeypatch.setattr(main.telemetry, "enabled", lambda: None)
+    monkeypatch.setattr(main.telemetry, "shutdown", lambda: None)
+    main.run_worker(once=True)
+    assert len(calls) == 3 and sleeps == [1.0, 2.0]  # waited and retried with back-off instead of exiting

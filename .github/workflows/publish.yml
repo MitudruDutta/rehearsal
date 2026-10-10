@@ -1,5 +1,15 @@
 name: Build and publish Python package
 
+# Publishing happens only from a published GitHub Release whose tag is v<version from pyproject.toml>. Before any
+# upload, every gate below must pass on that exact commit:
+#   1. the whole test suite (tests.yml: unit, integration against PostgreSQL, console build, plugin drift)
+#   2. the version: matches the tag, is valid, is higher than every version on PyPI, has a changelog entry,
+#      the agent plugin carries the same version, and the commit is on main
+#   3. the distributions: built, metadata strict-checked, required resources present, installable with client
+#      dependencies only on every supported Python, and the installed MCP server answers over stdio
+# After the upload, the published package is installed from PyPI and must report the new version.
+# A manual run (workflow_dispatch) runs every gate and builds, but never uploads.
+
 on:
   release:
     types: [published]
@@ -13,16 +23,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  version:
+    name: Version gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Check the version against the tag, PyPI, the changelog, and the plugin
+        run: |
+          python -m pip install --quiet "packaging>=24"
+          python .github/scripts/check-release.py --version-only
+      - name: Release commit is on main
+        if: github.event_name == 'release'
+        run: |
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error::Release ${RELEASE_TAG} points at ${GITHUB_SHA}, which is not on main. Merge first, then release from main."
+            exit 1
+          }
+
   build:
+    name: Build and verify distributions
+    needs: [tests, version]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
-      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-      TRACING_API_KEY: ""
-      DODO_PAYMENTS_API_KEY: ""
-      DODO_PAYMENTS_WEBHOOK_KEY: ""
       RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v6
@@ -35,34 +73,27 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
-      - name: Install build and test dependencies
+      - name: Install build tools
         run: |
           npm install --global pnpm@10.33.0
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev,mcp,telemetry]' langchain langchain-openai
-      - name: Run isolated unit tests
-        run: >-
-          python -B -m pytest tests/unit --confcutdir=tests/unit
-          -p no:cacheprovider -p pytest_asyncio.plugin -q
+          python -m pip install "build>=1.2" "twine>=6" "packaging>=24"
       - name: Build bundled console
         run: |
           pnpm --dir web install --frozen-lockfile
           pnpm --dir web build
-      - name: Build distributions and check metadata
+      - name: Build distributions and check metadata and contents
         run: |
           python -m build
           python -m twine check --strict dist/*
           python .github/scripts/check-release.py
-      - name: Verify installation with client dependencies only
+      - name: Installed MCP server answers over stdio
         working-directory: ${{ runner.temp }}
         run: |
-          python -m venv sdk-smoke
-          sdk-smoke/bin/python -m pip install "$GITHUB_WORKSPACE"/dist/*.whl
-          sdk-smoke/bin/python -m pip check
-          sdk-smoke/bin/rehearsal --version
-          sdk-smoke/bin/rehearsal --help
-          sdk-smoke/bin/rehearsal skill print
-          sdk-smoke/bin/python -c 'from rehearsal.sdk import Rehearsal; import importlib.util; assert importlib.util.find_spec("fastapi") is None'
+          python -m venv mcp-smoke
+          mcp-smoke/bin/python -m pip install --quiet "$(ls "$GITHUB_WORKSPACE"/dist/*.whl)[mcp]"
+          mcp-smoke/bin/python -m pip check
+          mcp-smoke/bin/python "$GITHUB_WORKSPACE/.github/scripts/smoke-mcp.py" "$PWD/mcp-smoke/bin/rehearsal"
       - name: Save verified distributions
         uses: actions/upload-artifact@v6
         with:
@@ -72,9 +103,43 @@ jobs:
             dist/*.tar.gz
           if-no-files-found: error
 
-  publish:
-    if: github.event_name == 'release'
+  client-install:
+    name: Client install on Python ${{ matrix.python }}
     needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]  # every version pyproject.toml advertises
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: python-distributions
+          path: dist/
+      - name: Install the wheel with client dependencies only
+        run: |
+          python -m venv sdk-smoke
+          sdk-smoke/bin/python -m pip install dist/*.whl
+          sdk-smoke/bin/python -m pip check
+          sdk-smoke/bin/rehearsal --version
+          sdk-smoke/bin/rehearsal --help > /dev/null
+          sdk-smoke/bin/rehearsal login --help > /dev/null
+          sdk-smoke/bin/rehearsal skill print > /dev/null
+          sdk-smoke/bin/python -c 'from rehearsal.sdk import Rehearsal; import importlib.util; assert importlib.util.find_spec("fastapi") is None'
+      - name: Install the source archive
+        run: |
+          python -m venv sdist-smoke
+          sdist-smoke/bin/python -m pip install dist/*.tar.gz
+          sdist-smoke/bin/rehearsal --version
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'release'
+    needs: [tests, version, build, client-install]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -89,3 +154,26 @@ jobs:
           path: dist/
       - name: Publish using PyPI Trusted Publishing
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  verify-published:
+    name: Install the published release from PyPI
+    if: github.event_name == 'release'
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Wait for PyPI, install, and check the version
+        run: |
+          version="${RELEASE_TAG#v}"
+          python -m venv published
+          for attempt in $(seq 1 20); do
+            if published/bin/python -m pip install --quiet --no-cache-dir "rehearsal-kit[mcp]==${version}"; then break; fi
+            echo "PyPI does not serve ${version} yet (attempt ${attempt}); waiting 30 s"; sleep 30
+          done
+          test "$(published/bin/rehearsal --version)" = "rehearsal-kit ${version}"
+          published/bin/python -m pip check

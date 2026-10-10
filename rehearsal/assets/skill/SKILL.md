@@ -39,16 +39,23 @@ Read these when the task needs them. Do not load them all at the start.
 
 ## Connect
 
-Prefer the MCP tools. Call `workspace_status` first: it confirms the key works and shows the allowance.
+Prefer the MCP tools. Call `workspace_status` first: it confirms the key works and shows the plan and what is left this month.
 
-If the tools are not available, set them up (the user gets the URL and key on the console's **API keys** page):
+If a tool answers that Rehearsal is not signed in, ask the user to sign in once on this machine. They need the server URL and an API key with "Build and evaluate" access from the console's **API keys** page. Do not ask them to paste the key into the chat; they run:
 
 ```bash
-pip install "rehearsal-kit[mcp]"
-claude mcp add rehearsal -e REHEARSAL_URL=https://<server> -e REHEARSAL_API_KEY=rh_... -- rehearsal mcp
+uvx --from rehearsal-kit rehearsal login      # or: pip install rehearsal-kit && rehearsal login
 ```
 
-Without MCP, use the CLI (`rehearsal ...`, same environment variables) or the Python SDK (`from rehearsal.sdk import Rehearsal`). See references/tools.md.
+`rehearsal login` saves the URL and key for this user only; the MCP server, the CLI and the Python SDK all use it. `REHEARSAL_URL` and `REHEARSAL_API_KEY` in the environment take precedence.
+
+If the MCP tools are not installed at all, the Rehearsal agent plugin adds them (Claude Code: `claude plugin marketplace add MitudruDutta/rehearsal`, then `claude plugin install rehearsal@rehearsal`), or add the server by hand:
+
+```bash
+claude mcp add rehearsal -- uvx --from "rehearsal-kit[mcp]" rehearsal mcp
+```
+
+Without MCP, use the CLI (`rehearsal ...`) or the Python SDK (`from rehearsal.sdk import Rehearsal`). See references/tools.md.
 
 ## Money: ask before you spend
 

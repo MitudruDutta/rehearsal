@@ -15,7 +15,9 @@ from ..config import settings
 
 @lru_cache
 def engine() -> Engine:
-    return create_engine(settings().database_url, pool_pre_ping=True, pool_size=10, max_overflow=20)
+    cfg = settings()
+    # pool_recycle: managed databases and their proxies drop long-idle connections; replace them before that happens
+    return create_engine(cfg.database_url, pool_pre_ping=True, pool_size=cfg.db_pool_size, max_overflow=cfg.db_max_overflow, pool_recycle=1800)
 
 
 @lru_cache
