@@ -9,13 +9,13 @@ The plugin follows the [Agent Plugins 1.0.0](https://agent-plugins.org/specifica
 
 ## Sign in once
 
-Every client below uses the same sign-in. Create an API key with **Build and evaluate** access on the console's **API keys** page, then run:
+Every client below uses the same sign-in:
 
 ```bash
-uvx --from rehearsal-kit rehearsal login
+uvx --from rehearsal-kit rehearsal login                  # add --url <address> for another server
 ```
 
-It asks for the server URL and the key, checks them, and saves them for your user only (`~/.config/rehearsal/config.json`, mode 600). The MCP server, the CLI and the Python SDK all read it. `REHEARSAL_URL` and `REHEARSAL_API_KEY` in the environment take precedence. Without a saved key the MCP server still starts, and its tools tell the assistant to ask you to sign in.
+It opens the console in your browser. Check that the code matches your terminal, click **Approve**, and the terminal receives a key with **Build and evaluate** access, saved for your user only (`~/.config/rehearsal/config.json`, mode 600). On a server or in CI without a browser, use `rehearsal login --with-key` and paste a key from the console's **API keys** page. The MCP server, the CLI and the Python SDK all read it. `REHEARSAL_URL` and `REHEARSAL_API_KEY` in the environment take precedence. Without a saved key the MCP server still starts, and its tools tell the assistant to ask you to sign in.
 
 ## Install
 

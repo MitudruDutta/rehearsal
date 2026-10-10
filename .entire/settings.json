@@ -12,7 +12,13 @@
     "custom_redactions": {
       "google_oauth_client_secret": "GOCSPX-[A-Za-z0-9_-]{20,}",
       "rehearsal_api_key": "rh_[a-z0-9]{4,}_[A-Za-z0-9_-]{20,}",
-      "token_harbor_key": "thk_(live|test)_[A-Za-z0-9_-]{20,}"
+      "token_harbor_key": "thk_(live|test)_[A-Za-z0-9_-]{20,}",
+      "dodo_payments_api_key": "\\b[A-Za-z0-9]{16}\\.[A-Za-z0-9]{40,}\\b",
+      "dodo_prefixed_key": "dodo_(test|live)_[A-Za-z0-9_-]{20,}",
+      "webhook_signing_secret": "whsec_[A-Za-z0-9+/=_-]{20,}",
+      "openai_style_key": "\\bsk-[A-Za-z0-9_-]{20,}",
+      "supabase_access_token": "sbp_[a-f0-9]{40}",
+      "postgres_url_password": "(?<=://)[^:/@\\s]+:[^@/\\s]{8,}(?=@)"
     }
   },
   "checkpoints": {

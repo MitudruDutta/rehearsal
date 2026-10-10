@@ -3,6 +3,14 @@
 Every release of `rehearsal-kit` has a section here. The publish workflow refuses a release whose version has no
 section, so write it before tagging.
 
+## 0.1.2
+
+- `rehearsal login` signs in through the browser: the terminal shows a code, you approve it in the console, and the
+  terminal receives a "Build and evaluate" key. The key is created when the terminal collects it and is never stored
+  readable. `--with-key` still pastes a key, for servers and CI.
+- `rehearsal whoami` shows the server, workspace, key and where the sign-in comes from.
+- `rehearsal --help` groups commands by task and describes every one; a mistyped command suggests the closest one.
+
 ## 0.1.1
 
 - `rehearsal login` saves the server URL and an API key (readable by your user only); the CLI, the Python SDK and

@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .client import DEFAULT_URL
+
 
 def _client() -> Any:
     from .client import Rehearsal
@@ -54,7 +56,7 @@ def main(argv: list[str] | None = None) -> None:
         hint = HINTS.get(exc.status) or ("The server had a problem; try again, and check the server log if it persists." if exc.status >= 500 else "")
         sys.exit(f"Error ({exc.status}): {exc.detail}" + (f"\n{hint}" if hint else ""))
     except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-        from .client import DEFAULT_URL, saved_login
+        from .client import saved_login
 
         url = os.environ.get("REHEARSAL_URL") or saved_login().get("url") or DEFAULT_URL
         sys.exit(f"Cannot reach Rehearsal at {url} ({exc.__class__.__name__}). Check the URL (`rehearsal login --url ...`) and that the server is running.")
@@ -70,6 +72,110 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(f"This command runs a Rehearsal server, which needs the server extra:\n  pip install 'rehearsal-kit[server]'\n(missing module: {exc.name})")
 
 
+def _db_host(url: str) -> str:
+    from sqlalchemy.engine import make_url
+
+    try:
+        return make_url(url).host or ""
+    except Exception:  # noqa: BLE001 - only for a log line
+        return "unknown"
+
+
+def _server(explicit: str | None) -> str:
+    from .client import _env, saved_login
+
+    return (explicit or _env("REHEARSAL_URL") or saved_login().get("url") or DEFAULT_URL).rstrip("/")
+
+
+def _signed_in(url: str, key: str) -> None:
+    from .client import Rehearsal, save_login
+
+    me = Rehearsal(api_key=key, base_url=url).get("/v1/me")  # a wrong key or URL fails here with a clear message
+    path = save_login(url, key)
+    print(f"\n\u2713 Signed in to {me.get('organization') or 'your workspace'} (project {me.get('project')}) at {url}.")
+    print(f"  Saved to {path} (readable by you only). The CLI, the Python SDK and the MCP server use it.")
+    print("  Next: rehearsal worlds list")
+
+
+def _login(args: Any) -> None:
+    """Browser sign-in by default: the terminal shows a code, the console approves it, the terminal receives a key.
+    --with-key pastes a key instead, for servers and CI where no browser is at hand."""
+    import getpass
+    import socket
+    import time
+    import webbrowser
+
+    import httpx
+
+    url = _server(args.url)
+    print(f"Signing in to Rehearsal at {url}" + ("" if args.url else "  (another server: rehearsal login --url <address>)"))
+    if args.key or args.with_key:
+        key = (args.key or getpass.getpass("Paste an API key from the console's API keys page (input is hidden): ")).strip()
+        if not key.startswith("rh_"):
+            sys.exit("That is not a Rehearsal API key; keys start with rh_.")
+        return _signed_in(url, key)
+
+    client = f"{getpass.getuser()}@{socket.gethostname()}"
+    try:
+        r = httpx.post(f"{url}/v1/cli/logins", json={"client": client}, timeout=30)
+    except httpx.HTTPError as exc:
+        sys.exit(f"Cannot reach {url} ({exc.__class__.__name__}). Check the address, or use --url.")
+    if r.status_code == 404:  # a server older than browser sign-in
+        print("This server does not offer browser sign-in yet; paste a key instead.")
+        args.with_key = True
+        return _login(args)
+    if r.status_code >= 400:
+        sys.exit(f"The server refused to start a sign-in ({r.status_code}): {r.text[:200]}")
+    start = r.json()
+    print("\nApprove this sign-in in your browser:")
+    print(f"  {start['verification_url']}")
+    print(f"\nConfirmation code: {start['user_code']}  (the browser shows the same code)")
+    if not args.no_browser:
+        try:
+            if webbrowser.open(start["verification_url"]):
+                print("A browser window is opening. If it does not, open the link above.")
+        except webbrowser.Error:
+            pass
+    print("\nWaiting for approval (Ctrl+C to cancel)", end="", flush=True)
+    deadline = time.monotonic() + start["expires_in"]
+    try:
+        while time.monotonic() < deadline:
+            time.sleep(start.get("interval", 2))
+            try:
+                poll = httpx.post(f"{url}/v1/cli/logins/poll", json={"device_code": start["device_code"]}, timeout=30).json()
+            except (httpx.HTTPError, ValueError):
+                print("!", end="", flush=True)  # a network blip: keep waiting
+                continue
+            if poll.get("status") == "pending":
+                print(".", end="", flush=True)
+                continue
+            print()
+            if poll.get("status") == "approved":
+                return _signed_in(url, poll["api_key"])
+            if poll.get("status") == "denied":
+                sys.exit("The sign-in was denied in the browser. Nothing was saved.")
+            sys.exit("The sign-in request expired or was already used. Run rehearsal login again.")
+    except KeyboardInterrupt:
+        print()
+        sys.exit("Cancelled. Nothing was saved.")
+    print()
+    sys.exit("No approval within 10 minutes. Run rehearsal login again.")
+
+
+def _whoami() -> None:
+    from .client import Rehearsal, _env, config_path, saved_login
+
+    source = "environment (REHEARSAL_API_KEY)" if _env("REHEARSAL_API_KEY") else (f"saved sign-in ({config_path()})" if saved_login() else None)
+    if source is None:
+        sys.exit("Not signed in. Run rehearsal login.")
+    c = Rehearsal()
+    me = c.get("/v1/me")
+    print(f"Server:     {c.base_url}")
+    print(f"Workspace:  {me.get('organization')} (project {me.get('project')})" + (f", {me['plan']} plan" if me.get("plan") else ""))
+    print(f"Key:        rh_{c.api_key.split('_')[1]}_\u2026  access: {', '.join(me.get('scopes') or [])}")
+    print(f"Signed in:  {source}")
+
+
 def _version() -> str:
     from importlib.metadata import PackageNotFoundError, version
 
@@ -79,82 +185,107 @@ def _version() -> str:
         return "unknown (not installed)"
 
 
-def _main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="rehearsal", description="Rehearse AI agents on a sandboxed copy of your application.")
-    ap.add_argument("--version", action="version", version=f"rehearsal-kit {_version()}")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> Any:  # a mistyped command gets a suggestion, not the full list of choices
+        import difflib
+        import re
 
-    sub.add_parser("up", help="start the local control-plane database and apply migrations")
-    sub.add_parser("migrate", help="apply database migrations")
-    b = sub.add_parser("bootstrap", help="create an organisation, project, and admin API key")
+        m = re.search(r"argument <(?:command|action)>: invalid choice: '([^']*)' \(choose from (.*)\)", message)
+        if m:
+            choices = [c.strip().strip("'") for c in m.group(2).split(",")]
+            close = difflib.get_close_matches(m.group(1), choices, n=1)
+            hint = f" Did you mean '{close[0]}'?" if close else ""
+            self.exit(2, f"{self.prog}: unknown command '{m.group(1)}'.{hint} Run '{self.prog} --help' to see every command.\n")
+        super().error(message)
+
+
+def _main(argv: list[str] | None = None) -> None:
+    ap = _Parser(prog="rehearsal", usage="rehearsal <command> [options]", formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--version", action="version", version=f"rehearsal-kit {_version()}")
+    sub = ap.add_subparsers(dest="cmd", required=True, metavar="<command>", help=argparse.SUPPRESS, prog="rehearsal")
+    summaries: dict[str, str] = {}
+
+    def cmd(name: str, help: str, **kw: Any) -> argparse.ArgumentParser:  # noqa: A002 - mirrors argparse's own keyword
+        summaries[name] = help
+        return sub.add_parser(name, help=argparse.SUPPRESS, description=help[0].upper() + help[1:] + ".", **kw)
+
+    def actions(parser: argparse.ArgumentParser) -> Any:
+        return parser.add_subparsers(dest="sub", required=True, metavar="<action>", title="actions")
+
+    cmd("up", "apply database migrations; starts a local database in Docker only when no cloud database is set")
+    cmd("migrate", "apply database migrations")
+    b = cmd("bootstrap", "create an organisation, project, and admin API key")
     b.add_argument("--org", default="Local")
     b.add_argument("--project", default="default")
-    users = sub.add_parser("users", help="console accounts (runs on the server)").add_subparsers(dest="sub", required=True)
+    users = actions(cmd("users", "console accounts (runs on the server)"))
     ua = users.add_parser("add", help="give a person access to a project's organisation")
     ua.add_argument("email")
     ua.add_argument("--name", default="")
     ua.add_argument("--project", required=True, help="project id, as printed by bootstrap")
     ua.add_argument("--role", choices=["owner", "admin", "member"], default="owner")
     ua.add_argument("--no-password", action="store_true", help="the person signs in with Google only")
-    s = sub.add_parser("serve", help="run the API and console")
+    s = cmd("serve", "run the API and console")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=7800)
-    w = sub.add_parser("worker", help="run a job worker")
+    w = cmd("worker", "run a job worker")
     w.add_argument("--kinds", default="", help="comma-separated job kinds")
     w.add_argument("--once", action="store_true", help="exit when the queue is empty")
-    sub.add_parser("openapi", help="print the OpenAPI document")
-    lg = sub.add_parser("login", help="save the server URL and an API key for the CLI, SDK and MCP server")
-    lg.add_argument("--url", default=None, help="Rehearsal server, for example https://rehearsal.example.com")
-    lg.add_argument("--key", default=None, help="API key (rh_...); asked for when omitted, so it stays out of shell history")
-    sub.add_parser("logout", help="forget the saved API key")
-    sub.add_parser("mcp", help="run the MCP server for AI assistants (stdio; uses `rehearsal login`, or REHEARSAL_API_KEY and REHEARSAL_URL)")
-    sk = sub.add_parser("skill", help="install the Rehearsal skill for Claude Code and other agents")
+    cmd("openapi", "print the OpenAPI document")
+    lg = cmd("login", "sign in: approve this terminal in your browser, or paste an API key")
+    lg.add_argument("--url", default=None, help="Rehearsal server (default: REHEARSAL_URL, the last server you signed in to, or %s)" % DEFAULT_URL)
+    lg.add_argument("--with-key", action="store_true", help="paste an API key instead of approving in the browser (servers, CI)")
+    lg.add_argument("--key", default=None, help=argparse.SUPPRESS)  # still accepted, but keys on the command line end up in shell history
+    lg.add_argument("--no-browser", action="store_true", help="print the approval link instead of opening a browser")
+    cmd("logout", "forget the saved sign-in on this machine")
+    cmd("whoami", "show the server, workspace and key this machine uses")
+    cmd("mcp", "run the MCP server for AI assistants (stdio; uses your rehearsal login)")
+    sk = cmd("skill", "install the Rehearsal skill for Claude Code and other agents")
     sk.add_argument("action", choices=["install", "print"])
     sk.add_argument("--dir", default=None, help="skills folder (default ~/.claude/skills)")
 
-    apps = sub.add_parser("apps").add_subparsers(dest="sub", required=True)
-    apps.add_parser("import-catalog")
-    apps.add_parser("list")
-    add = apps.add_parser("add")
+    apps = actions(cmd("apps", "add, list and upload applications"))
+    apps.add_parser("import-catalog", help="register the bundled catalog of open-source applications")
+    apps.add_parser("list", help="applications in this workspace")
+    add = apps.add_parser("add", help="add an application from a git repository or a local folder")
     add.add_argument("name")
     add.add_argument("--git")
     add.add_argument("--commit")
     add.add_argument("--path")
     add.add_argument("--image", action="append", default=[], help="component=image@sha256:...")
     add.add_argument("--policies-file")
-    up = apps.add_parser("upload")
+    up = apps.add_parser("upload", help="upload a .tar.gz of an application's source")
     up.add_argument("app_id")
     up.add_argument("archive")
 
-    build = sub.add_parser("build", help="compile an application into a world")
+    build = cmd("build", "compile an application into a world")
     build.add_argument("app_id")
     build.add_argument("--model")
     build.add_argument("--budget", type=float)
     build.add_argument("--scenarios", type=int, default=8)
     build.add_argument("--watch", action="store_true")
 
-    jobs = sub.add_parser("jobs").add_subparsers(dest="sub", required=True)
+    jobs = actions(cmd("jobs", "follow and control builds and other long jobs"))
     for name in ("show", "watch", "pause", "resume", "stop", "retry"):
-        jobs.add_parser(name).add_argument("job_id")
+        jobs.add_parser(name, help=f"{name} a job").add_argument("job_id")
 
-    worlds = sub.add_parser("worlds").add_subparsers(dest="sub", required=True)
-    worlds.add_parser("list")
-    worlds.add_parser("show").add_argument("wv_id")
-    worlds.add_parser("scenarios").add_argument("wv_id")
-    worlds.add_parser("validate").add_argument("wv_id")
-    bnd = worlds.add_parser("bundle")
+    worlds = actions(cmd("worlds", "list practice worlds, their jobs, re-checks and bundles"))
+    worlds.add_parser("list", help="worlds and their versions")
+    worlds.add_parser("show", help="one world version").add_argument("wv_id")
+    worlds.add_parser("scenarios", help="the jobs of a world version").add_argument("wv_id")
+    worlds.add_parser("validate", help="re-check every job of a published world").add_argument("wv_id")
+    bnd = worlds.add_parser("bundle", help="export a portable world bundle")
     bnd.add_argument("wv_id")
     bnd.add_argument("--include-images", action="store_true")
 
-    prof = sub.add_parser("profiles").add_subparsers(dest="sub", required=True)
-    prof.add_parser("list")
-    pc = prof.add_parser("create")
+    prof = actions(cmd("profiles", "list and create agent profiles (agent versions)"))
+    prof.add_parser("list", help="agent profiles and versions")
+    pc = prof.add_parser("create", help="create an agent profile")
     pc.add_argument("name")
     pc.add_argument("--prompt-file")
     pc.add_argument("--model")
     pc.add_argument("--external", action="store_true", help="actions come from your own agent through the API")
 
-    ev = sub.add_parser("eval", help="evaluate agent profiles on a world version")
+    ev = cmd("eval", "evaluate agent profiles on a world version")
     ev.add_argument("wv_id")
     ev.add_argument("--profile", action="append", required=True)
     ev.add_argument("--split", action="append", default=[], help="train, dev or holdout; default every split")
@@ -162,49 +293,63 @@ def _main(argv: list[str] | None = None) -> None:
     ev.add_argument("--budget", type=float)
     ev.add_argument("--watch", action="store_true")
 
-    runs = sub.add_parser("runs").add_subparsers(dest="sub", required=True)
-    runs.add_parser("show").add_argument("run_id")
-    runs.add_parser("watch").add_argument("run_id")
-    runs.add_parser("episodes").add_argument("run_id")
-    runs.add_parser("episode").add_argument("episode_id")
-    cmp_ = sub.add_parser("compare")
+    runs = actions(cmd("runs", "follow runs and read their episodes"))
+    runs.add_parser("show", help="status and scores of a run").add_argument("run_id")
+    runs.add_parser("watch", help="follow a run live").add_argument("run_id")
+    runs.add_parser("episodes", help="one line per episode").add_argument("run_id")
+    runs.add_parser("episode", help="what happened in one episode").add_argument("episode_id")
+    cmp_ = cmd("compare", "compare agents within a run, or two runs on one world version")
     cmp_.add_argument("run_a")
     cmp_.add_argument("run_b", nargs="?")
 
-    imp = sub.add_parser("improve", help="propose a revised agent profile from train/dev failures")
+    imp = cmd("improve", "propose a revised agent profile from train/dev failures")
     imp.add_argument("profile_id")
     imp.add_argument("run_id")
 
-    exp = sub.add_parser("export", help="export verified trajectories as a dataset")
+    exp = cmd("export", "export verified trajectories as a dataset")
     exp.add_argument("run_ids", nargs="+")
     exp.add_argument("--split", action="append", default=[])
 
-    tr = sub.add_parser("train", help="train a model on a world with reinforcement learning (coming soon)")
+    tr = cmd("train", "train a model on a world with reinforcement learning")
     tr.add_argument("wv_id")
     tr.add_argument("--base-model", default="Qwen/Qwen3-1.7B")
     tr.add_argument("--rounds", type=int, default=2)
     tr.add_argument("--rollouts", type=int, default=4)
     tr.add_argument("--serve-url", default="http://127.0.0.1:8001/v1")
 
-    art = sub.add_parser("artifacts").add_subparsers(dest="sub", required=True)
-    art.add_parser("list")
-    dl = art.add_parser("download")
+    art = actions(cmd("artifacts", "list and download exported files"))
+    art.add_parser("list", help="exported files")
+    dl = art.add_parser("download", help="download one exported file")
     dl.add_argument("artifact_id")
     dl.add_argument("dest")
 
-    sub.add_parser("prices", help="model prices from every source, for the configured model chains")
+    cmd("prices", "model prices from every source, for the configured model chains")
 
-    exm = sub.add_parser("export-example", help="write examples/<app>/ from a published world version and its runs")
+    exm = cmd("export-example", "write examples/<app>/ from a published world version and its runs")
     exm.add_argument("wv_id")
 
-    rep = sub.add_parser("export-replay", help="save a job's or run's recorded events (already redacted) as a replay file")
+    rep = cmd("export-replay", "save a job's or run's recorded events (already redacted) as a replay file")
     rep.add_argument("stream", help="job_... or run_... id")
     rep.add_argument("dest")
     rep.add_argument("--episode", help="only this episode's events (runs)")
 
-    run_b = sub.add_parser("run-bundle", help="start a world from an exported bundle on this machine")
+    run_b = cmd("run-bundle", "start a world from an exported bundle on your own machine")
     run_b.add_argument("bundle")
 
+    groups = [
+        ("Start", ["login", "whoami", "logout"]),
+        ("Applications and worlds", ["apps", "build", "worlds", "jobs"]),
+        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve"]),
+        ("Data", ["export", "artifacts", "export-example", "export-replay"]),
+        ("AI assistants", ["mcp", "skill"]),
+        ("Run your own server", ["serve", "worker", "up", "migrate", "bootstrap", "users", "openapi", "prices"]),
+        ("Coming soon", ["train", "run-bundle"]),
+    ]
+    assert sorted(n for _, names in groups for n in names) == sorted(summaries), "every command belongs to one help group"
+    width = max(map(len, summaries)) + 2
+    ap.description = "Rehearse AI agents on a sandboxed copy of your application.\n\n" + "\n\n".join(
+        f"{title}:\n" + "\n".join(f"  {n:<{width}}{summaries[n]}" for n in names) for title, names in groups)
+    ap.epilog = "Get started: rehearsal login, then rehearsal worlds list.\nHelp for one command: rehearsal <command> --help"
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     if not os.environ.get("REHEARSAL_DEBUG"):
@@ -213,12 +358,15 @@ def _main(argv: list[str] | None = None) -> None:
     if args.cmd == "up":
         from importlib.resources import files
 
-        compose = files("rehearsal").joinpath("assets/compose.yaml")
-        subprocess.run(["docker", "compose", "-f", str(compose), "-p", "rehearsal", "up", "-d", "--wait"], check=True)
+        from ..config import settings
         from ..db.session import upgrade
 
+        host = _db_host(settings().database_url)
+        if host in ("127.0.0.1", "localhost", "::1", ""):  # no cloud database configured: run one locally in Docker
+            compose = files("rehearsal").joinpath("assets/compose.yaml")
+            subprocess.run(["docker", "compose", "-f", str(compose), "-p", "rehearsal", "up", "-d", "--wait"], check=True)
         upgrade()
-        print("database ready and migrated")
+        print(f"database ready and migrated: {host or 'local'}" + ("" if host in ("127.0.0.1", "localhost", "::1", "") else " (cloud; no local database started)"))
     elif args.cmd == "migrate":
         from ..db.session import upgrade
 
@@ -243,6 +391,10 @@ def _main(argv: list[str] | None = None) -> None:
     elif args.cmd == "serve":
         import uvicorn
 
+        from ..config import settings
+
+        print(f"Rehearsal API on http://{args.host}:{args.port}, database {_db_host(settings().database_url)}", flush=True)
+
         # uvicorn trusts X-Forwarded-For/-Proto from FORWARDED_ALLOW_IPS (compose sets it for Caddy), so client addresses are real
         uvicorn.run("rehearsal.api.app:app", host=args.host, port=args.port, log_level="info", timeout_graceful_shutdown=5)
     elif args.cmd == "worker":
@@ -250,24 +402,17 @@ def _main(argv: list[str] | None = None) -> None:
 
         run_worker([k for k in args.kinds.split(",") if k] or None, once=args.once)
     elif args.cmd == "login":
-        import getpass
-
-        from .client import DEFAULT_URL, Rehearsal, save_login, saved_login
-
-        login = saved_login()
-        url = (args.url or os.environ.get("REHEARSAL_URL") or input(f"Rehearsal server [{login.get('url') or DEFAULT_URL}]: ").strip()
-               or login.get("url") or DEFAULT_URL).rstrip("/")
-        key = (args.key or getpass.getpass("API key (create one on the console's API keys page): ")).strip()
-        if not key.startswith("rh_"):
-            sys.exit("That is not a Rehearsal API key; keys start with rh_.")
-        me = Rehearsal(api_key=key, base_url=url).get("/v1/me")  # fails with a clear message on a wrong key or URL
-        path = save_login(url, key)
-        print(f"Signed in to {me.get('organization') or 'your workspace'} (project {me.get('project')}) at {url}. Saved to {path}.")
+        _login(args)
     elif args.cmd == "logout":
-        from .client import config_path
+        from .client import config_path, saved_login
 
-        config_path().unlink(missing_ok=True)
-        print("Signed out: the saved API key is removed.")
+        if not saved_login():
+            print("Not signed in on this machine; nothing to remove.")
+        else:
+            config_path().unlink(missing_ok=True)
+            print("Signed out. The saved key is removed from this machine; revoke it on the console's API keys page to disable it everywhere.")
+    elif args.cmd == "whoami":
+        _whoami()
     elif args.cmd == "mcp":
         try:
             from .mcp import main as mcp_main
@@ -430,9 +575,11 @@ def _main(argv: list[str] | None = None) -> None:
         events = [e for e in events if e["type"] in keep and (not args.episode or e.get("episode_id") == args.episode)]
         Path(args.dest).parent.mkdir(parents=True, exist_ok=True)
         Path(args.dest).write_text(json.dumps({"stream": args.stream, "events": events}, default=str))
-        print(f"saved {len(events)} events to {args.dest}")
+        print(f"saved {len(events)} events to {args.dest}" + ("" if events else
+              " (a replay holds build and episode activity; this job or run has none yet)"))
     elif args.cmd == "run-bundle":
-        ap.error("run-bundle is not implemented in this release; use a published world through the API")
+        sys.exit("Starting a world from a bundle on your own machine is coming soon. Today, evaluate the published world "
+                 "through the server: rehearsal eval <world_version_id> --profile <agent_id>.")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
-# Full single-host stack: database, API + console, and workers.
+# Full single-host stack: API + console and workers, on a cloud PostgreSQL database (Supabase or any managed
+# PostgreSQL) given as REHEARSAL_DATABASE_URL. To run PostgreSQL on this machine instead, add `--profile localdb`.
 #   cp infra/deploy.env.example infra/deploy.env   # then fill it in
 #   docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d
 #   docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api rehearsal bootstrap
@@ -8,9 +9,10 @@
 # The worker controls the host Docker daemon to run sandboxes. Run this stack on a
 # dedicated runner VM; for arbitrary third-party repositories use per-job VM isolation.
 services:
-  postgres:
+  postgres:  # only with --profile localdb; the default is the cloud database in REHEARSAL_DATABASE_URL
+    profiles: ["localdb"]
     image: postgres:16-alpine
-    environment: { POSTGRES_USER: rehearsal, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set a database password}", POSTGRES_DB: rehearsal }
+    environment: { POSTGRES_USER: rehearsal, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-}", POSTGRES_DB: rehearsal }
     volumes: [rehearsal-pg:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U rehearsal"], interval: 2s, retries: 30 }
 
@@ -21,7 +23,7 @@ services:
     user: root
     volumes: ["/var/lib/rehearsal:/var/lib/rehearsal"]
     environment: &env
-      REHEARSAL_DATABASE_URL: postgresql+psycopg://rehearsal:${POSTGRES_PASSWORD}@postgres:5432/rehearsal
+      REHEARSAL_DATABASE_URL: ${REHEARSAL_DATABASE_URL:?set REHEARSAL_DATABASE_URL to your cloud database (see deploy.env.example)}
       REHEARSAL_SESSION_SECRET: ${REHEARSAL_SESSION_SECRET:?set a random session secret}
       REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
       REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
@@ -39,7 +41,7 @@ services:
       REHEARSAL_RUN_PARALLEL: ${REHEARSAL_RUN_PARALLEL:-4}
       REHEARSAL_BUILD_PARALLEL: ${REHEARSAL_BUILD_PARALLEL:-4}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      # Plans and payments (see docs/BUSINESS.md). Leave REHEARSAL_PLANS=off on a private server.
+      # Plans and payments (see handbook/BUSINESS.md). Leave REHEARSAL_PLANS=off on a private server.
       REHEARSAL_PLANS: ${REHEARSAL_PLANS:-off}
       REHEARSAL_ADMIN_EMAILS: ${REHEARSAL_ADMIN_EMAILS:-}
       REHEARSAL_PUBLIC_URL: https://${REHEARSAL_DOMAIN:-localhost}
@@ -55,7 +57,7 @@ services:
       DODO_PRODUCT_BUILD_1: ${DODO_PRODUCT_BUILD_1:-}
       # only Caddy (same compose network) reaches the API, so trust its X-Forwarded-Proto for Secure cookies
       FORWARDED_ALLOW_IPS: "*"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { postgres: { condition: service_healthy, required: false } }  # waits only when --profile localdb runs it
 
   api:
     build: { context: .., dockerfile: Dockerfile }

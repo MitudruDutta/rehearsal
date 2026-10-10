@@ -91,7 +91,7 @@ Other commands:
 
 If no model provider is configured, a build fails in its first phase with `inspector: model unavailable`. Set the key, then `rehearsal jobs retry JOB_ID`.
 
-A Python client is in `rehearsal.sdk`; see [docs/PACKAGE.md](docs/PACKAGE.md). To drive episodes with your own agent, see [examples/agents/langgraph_react.py](examples/agents/langgraph_react.py).
+A Python client is in `rehearsal.sdk`; see [handbook/PACKAGE.md](handbook/PACKAGE.md). To drive episodes with your own agent, see [examples/agents/langgraph_react.py](examples/agents/langgraph_react.py).
 
 ## Configuration
 
@@ -111,6 +111,8 @@ A Python client is in `rehearsal.sdk`; see [docs/PACKAGE.md](docs/PACKAGE.md). T
 | `REHEARSAL_RUN_PARALLEL`, `REHEARSAL_BUILD_PARALLEL` | `4` | Evaluation shards per run; scenarios validated at once in a build |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |
 | `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `http://127.0.0.1:7800`, none | Used by the CLI and SDK client |
+
+See the [local development runbook](handbook/RUN_LOCALLY.md) for Docker startup and rebuilds, migrations, logs, workers, frontend development, and shutdown commands.
 
 The worker controls Docker and executes application source; use a dedicated runner. Restrict local sources with `REHEARSAL_SOURCE_ROOTS`. Admin keys have full access; scoped keys require `read`/`write` for ordinary operations, `evaluator` for private evaluation data, and `agent` for external-agent observations/actions. Evaluator mutations also require `write`.
 
@@ -166,10 +168,10 @@ Neatlogs uses the OpenAI-compatible client wrapper, with separate workflow roots
 
 Entire is configured in `.entire/settings.json` with automatic session pushing disabled and checkpoints stored as git refs. `.claude/settings.json` connects Claude Code's hooks to the `entire` CLI; each hook does nothing when the CLI is not installed. For Codex, approve the installed hooks through `/hooks`. No Entire checkpoints are recorded in this repository yet.
 
-`docs/BUSINESS.md` contains inputs for cfo.ai, not evidence of a generated cfo.ai plan. A real plan link and hackathon demo/replay evidence remain to be supplied.
+`handbook/BUSINESS.md` contains inputs for cfo.ai, not evidence of a generated cfo.ai plan. A real plan link and hackathon demo/replay evidence remain to be supplied.
 
 ## Documentation
 
-- [docs/REHEARSAL_SPEC.md](docs/REHEARSAL_SPEC.md): the implementation specification. It includes planned capabilities as well as implemented behavior. It is not a claim that every feature or submission artifact is complete.
-- [docs/PACKAGE.md](docs/PACKAGE.md): the package description, with client and SDK usage.
-- [docs/BUSINESS.md](docs/BUSINESS.md): business-plan inputs.
+- [handbook/REHEARSAL_SPEC.md](handbook/REHEARSAL_SPEC.md): the implementation specification. It includes planned capabilities as well as implemented behavior. It is not a claim that every feature or submission artifact is complete.
+- [handbook/PACKAGE.md](handbook/PACKAGE.md): the package description, with client and SDK usage.
+- [handbook/BUSINESS.md](handbook/BUSINESS.md): business-plan inputs.
