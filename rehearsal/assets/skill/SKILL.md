@@ -64,9 +64,10 @@ Rules:
 
 1. Before any action in the table, tell the user what you will start, how many episodes or builds, and the rough cost. Wait for a clear yes.
 2. Compute the episode count before `run_evaluation`: `len(jobs in the chosen splits) x len(agents) x repeats`.
-3. HTTP 402 means the monthly allowance is used up. Do not retry. Tell the user when it renews (`workspace_status`) and that they can stop a running job.
-4. HTTP 429 with "already has N ... in progress" means the workspace limit on parallel jobs. Wait for one to finish, or ask the user to stop one.
-5. Never start a second build of the same application while one is running.
+3. HTTP 402 means the workspace's plan does not cover the request (applications, world builds, episodes, or the monthly model allowance). Do not retry. Tell the user what the message says is left, offer a smaller run (one split, `repeats=1`), and point to the console's Billing page for a top-up or upgrade.
+4. HTTP 429 with "in progress" or "sandbox" means the workspace's parallel limit. Wait for one to finish, or ask the user to stop one.
+5. On the free plan, evaluations start only in quiet hours: `run_evaluation` returns `starts_at`. Tell the user when the run will start.
+6. Never start a second build of the same application while one is running.
 
 ## Choose the workflow
 
@@ -88,7 +89,7 @@ Rules:
 4. Choose the splits:
    - Exploring or debugging: `dev`.
    - Final score: `holdout` only, after you have stopped changing the agent.
-5. Choose repeats: 2 or more. Models are not deterministic, and one episode per job is noise.
+5. Choose repeats: 2 or more. Models are not deterministic, and one episode per job is noise. Without splits or repeats, a run uses every job twice; every episode also gets the default stress layer: the agent's first change is refused with "too many requests" and must be retried, and after a change goes through the customer sends the same request again, which must not be done twice.
 6. State the episode count and cost, and ask. Then `run_evaluation(world_version_id, [agent_ids], splits, repeats)`.
 7. Give the user the `watch` link. Call `run_results(run_id)` every 30-60 seconds until `status` is `finished`. Runs use several sandboxes in parallel.
 8. Report as described in references/results.md:

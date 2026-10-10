@@ -618,3 +618,45 @@ def test_custom_prompt_with_braces_and_no_placeholder_still_gets_the_job_instruc
     policy = ep.LLMPolicy(ep.AgentProfile(name="mine", system_prompt='Answer as JSON like {"ok": true}.'), "local:m")
     text = policy.system_prompt(engine, engine.state.actors["agent"])
     assert text.startswith('Answer as JSON like {"ok": true}.') and "Your assignment: act" in text
+
+
+
+def test_every_evaluation_episode_is_stress_tested_by_default(make_engine):
+    from rehearsal.core.contracts import EventAction, ScheduledEvent, TrajectoryStep, Trigger
+
+    def engine_with(events=(), policy=None, stress=True):
+        eng = make_engine(policy or BatchPolicy([call("complete")]), default_stress=stress)
+        eng.scenario = eng.scenario.model_copy(update={"reference": [TrajectoryStep(actor="agent", tool="mutate", args={})], "events": list(events)})
+        return eng
+
+    plain = engine_with()
+    plain.run()
+    assert plain.gateway.faults.get("mutate") == ["rate_limit"]  # refused once, not carried out; a careful agent retries
+    timeout = ScheduledEvent(id="t", trigger=Trigger(kind="at_step", step=0), actions=[EventAction(kind="fault", tool="mutate", fault_mode="drop_response")])
+    own = engine_with([timeout])
+    own.run()
+    assert "rate_limit" not in (own.gateway.faults.get("mutate") or [])  # the job's own stress is kept as written
+    replay = engine_with(policy=ep.ScriptedPolicy([TrajectoryStep(actor="agent", tool="complete", args={"summary": "x"})]))
+    replay.run()
+    assert not replay.gateway.faults.get("mutate")  # validation replays stay exact
+    off = engine_with(stress=False)
+    off.run()
+    assert not off.gateway.faults.get("mutate")
+
+
+
+def test_customer_repeats_the_request_once_after_the_first_change_by_default(make_engine):
+    from rehearsal.core.contracts import GoalVersion
+
+    def run(goals=None, stress=True):
+        eng = make_engine(BatchPolicy([call("mutate"), call("complete", id="done")]), participant=app_participant(), default_stress=stress)
+        if goals:
+            eng.scenario = eng.scenario.model_copy(update={"goals": goals})
+        eng.run()
+        return [args.get("content") for _, tool, args, _ in eng.dispatched if tool == "post_customer"]
+
+    posts = run()
+    assert posts[0] == "hello" and len(posts) == 2 and posts[1].startswith("Did my request go through?") and posts[1].endswith("hello")
+    two_versions = [GoalVersion(version=1, instruction="a", checks=["check"]), GoalVersion(version=2, instruction="b", checks=["check"])]
+    assert run(goals=two_versions) == ["hello"]  # never contradicts a job whose request changes
+    assert run(stress=False) == ["hello"]

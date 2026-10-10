@@ -79,6 +79,8 @@ class EpisodeState:
     started: float = field(default_factory=time.time)
     opened: bool = False
     script_pos: int = 0
+    repeated: bool = False  # default stress: the customer has already re-sent the request
+    environment_error: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -265,6 +267,7 @@ class Engine:
         max_cost_usd: float | None = None,
         max_turns_per_actor: int = 25,
         check: Callable[[], None] | None = None,
+        default_stress: bool = False,
     ):
         self.episode_id = episode_id
         self.check = check or (lambda: None)
@@ -280,7 +283,10 @@ class Engine:
         self.gateway.load_state(self.state.gateway)
         self.max_cost_usd = max_cost_usd
         self.max_turns = max_turns_per_actor
-        self.environment_error: str | None = None
+        self.default_stress = default_stress
+        self.environment_error = self.state.environment_error
+        if self.environment_error is None and self.state.termination == "environment_error":
+            self.environment_error = "episode stopped with an environment error"
         self.actor_roles = {a.id: a.role for a in scenario.actors}
 
     # ------------------------------------------------------------------ helpers
@@ -305,6 +311,7 @@ class Engine:
 
     def save(self) -> None:
         self.state.gateway = self.gateway.state()
+        self.state.environment_error = self.environment_error
         self.recorder.save(self.state)
 
     # ------------------------------------------------------------------ messaging
@@ -483,6 +490,37 @@ class Engine:
         }
         self.save()
 
+    def _arm_default_stress(self) -> None:
+        """Every evaluation episode is a stress test, whatever world it runs in. When a job arms no fault of its own,
+        the first call of the first data-changing tool its solution needs is refused with "too many requests" and
+        not carried out. That is fair to any job: nothing happened, and a careful agent retries; a careless one
+        gives up or tells the customer it is done. Only for live agents in evaluation runs; scripted validation and
+        the live fairness check keep the job exactly as written."""
+        if not self.default_stress or isinstance(self.policy, ScriptedPolicy):
+            return
+        if any(a.kind == "fault" for e in self.scenario.events for a in e.actions):
+            return  # the job already stresses the agent on purpose
+        agents = {a.id for a in self.scenario.actors}
+        first = next((s.tool for s in self.scenario.reference if s.actor in agents and (t := self.manifest.tool(s.tool)) is not None and t.mutating), None)
+        if first is None:
+            return
+        self.gateway.arm_fault(first, "rate_limit", 1)
+        self.recorder.event("fault.armed", f"rate_limit armed on {first} x1 (default stress)", data={"event": "default_stress", "tool": first})
+
+    def _repeat_request(self) -> None:
+        """Default stress, part two: after the agent's first change goes through, the customer sends the same request
+        again, as real customers do when they are unsure. A careful agent checks and answers that it is done; a
+        careless one does the work twice. The words are the opening request, so no model is called. Only when the job
+        has one request version and no customer messages of its own, so the repeat can never contradict the job."""
+        st = self.state
+        if not self.default_stress or isinstance(self.policy, ScriptedPolicy) or st.repeated:
+            return
+        if len(self.scenario.goals) > 1 or any(a.kind in ("customer_message", "goal_change") for e in self.scenario.events for a in e.actions):
+            return
+        st.repeated = True
+        self.recorder.event("stress.repeat_request", "the customer sent the same request again (default stress)", goal_version=st.goal_version)
+        self.customer_says(f"Did my request go through? Sending it again to be safe: {self.scenario.participant.opening_message}", st.goal_version)
+
     def _arm_first_use_faults(self) -> None:
         """A fault armed "after tool T" on T itself only affects a second call of T, which a careful agent never
         makes, so the timeout would never be tested. For live agents it is armed before the first use: the write
@@ -611,6 +649,8 @@ class Engine:
             if call.name in self.scenario.contact_tools and res.status == "SUCCEEDED":
                 text = max((str(v) for v in call.arguments.values() if isinstance(v, str)), key=len, default="")
                 self._contact(actor_id, text, None)
+            if res.status == "SUCCEEDED" and res.mutating and call.name not in self.scenario.contact_tools:
+                self._repeat_request()
         for key in (f"{actor_id}|{call.name}", f"*|{call.name}"):
             st.tool_counts[key] = st.tool_counts.get(key, 0) + 1
         self._fire("tool", actor_id, call.name)
@@ -686,6 +726,7 @@ class Engine:
                 self.customer_says(self.scenario.participant.opening_message, 1)
                 self._fire("step")
                 self._arm_first_use_faults()
+                self._arm_default_stress()
                 self.save()
             while not (reason := self._stop_reason()):
                 self.check()
@@ -746,7 +787,7 @@ class Engine:
             journal = self.instance.journal()
             result = evaluate(Prober(self.instance), journal, self.scenario, self.variables, st.goal_version, stats)
         except Exception as exc:  # noqa: BLE001 - an oracle failure is an environment error, not an agent failure
-            stats.environment_error = f"oracle failed: {exc}"[:500]
+            self.environment_error = stats.environment_error = f"oracle failed: {exc}"[:500]
             result = OracleResult(goal_version=st.goal_version, goal_satisfied=False, hard_constraint_violations=[], check_results=[], environment_error=stats.environment_error, model_cost_usd=st.cost_usd, tokens=st.tokens, elapsed_ms=stats.elapsed_ms, claimed_complete=st.completed, rejected_attempts=st.rejected)
         self.recorder.event(
             "episode.finished",

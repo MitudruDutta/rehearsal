@@ -34,7 +34,7 @@ SERVER_MODULES = {"fastapi", "uvicorn", "sqlalchemy", "alembic", "psycopg", "its
 
 HINTS = {
     401: "Check REHEARSAL_API_KEY: the key is missing, mistyped, or revoked. Create one on the console's API keys page.",
-    402: "The workspace's monthly model allowance is used up. It renews on the 1st.",
+    402: "The workspace's plan does not cover this. See the console's Billing page for what is left and how to get more.",
     403: "This API key's access does not allow that. Use a key with \"Build and evaluate\" or \"Full access\".",
     404: "Check the id: list what exists with 'rehearsal apps list', 'worlds list', 'profiles list' or 'runs show'.",
     409: "Not possible in the current state; the message above says why.",
@@ -151,8 +151,8 @@ def _main(argv: list[str] | None = None) -> None:
     ev = sub.add_parser("eval", help="evaluate agent profiles on a world version")
     ev.add_argument("wv_id")
     ev.add_argument("--profile", action="append", required=True)
-    ev.add_argument("--split", action="append", default=[])
-    ev.add_argument("--repeats", type=int, default=1)
+    ev.add_argument("--split", action="append", default=[], help="train, dev or holdout; default every split")
+    ev.add_argument("--repeats", type=int, default=None, help="default 2")
     ev.add_argument("--budget", type=float)
     ev.add_argument("--watch", action="store_true")
 
@@ -237,6 +237,7 @@ def _main(argv: list[str] | None = None) -> None:
     elif args.cmd == "serve":
         import uvicorn
 
+        # uvicorn trusts X-Forwarded-For/-Proto from FORWARDED_ALLOW_IPS (compose sets it for Caddy), so client addresses are real
         uvicorn.run("rehearsal.api.app:app", host=args.host, port=args.port, log_level="info", timeout_graceful_shutdown=5)
     elif args.cmd == "worker":
         from ..worker.main import run_worker
@@ -245,9 +246,10 @@ def _main(argv: list[str] | None = None) -> None:
     elif args.cmd == "mcp":
         try:
             from .mcp import main as mcp_main
+
+            mcp_main()
         except ModuleNotFoundError as exc:
             sys.exit(f"The MCP server needs the mcp extra:\n  pip install 'rehearsal-kit[mcp]'\n(missing module: {exc.name})")
-        mcp_main()
     elif args.cmd == "skill":
         from importlib.resources import files
 
@@ -325,7 +327,7 @@ def _main(argv: list[str] | None = None) -> None:
             _print(c.profiles.create(args.name, prompt, **extra))
     elif args.cmd == "eval":
         c = _client()
-        res = c.evaluations.create(args.wv_id, args.profile, args.split or ["dev"], args.repeats, **({"budget_usd": args.budget} if args.budget is not None else {}))
+        res = c.evaluations.create(args.wv_id, args.profile, args.split or None, args.repeats, **({"budget_usd": args.budget} if args.budget is not None else {}))
         _print(res)
         if args.watch:
             _watch(c.runs.events(res["run_id"]))

@@ -30,9 +30,9 @@ The worker controls Docker and executes application source; use a dedicated runn
 
 Neatlogs uses the OpenAI-compatible client wrapper, with separate workflow roots for compilation, evaluation, and improvement. Workers initialize tracing once and flush on shutdown. The endpoint is `https://ingest.neatlogs.com`; keys are read from the environment. Secret masking applies before trace export.
 
-Entire is enabled locally for Codex with automatic session pushing disabled. Approve the installed hooks through Codex `/hooks`. Checkpoint capture also requires an initial Git anchor commit. No commit, staging, or push was performed during this setup, so checkpoint capture is still pending.
+Entire is enabled in `.entire/settings.json`, with `push_sessions` enabled and a separate checkpoint remote configured. Session capture requires the installed Codex hooks to be active. Checkpoint links are still needed to verify hackathon provenance. No staging, commit, or push was performed during this verification.
 
-`docs/BUSINESS.md` contains inputs for cfo.ai, not evidence of a generated cfo.ai plan. A real plan link and hackathon demo/replay evidence remain to be supplied.
+`docs/BUSINESS.md` records inputs and reported cfo.ai results. It does not include a verifiable plan link; that link and hackathon demo/replay evidence remain to be supplied.
 
 ## Verification without starting services
 

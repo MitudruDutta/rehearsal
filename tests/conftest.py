@@ -19,6 +19,12 @@ def _prepare_db() -> bool:
     return True
 
 
+# Tests do not inherit plan enforcement or operator admins from a developer's .env (environment wins over .env).
+os.environ["REHEARSAL_PLANS"] = "off"
+os.environ["REHEARSAL_ADMIN_EMAILS"] = ""
+for _k in ("DODO_PAYMENTS_API_KEY", "DODO_PAYMENTS_WEBHOOK_KEY"):  # tests must never reach a real Dodo account
+    os.environ[_k] = ""
+
 DB_AVAILABLE = _prepare_db()
 if DB_AVAILABLE:
     os.environ["REHEARSAL_DATABASE_URL"] = TEST_DB

@@ -1,0 +1,91 @@
+name: Build and publish Python package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      NEATLOGS_API_KEY: ""
+      DODO_PAYMENTS_API_KEY: ""
+      DODO_PAYMENTS_WEBHOOK_KEY: ""
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install build and test dependencies
+        run: |
+          npm install --global pnpm@10.33.0
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,mcp,telemetry]'
+      - name: Run isolated unit tests
+        run: >-
+          python -B -m pytest tests/unit --confcutdir=tests/unit
+          -p no:cacheprovider -p pytest_asyncio.plugin -q
+      - name: Build bundled console
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web build
+      - name: Build distributions and check metadata
+        run: |
+          python -m build
+          python -m twine check --strict dist/*
+          python .github/scripts/check-release.py
+      - name: Verify installation with client dependencies only
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m venv sdk-smoke
+          sdk-smoke/bin/python -m pip install "$GITHUB_WORKSPACE"/dist/*.whl
+          sdk-smoke/bin/python -m pip check
+          sdk-smoke/bin/rehearsal --version
+          sdk-smoke/bin/rehearsal --help
+          sdk-smoke/bin/rehearsal skill print
+          sdk-smoke/bin/python -c 'from rehearsal.sdk import Rehearsal; import importlib.util; assert importlib.util.find_spec("fastapi") is None'
+      - name: Save verified distributions
+        uses: actions/upload-artifact@v6
+        with:
+          name: python-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/rehearsal-kit/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: python-distributions
+          path: dist/
+      - name: Publish using PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1

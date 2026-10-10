@@ -56,7 +56,7 @@ rehearsal = "rehearsal.sdk.cli:main"
 include = ["rehearsal*"]
 
 [tool.setuptools.package-data]
-rehearsal = ["py.typed", "db/migrations/*.py", "db/migrations/versions/*.py", "db/alembic.ini", "providers/Dockerfile", "training/kaggle_kernel/*", "api/static/**/*", "assets/*.yaml", "assets/skill/*.md", "assets/skill/references/*.md"]
+rehearsal = ["py.typed", "db/migrations/*.py", "db/migrations/*.mako", "db/migrations/versions/*.py", "db/alembic.ini", "providers/Dockerfile", "training/kaggle_kernel/*", "api/static/**/*", "assets/*.yaml", "assets/skill/*.md", "assets/skill/references/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

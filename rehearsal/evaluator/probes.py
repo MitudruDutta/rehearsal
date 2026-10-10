@@ -14,8 +14,10 @@ import hashlib
 import re
 import sqlite3
 import tempfile
+from contextlib import closing
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from ..core.contracts import StateProbe, render_template
@@ -24,6 +26,10 @@ from ..runner.runtime import WorldInstance
 NULL = "__RH_NULL__"
 SEP = "\x1f"
 PARAM = re.compile(r"(?<![:\w]):([A-Za-z_][A-Za-z0-9_]*)")
+SQLITE_TIMEOUT_S = 15
+SQLITE_MAX_ROWS = 1000
+SQLITE_MAX_VALUE_BYTES = 1024 * 1024
+SQLITE_MAX_RESULT_BYTES = 4 * 1024 * 1024
 
 
 class ProbeError(Exception):
@@ -52,16 +58,36 @@ def _sqlite_authorizer(action: int, *_args: Any) -> int:
 
 def query_sqlite_conn(conn: sqlite3.Connection, sql: str, params: dict[str, Any]) -> list[tuple]:
     body = single_statement(sql)
-    missing = [p for p in params_used(body) if p not in params]
+    names = params_used(body)
+    missing = [p for p in names if p not in params]
     if missing:
         raise ProbeError(f"unbound parameters {missing}")
+    deadline = monotonic() + SQLITE_TIMEOUT_S
+    previous_length = conn.getlimit(sqlite3.SQLITE_LIMIT_LENGTH)
     conn.set_authorizer(_sqlite_authorizer)
     try:
-        return conn.execute(body, {k: params[k] for k in params_used(body)}).fetchall()
+        # Also bound SQL-generated strings/blobs: a single row can exhaust memory.
+        conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, min(previous_length, SQLITE_MAX_VALUE_BYTES))
+        conn.set_progress_handler(lambda: monotonic() >= deadline, 1000)
+        # Bound returned rows without limiting the input to aggregates such as COUNT(*).
+        rows = []
+        result_bytes = 0
+        with closing(conn.execute(body, {k: params[k] for k in names})) as cursor:
+            for row in cursor:
+                if len(rows) >= SQLITE_MAX_ROWS:
+                    raise ProbeError(f"sqlite: result exceeds {SQLITE_MAX_ROWS} rows")
+                result_bytes += sum(len(value.encode("utf-8")) if isinstance(value, str)
+                                    else len(value) if isinstance(value, bytes) else 64 for value in row)
+                if result_bytes > SQLITE_MAX_RESULT_BYTES:
+                    raise ProbeError(f"sqlite: result exceeds {SQLITE_MAX_RESULT_BYTES} bytes")
+                rows.append(row)
+        return rows
     except sqlite3.Error as exc:
         raise ProbeError(f"sqlite: {exc}") from exc
     finally:
+        conn.set_progress_handler(None, 0)
         conn.set_authorizer(None)
+        conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, previous_length)
 
 
 class Prober:

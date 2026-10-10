@@ -13,18 +13,20 @@ import json
 import os
 import re
 import time
+import threading
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 import yaml
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 from sqlalchemy import func, select, text
 
+from .. import billing
 from ..config import settings
 from ..core.contracts import AgentProfile, ScenarioSpec
 from ..db import queue
@@ -32,6 +34,8 @@ from ..db.events import emit, serialize
 from ..db.models import (
     Action,
     AgentProfileRow,
+    BillingEvent,
+    PlanCredit,
     ApiKey,
     Application,
     Artifact,
@@ -40,6 +44,7 @@ from ..db.models import (
     Event,
     Job,
     Message,
+    ModelSpend,
     Organization,
     Project,
     User,
@@ -54,6 +59,7 @@ from ..db.session import session
 from ..worker.evaluate import summarize_run
 from .auth import (
     COOKIE,
+    DEVICE_COOKIE,
     SESSION_SECONDS,
     Principal,
     create_key,
@@ -65,13 +71,24 @@ from .auth import (
     user_cookie,
     verify_google,
 )
+from .limits import RequestBodyLimit
 
 app = FastAPI(title="Rehearsal API", version="1.0.0")
+app.add_middleware(RequestBodyLimit)
+Money = Annotated[FiniteFloat, Field(ge=0)]
 
 
 @app.exception_handler(queue.AllowanceExhausted)
 async def _allowance_exhausted(request: Request, exc: queue.AllowanceExhausted) -> JSONResponse:
     return JSONResponse(status_code=402, content={"detail": str(exc)})
+
+
+@app.exception_handler(billing.PlanLimit)
+@app.exception_handler(billing.BillingError)
+async def _billing_refused(request: Request, exc: billing.PlanLimit | billing.BillingError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -111,13 +128,28 @@ class LoginIn(BaseModel):
 
 
 _attempts: dict[str, list[float]] = {}  # ponytail: per-process limiter; use the proxy's rate limit with several API replicas
+_attempt_deadlines: dict[str, float] = {}
+_attempt_lock = threading.Lock()
+_attempt_cleanup = 0.0
 
 
 def _throttle(key: str, limit: int, window_s: float, message: str) -> None:
-    recent = [t for t in _attempts.get(key, []) if time.time() - t < window_s]
-    if len(recent) >= limit:
-        raise HTTPException(429, message)
-    _attempts[key] = [*recent, time.time()]
+    global _attempt_cleanup
+    at = time.time()
+    with _attempt_lock:
+        if at >= _attempt_cleanup or len(_attempts) >= 10_000:
+            for old in list(_attempt_deadlines):
+                if old not in _attempts or _attempt_deadlines[old] <= at:
+                    _attempts.pop(old, None)
+                    _attempt_deadlines.pop(old, None)
+            _attempt_cleanup = at + 60
+        if key not in _attempts and len(_attempts) >= 10_000:
+            raise HTTPException(429, "too many requests; try again later")
+        recent = [t for t in _attempts.get(key, []) if at - t < window_s]
+        if len(recent) >= limit:
+            raise HTTPException(429, message)
+        _attempts[key] = [*recent, at]
+        _attempt_deadlines[key] = at + window_s
 
 
 def _ip(request: Request) -> str:
@@ -140,6 +172,7 @@ def sign_up(body: SignupIn, response: Response, request: Request) -> dict[str, A
 
 @app.post("/v1/auth/login")
 def sign_in(body: LoginIn, response: Response, request: Request) -> dict[str, Any]:
+    _throttle(f"login-ip:{_ip(request)}", 30, 900, "too many sign-in attempts from this address; wait 15 minutes")
     _throttle(f"login:{_ip(request)}:{body.email.strip().lower()}", 10, 900, "too many sign-in attempts; wait 15 minutes")
     user_id, project_id = password_login(body.email, body.password)
     _set_session(response, request, user_cookie(user_id, project_id))
@@ -147,7 +180,12 @@ def sign_in(body: LoginIn, response: Response, request: Request) -> dict[str, An
 
 
 def _set_session(response: Response, request: Request, value: str) -> None:
-    response.set_cookie(COOKIE, value, max_age=SESSION_SECONDS, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+    secure = request.url.scheme == "https"
+    response.set_cookie(COOKIE, value, max_age=SESSION_SECONDS, httponly=True, samesite="lax", secure=secure)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,64}", request.cookies.get(DEVICE_COOKIE, "")):
+        import secrets
+
+        response.set_cookie(DEVICE_COOKIE, secrets.token_urlsafe(24), max_age=2 * 365 * 86400, httponly=True, samesite="lax", secure=secure)
 
 
 class GoogleIn(BaseModel):
@@ -172,7 +210,9 @@ def onboarding_workspace(body: WorkspaceIn, response: Response, request: Request
     """First step after a new user signs in: the organisation they own and its first project."""
     if not p.user_id:
         raise HTTPException(400, "workspaces are created by signed-in users, not API keys")
-    project_id = create_workspace(p.user_id, body.organization, body.project)
+    device = request.cookies.get(DEVICE_COOKIE, "")
+    project_id = create_workspace(p.user_id, body.organization, body.project,
+                                  device=device if re.fullmatch(r"[A-Za-z0-9_-]{20,64}", device) else None, ip=_ip(request))
     _set_session(response, request, user_cookie(p.user_id, project_id))
     return {"project_id": project_id}
 
@@ -191,6 +231,7 @@ def me(p: Principal = Depends(principal)) -> dict[str, Any]:
         user = s.get(User, p.user_id) if p.user_id else None
         return {
             "project_id": p.project_id or None, "key_id": p.key_id, "scopes": p.scopes,
+            "is_admin": billing.is_admin(user), "plan": billing.plan_of(s, org).title if org and settings().plans else None,
             "project": project.name if project else None, "organization": org.name if org else None,
             "user": {"name": user.name, "email": user.email, "picture_url": user.picture_url} if user else None,
             "needs_onboarding": bool(p.user_id) and not p.project_id,
@@ -261,6 +302,7 @@ def create_application(body: ApplicationIn, p: Principal = Depends(principal)) -
     with session() as s:
         if s.scalars(select(Application).where(Application.project_id == p.project_id, Application.name == body.name)).first():
             raise HTTPException(409, f"application {body.name} exists")
+        billing.check_application(s, p.project_id)
         a = Application(project_id=p.project_id, name=body.name, source=source, images=body.images, policies=body.policies, notes=body.notes)
         s.add(a)
         s.flush()
@@ -273,6 +315,8 @@ def import_catalog(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
     catalog = yaml.safe_load(files("rehearsal").joinpath("assets/catalog.yaml").read_text())
     out = []
     with session() as s:
+        have = set(s.scalars(select(Application.name).where(Application.project_id == p.project_id)))
+        billing.check_application(s, p.project_id, adding=len([e for e in catalog["applications"] if e["name"] not in have]))
         for entry in catalog["applications"]:
             existing = s.scalars(select(Application).where(Application.project_id == p.project_id, Application.name == entry["name"])).first()
             if existing:
@@ -355,7 +399,7 @@ async def upload_source(app_id: str, file: UploadFile = File(...), p: Principal 
 class BuildIn(BaseModel):
     application_id: str
     model: str | None = None
-    budget_usd: float | None = None
+    budget_usd: Money | None = None
     auto_approve: bool = True
     scenario_target: int = Field(default=8, ge=1, le=30)
     max_repair_rounds: int = Field(default=2, ge=0, le=5)
@@ -369,6 +413,7 @@ def start_build(body: BuildIn, p: Principal = Depends(principal)) -> dict[str, A
         if a.removed_at:
             raise HTTPException(404, "not found")
         _room(s, p.project_id, "world_build", settings().max_active_builds, "world builds")
+        grant = billing.check_build(s, p.project_id, body.budget_usd)
         s.execute(select(Application.id).where(Application.id == a.id).with_for_update())
         world = s.scalars(select(World).where(World.application_id == a.id)).first()
         if world is None:
@@ -380,10 +425,11 @@ def start_build(body: BuildIn, p: Principal = Depends(principal)) -> dict[str, A
         s.add(wv)
         s.flush()
         job = queue.enqueue(
-            s, project_id=p.project_id, kind="world_build", max_attempts=3, budget_usd=body.budget_usd,
+            s, project_id=p.project_id, kind="world_build", max_attempts=3, budget_usd=grant.budget_usd,
             payload={
                 "application_id": a.id, "world_id": world.id, "world_version_id": wv.id, "model": body.model, "auto_approve": body.auto_approve,
-                "options": {"scenario_target": body.scenario_target, "max_repair_rounds": body.max_repair_rounds, "check_determinism": body.check_determinism},
+                "options": {"scenario_target": body.scenario_target, "max_repair_rounds": body.max_repair_rounds, "check_determinism": body.check_determinism,
+                            "parallel": grant.lanes or 0},
             },
         )
         wv.build_job_id = job.id
@@ -441,6 +487,8 @@ def job_command(job_id: str, body: CommandIn, p: Principal = Depends(principal))
     with session() as s:
         j = _get(s, Job, job_id, p)
         s.refresh(j, with_for_update=True)
+        if body.command == "retry" and j.status in ("failed", "cancelled"):
+            j.not_before = billing.check_retry(s, p.project_id, j)
         try:
             queue.command(s, j, body.command)
         except ValueError as exc:
@@ -647,11 +695,13 @@ def get_profile(prof_id: str, p: Principal = Depends(principal)) -> dict[str, An
 class EvaluationIn(BaseModel):
     world_version_id: str
     profile_ids: list[str] = Field(min_length=1)
-    splits: list[Literal["train", "dev", "holdout"]] = Field(default_factory=lambda: ["dev"])
+    # Properly tested by default: every job, twice, with the default stress layer on.
+    splits: list[Literal["train", "dev", "holdout"]] = Field(default_factory=lambda: ["train", "dev", "holdout"])
     scenario_ids: list[str] | None = None
-    repeats: int = Field(default=1, ge=1, le=20)
-    budget_usd: float | None = None
-    max_episode_cost_usd: float | None = None
+    repeats: int = Field(default=2, ge=1, le=20)
+    default_stress: bool = True
+    budget_usd: Money | None = None
+    max_episode_cost_usd: Money | None = None
 
 
 @app.post("/v1/evaluations", status_code=202)
@@ -667,7 +717,9 @@ def create_evaluation(body: EvaluationIn, p: Principal = Depends(principal)) -> 
         if not scenarios:
             raise HTTPException(422, "no approved scenarios match")
         _room(s, p.project_id, "evaluation", settings().max_active_runs, "evaluation runs")
-        run = Run(project_id=p.project_id, world_version_id=wv.id, config={**body.model_dump(), "profiles": [f"{r.name}@v{r.version}" for r in profiles], "world_content_hash": wv.content_hash})
+        grant = billing.check_evaluation(s, p.project_id, body.repeats * len(scenarios) * len(profiles))
+        run = Run(project_id=p.project_id, world_version_id=wv.id, config={**body.model_dump(), "profiles": [f"{r.name}@v{r.version}" for r in profiles], "world_content_hash": wv.content_hash,
+                                                                           "starts_at": grant.not_before.isoformat() if grant.not_before else None})
         s.add(run)
         s.flush()
         n = 0
@@ -677,15 +729,18 @@ def create_evaluation(body: EvaluationIn, p: Principal = Depends(principal)) -> 
                     s.add(Episode(project_id=p.project_id, run_id=run.id, scenario_id=sc.id, profile_id=prof.id, seed=rep))
                     n += 1
         # Each shard pays one sandbox start, so more shards than half the episodes gains little.
-        shards = max(1, min(settings().run_parallel, -(-n // 2)))
+        shards = max(1, min(settings().run_parallel, grant.sandboxes or settings().run_parallel, -(-n // 2)))
         left = queue.allowance_left(s, p.project_id)
-        total = body.budget_usd if left is None else min(body.budget_usd or left, left)
+        # With a monthly allowance, a run reserves about three times what its episodes cost, not the whole allowance.
+        total = body.budget_usd if left is None else min(body.budget_usd if body.budget_usd is not None else n * billing.EPISODE_BUDGET_USD, left)
         budget = total / shards if total is not None else None  # shards share the run's budget, not one each
-        jobs = [queue.enqueue(s, project_id=p.project_id, kind="evaluation", payload={"run_id": run.id, "max_episode_cost_usd": body.max_episode_cost_usd}, budget_usd=budget, max_attempts=5)
+        jobs = [queue.enqueue(s, project_id=p.project_id, kind="evaluation", payload={"run_id": run.id, "max_episode_cost_usd": body.max_episode_cost_usd, "default_stress": body.default_stress},
+                              budget_usd=budget, max_attempts=5, not_before=grant.not_before)
                 for _ in range(shards)]
         run.job_id = jobs[0].id
-        emit(s, project_id=p.project_id, stream=run.id, type="run.queued", summary=f"{n} episodes queued", data={"shards": shards})
-        return {"run_id": run.id, "job_id": jobs[0].id, "episodes": n, "shards": shards}
+        later = f"; the free plan starts runs in quiet hours, at {grant.not_before:%H:%M} UTC" if grant.not_before else ""
+        emit(s, project_id=p.project_id, stream=run.id, type="run.queued", summary=f"{n} episodes queued{later}", data={"shards": shards, "starts_at": run.config["starts_at"]})
+        return {"run_id": run.id, "job_id": jobs[0].id, "episodes": n, "shards": shards, "starts_at": run.config["starts_at"]}
 
 
 @app.get("/v1/runs")
@@ -706,12 +761,20 @@ def run_command(run_id: str, body: CommandIn, p: Principal = Depends(principal))
     with session() as s:
         _get(s, Run, run_id, p)
         ids = [j.id for j in queue.run_jobs(s, run_id)]
-    out, refused = None, HTTPException(409, "run has no job")
+    out: Any = None
+    refused: Exception = HTTPException(409, "run has no job")
     for job_id in ids:
         try:
             out = job_command(job_id, body, p)
         except HTTPException as exc:
             if exc.status_code != 409:
+                raise
+            if isinstance(refused, HTTPException):
+                refused = exc
+        except (billing.PlanLimit, queue.AllowanceExhausted) as exc:
+            # A viable sibling can take over this shard's remaining episodes.
+            # Preserve allowance/capacity failures if no shard can restart.
+            if isinstance(exc, billing.PlanLimit) and exc.status not in (402, 429):
                 raise
             refused = exc
     if out is None:
@@ -1098,11 +1161,189 @@ def usage(p: Principal = Depends(principal)) -> dict[str, Any]:
     """Model spend this month, the workspace allowance, and what is left of it."""
     with session() as s:
         start = queue.month_start()
-        by_kind = dict(s.execute(select(Job.kind, func.coalesce(func.sum(Job.spent_usd), 0.0)).where(Job.project_id == p.project_id, Job.created_at >= start).group_by(Job.kind)).all())
-        cap = settings().monthly_allowance_usd or None
+        query = (select(Job.kind, func.coalesce(func.sum(ModelSpend.spent_usd), 0.0))
+                 .select_from(ModelSpend).join(Job, Job.id == ModelSpend.job_id)
+                 .where(ModelSpend.month == start.strftime("%Y-%m")).group_by(Job.kind))
+        projects = queue.spend_projects(p.project_id)
+        if projects is not None:
+            query = query.where(ModelSpend.project_id.in_(projects))
+        by_kind = dict(s.execute(query).all())
+        cap = billing.allowance(s, p.project_id)
         renews = (start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)).date().isoformat()
         return {"month": start.strftime("%Y-%m"), "spent_usd": round(sum(by_kind.values()), 4), "by_kind": {k: round(v, 4) for k, v in by_kind.items()},
                 "allowance_usd": cap, "left_usd": None if cap is None else round(queue.allowance_left(s, p.project_id) or 0.0, 4), "renews": renews}
+
+
+# --------------------------------------------------------------------------- plans and billing (Dodo Payments)
+
+
+def _org(s: Any, p: Principal) -> Organization:
+    return billing.org_of(s, p.project_id)
+
+
+@app.get("/v1/billing")
+def billing_summary(p: Principal = Depends(principal)) -> dict[str, Any]:
+    """The workspace's plan, what it has used this month, and what can be bought."""
+    with session() as s:
+        return billing.summary(s, _org(s, p))
+
+
+class CheckoutIn(BaseModel):
+    item: Literal["pro_monthly", "pro_yearly", "team_monthly", "team_yearly", "episodes_1000", "build_1"]
+    quantity: int = Field(default=1, ge=1, le=50)
+
+
+@app.post("/v1/billing/checkout")
+def billing_checkout(body: CheckoutIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """A Dodo Payments checkout page for a plan or a top-up; the browser goes there and comes back to the Billing page."""
+    with session() as s:
+        org = billing.lock(s, p.project_id)
+        return {"url": billing.checkout(s, org, body.item, body.quantity)}
+
+
+class ChangePlanIn(BaseModel):
+    item: Literal["pro_monthly", "pro_yearly", "team_monthly", "team_yearly"]
+
+
+@app.post("/v1/billing/change")
+def billing_change(body: ChangePlanIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Moves an existing subscription to another plan now; Dodo charges or credits the difference for the rest of the period."""
+    with session() as s:
+        org = billing.lock(s, p.project_id)
+        billing.change_plan(s, org, body.item)
+        return billing.summary(s, org)
+
+
+@app.post("/v1/billing/portal")
+def billing_portal(p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Dodo's customer portal: invoices, payment method, cancellation."""
+    with session() as s:
+        return {"url": billing.portal(s, _org(s, p))}
+
+
+@app.post("/v1/billing/sync")
+def billing_sync(p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Reads the subscription and top-ups back from Dodo now (after checkout, or when a webhook could not reach us)."""
+    _throttle(f"billing-sync:{p.project_id}", 10, 60, "checked a moment ago; wait a minute")
+    with session() as s:
+        org = billing.lock(s, p.project_id)
+        billing.sync(s, org)
+        return billing.summary(s, org)
+
+
+@app.post("/v1/billing/webhook", include_in_schema=False)
+async def billing_webhook(request: Request) -> dict[str, Any]:
+    """Dodo Payments webhooks. Signed (Standard Webhooks); each webhook-id is applied once. The event only says which
+    workspace to sync: the state itself is read back from the Dodo API, so retries and out-of-order events are harmless.
+    A failure returns 5xx so Dodo retries (up to 8 times over about a day)."""
+    body = await request.body()
+    if len(body) > 1 << 20:
+        raise HTTPException(413, "payload too large")
+    billing.verify_webhook(request.headers, body)
+    try:
+        event = json.loads(body)
+    except ValueError as exc:
+        raise HTTPException(400, "body is not JSON") from exc
+    if not isinstance(event, dict) or not isinstance(event.get("data"), dict):
+        raise HTTPException(400, "webhook must be an object with object data")
+    wid = request.headers["webhook-id"][:120]
+
+    def apply() -> dict[str, Any]:
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            with session() as s:
+                if s.get(BillingEvent, wid):
+                    return {"ok": True, "duplicate": True}
+                org = billing.org_for_event(s, event.get("data") or {})
+                s.add(BillingEvent(id=wid, type=str(event.get("type", ""))[:80], org_id=org.id if org else None, payload=event))
+                s.flush()
+                if org is not None:
+                    s.refresh(org, with_for_update=True)
+                    billing.sync(s, org)
+                    billing.apply_event(s, org, event)
+                return {"ok": True}
+        except IntegrityError:
+            # Only an already committed delivery is a duplicate. Other constraint
+            # failures must return 5xx so Dodo retries the rolled-back event.
+            with session() as s:
+                if s.get(BillingEvent, wid):
+                    return {"ok": True, "duplicate": True}
+            raise
+
+    return await asyncio.to_thread(apply)
+
+
+# --------------------------------------------------------------------------- operator admin (REHEARSAL_ADMIN_EMAILS)
+
+
+def _admin(s: Any, p: Principal) -> User:
+    user = s.get(User, p.user_id) if p.user_id else None
+    if not billing.is_admin(user):
+        raise HTTPException(403, "operator admins only")
+    return user
+
+
+@app.get("/v1/admin/organizations")
+def admin_organizations(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
+    """Every workspace on this server with its plan, owner, and this month's use."""
+    with session() as s:
+        _admin(s, p)
+        out = []
+        for org in s.scalars(select(Organization).order_by(Organization.created_at.desc()).limit(500)):  # ponytail: one page; paginate past 500 workspaces
+            owner = billing.owner(s, org)
+            plan = billing.plan_of(s, org)
+            spent = s.scalar(select(func.coalesce(func.sum(ModelSpend.spent_usd), 0.0)).where(ModelSpend.project_id.in_(select(Project.id).where(Project.org_id == org.id)), ModelSpend.month == queue.month_start().strftime("%Y-%m"))) or 0.0
+            out.append({"id": org.id, "name": org.name, "owner": owner.email if owner else None, "created_at": org.created_at.isoformat(),
+                        "plan": plan.name, "plan_title": plan.title, "plan_override": org.plan_override, "limits_override": org.limits_override or {},
+                        "subscription": {k: (org.billing or {}).get(k) for k in ("status", "plan", "interval", "period_end")} if (org.billing or {}).get("subscription_id") else None,
+                        "usage": billing.usage(s, org, plan), "limits": {k: getattr(plan, k) for k in billing.LIMIT_FIELDS}, "spent_usd": round(spent, 4)})
+        return out
+
+
+class AdminPlanIn(BaseModel):
+    plan_override: Literal["free", "pro", "team", "enterprise", "internal"] | None = None
+    limits_override: dict[str, Money | None] = Field(default_factory=dict)
+
+
+@app.put("/v1/admin/organizations/{org_id}")
+def admin_set_plan(org_id: str, body: AdminPlanIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Puts a workspace on any plan, without payment, and optionally changes single limits (null = no limit)."""
+    with session() as s:
+        user = _admin(s, p)
+        org = s.get(Organization, org_id)
+        if org is None:
+            raise HTTPException(404, "workspace not found")
+        if bad := sorted(set(body.limits_override) - set(billing.LIMIT_FIELDS)):
+            raise HTTPException(422, f"unknown limits {bad}; use {list(billing.LIMIT_FIELDS)}")
+        if any(v is not None and v < 0 for v in body.limits_override.values()):
+            raise HTTPException(422, "limits cannot be negative")
+        money = ("build_budget_usd", "allowance_usd")
+        org.plan_override = body.plan_override
+        org.limits_override = {k: (v if v is None or k in money else int(v)) for k, v in body.limits_override.items()}
+        s.add(BillingEvent(id=f"admin_{os.urandom(8).hex()}", type="admin.plan", org_id=org.id, actor=user.email, payload=body.model_dump()))
+        return billing.summary(s, org)
+
+
+class AdminCreditIn(BaseModel):
+    kind: Literal["episodes", "builds"]
+    quantity: int = Field(ge=1, le=1_000_000)
+    note: str = Field(default="", max_length=500)
+
+
+@app.post("/v1/admin/organizations/{org_id}/credits", status_code=201)
+def admin_grant(org_id: str, body: AdminCreditIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Adds builds or episodes to a workspace for this month."""
+    with session() as s:
+        user = _admin(s, p)
+        org = s.get(Organization, org_id)
+        if org is None:
+            raise HTTPException(404, "workspace not found")
+        ref = f"admin:{os.urandom(8).hex()}"
+        s.add(PlanCredit(org_id=org.id, kind=body.kind, quantity=body.quantity, month=queue.month_start().strftime("%Y-%m"), ref=ref, note=body.note or f"granted by {user.email}"))
+        s.add(BillingEvent(id=ref.replace(":", "_"), type="admin.credit", org_id=org.id, actor=user.email, payload=body.model_dump()))
+        s.flush()
+        return billing.summary(s, org)
 
 
 @app.get("/v1/pricing")

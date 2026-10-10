@@ -6,8 +6,7 @@ import logging
 import threading
 from typing import Any
 
-from sqlalchemy import update
-
+from .. import pricing
 from ..config import settings
 from ..db import queue
 from ..db.events import emit
@@ -39,19 +38,30 @@ class JobContext:
     # ------------------------------------------------------------------ lifecycle
 
     def __enter__(self) -> "JobContext":
+        cfg = settings()
         self._thread.start()
+        self._price_token = pricing.require_known_prices.set(
+            self.budget is not None or cfg.plans or cfg.monthly_allowance_usd > 0)
         return self
 
     def __exit__(self, *exc: Any) -> None:
         self._halt.set()
         self._thread.join(timeout=5)
+        pricing.require_known_prices.reset(self._price_token)
+
+    def _heartbeat(self) -> None:
+        with session() as s:
+            job = queue.heartbeat(s, self.job_id, self.worker_id, self.attempt, check_commands=False)
+        if job.cancel_requested:
+            raise queue.JobCancelled("cancel requested")
+        if job.pause_requested:
+            raise queue.JobPaused("pause requested")
 
     def _beat(self) -> None:
         interval = max(0.2, settings().lease_seconds / 3)
         while not self._halt.wait(interval):
             try:
-                with session() as s:
-                    queue.heartbeat(s, self.job_id, self.worker_id, self.attempt)
+                self._heartbeat()
             except (queue.JobCancelled, queue.JobPaused, queue.LeaseLost) as exc:
                 self._stop = exc
             except Exception as exc:  # noqa: BLE001 - a transient DB error must not kill the job
@@ -62,8 +72,7 @@ class JobContext:
         if self._stop is not None:
             raise self._stop
         try:
-            with session() as s:
-                queue.heartbeat(s, self.job_id, self.worker_id, self.attempt)
+            self._heartbeat()
         except (queue.JobCancelled, queue.JobPaused, queue.LeaseLost) as exc:
             self._stop = exc
             raise
@@ -86,8 +95,8 @@ class JobContext:
         if not usd and not tokens:
             return
         with session() as s:
-            self.owned(s)
-            s.execute(update(Job).where(Job.id == self.job_id).values(spent_usd=Job.spent_usd + usd, tokens=Job.tokens + tokens))
+            job = self.owned(s)
+            queue.record_spend(s, job, usd, tokens)
 
         self.spent += usd
 

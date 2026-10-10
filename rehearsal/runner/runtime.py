@@ -4,8 +4,9 @@ Layout per instance ``rh-<id>``:
 
 * ``rh-<id>-int``  internal network (no egress). Application services and the
   providers container live here; services resolve each other by name.
-* ``rh-<id>-ext``  ordinary bridge used only by the providers container, which
+* ``rh-<id>-ext``  ordinary bridge for the providers container, which
   publishes its port on 127.0.0.1 and acts as the authenticated edge proxy.
+  Containerized workers join this bridge to reach the proxy without host loopback.
 * one named volume per service data path, plus every VOLUME the image declares
   (otherwise Docker would create anonymous volumes that reset cannot see).
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets as pysecrets
 import shutil
 import subprocess
@@ -360,15 +362,24 @@ class WorldInstance:
 
     def edge_url(self) -> str:
         if self._edge is None:
-            out = _run(["docker", "port", f"{self.prefix}-providers", str(PROVIDER_PORT)]).stdout.splitlines()[0]
-            self._edge = f"http://127.0.0.1:{out.rsplit(':', 1)[1]}"
+            worker = os.environ.get("REHEARSAL_WORKER_CONTAINER")
+            if worker:
+                network = f"{self.prefix}-ext"
+                networks = json.loads(_run(["docker", "inspect", "-f", "{{json .NetworkSettings.Networks}}", worker]).stdout)
+                if network not in networks:
+                    _run(["docker", "network", "connect", network, worker])
+                self._edge = f"http://{self.prefix}-providers:{PROVIDER_PORT}"
+            else:
+                out = _run(["docker", "port", f"{self.prefix}-providers", str(PROVIDER_PORT)]).stdout.splitlines()[0]
+                self._edge = f"http://127.0.0.1:{out.rsplit(':', 1)[1]}"
             self._client = None
         return self._edge
 
     def edge_client(self) -> httpx.Client:
         if self._client is None:
             self._client = httpx.Client(
-                base_url=self.edge_url(), headers={"X-Rehearsal-Admin": self.record.admin_token}, timeout=60.0
+                base_url=self.edge_url(), headers={"X-Rehearsal-Admin": self.record.admin_token}, timeout=60.0,
+                trust_env=False,  # Keep admin credentials off environment-configured HTTP proxies.
             )
         return self._client
 
@@ -469,6 +480,12 @@ class WorldInstance:
     def destroy(self) -> None:
         self._remove_containers()
         _run(["docker", "volume", "rm", "-f", *self._all_volumes()], check=False)
+        network = f"{self.prefix}-ext"
+        remaining = _run(["docker", "network", "inspect", "-f", "{{json .Containers}}", network], check=False)
+        if remaining.returncode == 0:
+            # Reattached instances may have endpoints from several workers; detach all before removal.
+            for container in json.loads(remaining.stdout) or {}:
+                _run(["docker", "network", "disconnect", "-f", network, container], check=False)
         _run(["docker", "network", "rm", f"{self.prefix}-int", f"{self.prefix}-ext"], check=False)
 
 

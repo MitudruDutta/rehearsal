@@ -36,4 +36,6 @@ export const routes = {
   compare: (a?: string, b?: string) => `/app/compare/${a ? `?a=${a}${b ? `&b=${b}` : ""}` : ""}`,
   apiKeys: "/app/api-keys/",
   settings: "/app/settings/",
+  billing: "/app/billing/",
+  admin: "/app/admin/",
 };

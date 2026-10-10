@@ -116,7 +116,7 @@ def main() -> None:
     ap.add_argument("--world", help="world version id; starts a new evaluation run")
     ap.add_argument("--agent", help="id of the bring-your-own agent profile (rehearsal profiles create NAME --external)")
     ap.add_argument("--split", action="append", default=[])
-    ap.add_argument("--repeats", type=int, default=1)
+    ap.add_argument("--repeats", type=int, default=None, help="default 2; with no --split, every job runs")
     ap.add_argument("--run", help="drive an existing run instead of starting one")
     args = ap.parse_args()
     rh = Rehearsal()
@@ -124,7 +124,7 @@ def main() -> None:
     if not run_id:
         if not (args.world and args.agent):
             ap.error("give --run, or --world and --agent")
-        run = rh.evaluations.create(args.world, [args.agent], splits=args.split or ["dev"], repeats=args.repeats)
+        run = rh.evaluations.create(args.world, [args.agent], splits=args.split or None, repeats=args.repeats)
         run_id = run["run_id"]
         print(f"run {run_id}: {run['episodes']} episodes, watch {rh.base_url}/app/run/?id={run_id}", flush=True)
     drive(rh, run_id)
