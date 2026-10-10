@@ -373,7 +373,7 @@ class EventAction(Strict):
     text: str | None = None
     goal_version: int | None = None
     tool: str | None = None
-    fault_mode: Literal["drop_response", "error", "timeout_before"] | None = None
+    fault_mode: Literal["drop_response", "error", "timeout_before", "rate_limit"] | None = None
     count: int = 1
     role: str | None = None
 
@@ -466,6 +466,7 @@ class ScenarioSpec(Strict):
     max_steps: int = 40
     max_customer_contacts: int = 3
     contact_tools: list[str] = Field(default_factory=list)  # app tools that count as contacting the customer
+    stress: str = ""  # what the job attacks (changed_request, unknown_outcome, social_engineering, ...); see compiler.stress
 
     @field_validator("id")
     @classmethod

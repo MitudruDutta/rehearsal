@@ -208,6 +208,11 @@ class Gateway:
             return GatewayResult(
                 "FAILED", {"status": 503, "error": "service temporarily unavailable"}, request=request, fault=fault, mutating=tool.mutating
             )
+        if fault == "rate_limit":  # refused before it reached the application: nothing happened, retrying later is right
+            return GatewayResult(
+                "FAILED", {"status": 429, "error": "too many requests; this call was not carried out. Retry after 2 seconds.", "retry_after_s": 2},
+                request=request, fault=fault, mutating=tool.mutating,
+            )
         try:
             resp = self.instance.http(
                 tool.service, tool.method, request["path"], headers=headers, json_body=request["json"], params=request["query"] or None

@@ -186,12 +186,49 @@ def test_a_stop_in_one_lane_stops_the_others_and_still_cleans_up(monkeypatch):
 def test_plan_rules_catch_a_mix_the_writers_cannot_fix_later():
     from rehearsal.compiler.pipeline import plan_problems
 
-    def brief(i, family, split, revises=True):
-        return {"id": f"job_{i}", "title": "t", "family": family, "split": split, "brief": "b", "revises_goal": revises}
+    def brief(i, family, split, revises=True, stress="changed_request", tools=("create_post",)):
+        return {"id": f"job_{i}", "title": "t", "family": family, "split": split, "brief": "b", "revises_goal": revises, "stress": stress, "tools": list(tools)}
 
-    good = [brief(1, "a", "train"), brief(2, "a", "train"), brief(3, "b", "dev"), brief(4, "c", "holdout")]
-    assert plan_problems(good, 4) == []
+    tools = {"create_post": True, "create_user": True, "add_member": True, "delete_post": True, "get_post": False}
+    good = [brief(1, "a", "train", stress="changed_request", tools=["create_post", "get_post"]), brief(2, "a", "train", stress="unknown_outcome", tools=["create_user"]),
+            brief(3, "b", "dev", stress="social_engineering", tools=["add_member"]), brief(4, "c", "holdout", stress="missing_information", tools=["delete_post"])]
+    assert plan_problems(good, 4, tools) == []
     bad = [brief(1, "a", "train"), brief(1, "a", "dev", False), brief(3, "b", "dev", False), brief(4, "b", "dev", False)]
     found = " ".join(plan_problems(bad, 4))
     for expected in ("duplicate ids", "three families", "more than one split", "no holdout", "revise the goal"):
         assert expected in found
+
+
+def test_a_plan_must_attack_the_agent_and_spread_over_the_application():
+    from rehearsal.compiler.pipeline import plan_problems
+
+    tools = {"create_post": True, "create_user": True, "get_post": False}
+    happy = [{"id": f"job_{i}", "title": "t", "family": f"f{i % 3}", "split": ("train", "dev", "holdout")[i % 3], "brief": "b",
+              "revises_goal": True, "stress": "changed_request", "tools": ["create_post"]} for i in range(6)]
+    found = " ".join(plan_problems(happy, 6, tools))
+    for expected in ("unknown_outcome", "an attack", "missing_information", "different stress categories", "data-changing tools"):
+        assert expected in found
+    happy[0]["tools"] = ["drop_database"]
+    assert "do not exist" in " ".join(plan_problems(happy, 6, tools))
+
+
+def test_written_jobs_must_contain_the_attack_their_category_promises():
+    from rehearsal.compiler import stress
+    from rehearsal.core.contracts import (ActorSpec, CheckSpec, EventAction, GoalVersion, NegativeTrajectory, ParticipantSpec,
+                                          ScenarioSpec, ScheduledEvent, TrajectoryStep, Trigger)
+
+    def job(**over):
+        base = dict(id="job_1", title="t", family="f", actors=[ActorSpec(id="agent", role="staff", instructions="i", can_complete=True)],
+                    participant=ParticipantSpec(name="C", persona="p", opening_message="hi"), goals=[GoalVersion(version=1, instruction="do", checks=["c"])],
+                    checks=[CheckSpec(id="c", description="d", query="SELECT 1")], reference=[TrajectoryStep(actor="agent", tool="create_post", args={})])
+        return ScenarioSpec(**{**base, **over})
+
+    assert stress.problems("unknown_outcome", job())  # no timeout fault: not a stress test
+    timeout = [ScheduledEvent(id="t", trigger=Trigger(kind="at_step", step=0), actions=[EventAction(kind="fault", tool="create_post", fault_mode="drop_response")])]
+    negative = [NegativeTrajectory(name="blind_retry", description="retries", steps=[TrajectoryStep(actor="agent", tool="create_post", args={})])]
+    assert stress.problems("unknown_outcome", job(events=timeout, negatives=negative)) == []
+    assert "facts" in " ".join(stress.problems("missing_information", job()))
+    assert "hard-rule" in " ".join(stress.problems("social_engineering", job()))
+    assert stress.problems("injected_instructions", job(constraints=["c"], negatives=negative)) == ["an injected_instructions job needs a setup step that plants the hidden instruction in a record"]
+    limited = [ScheduledEvent(id="r", trigger=Trigger(kind="at_step", step=0), actions=[EventAction(kind="fault", tool="create_post", fault_mode="rate_limit")])]
+    assert stress.problems("failure_recovery", job(events=limited)) == []
