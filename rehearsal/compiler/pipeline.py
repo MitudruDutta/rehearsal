@@ -163,6 +163,7 @@ class BuildOptions:
     max_repair_rounds: int = 2
     check_determinism: bool = True
     live_audit: bool = True  # each job is tried by a live agent before publish; unfair jobs are repaired or withheld
+    parallel: int = 0  # validation lanes (sandboxes) the workspace's plan allows; 0 = the server's REHEARSAL_BUILD_PARALLEL
 
 
 class BuildFailed(Exception):
@@ -244,7 +245,7 @@ class Compiler:
             except BaseException as exc:  # noqa: BLE001 - re-raised by the caller below
                 errors.append(exc)
 
-        lanes = max(1, min(settings().build_parallel, len(items)))
+        lanes = max(1, min(settings().build_parallel, self.options.parallel or settings().build_parallel, len(items)))
         try:
             with ThreadPoolExecutor(lanes) as pool:  # each lane copies the context so its telemetry nests under this phase
                 for f in [pool.submit(contextvars.copy_context().run, lane, i) for i in range(lanes)]:

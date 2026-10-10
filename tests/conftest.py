@@ -19,6 +19,10 @@ def _prepare_db() -> bool:
     return True
 
 
+# Tests do not inherit plan enforcement or operator admins from a developer's .env (environment wins over .env).
+os.environ["REHEARSAL_PLANS"] = "off"
+os.environ["REHEARSAL_ADMIN_EMAILS"] = ""
+
 DB_AVAILABLE = _prepare_db()
 if DB_AVAILABLE:
     os.environ["REHEARSAL_DATABASE_URL"] = TEST_DB

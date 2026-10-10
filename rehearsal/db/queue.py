@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from .. import billing
 from ..config import settings
 from .events import emit
 from .models import Episode, Job, Run, TrainingJob, WorldVersion, now
@@ -38,8 +39,7 @@ class AllowanceExhausted(Exception):
     pass
 
 
-def month_start() -> Any:
-    return now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+month_start = billing.month_start
 
 
 def month_spend(s: Session, project_id: str) -> float:
@@ -47,25 +47,27 @@ def month_spend(s: Session, project_id: str) -> float:
 
 
 def allowance_left(s: Session, project_id: str) -> float | None:
-    """Model money this workspace can still commit this month, or None without a limit. The unspent budgets of
-    jobs still in progress are already committed, so two jobs cannot both count on the same dollars."""
-    cap = settings().monthly_allowance_usd
-    if not cap:
+    """Model money this workspace can still commit this month, or None without a limit (the plan's safety net, or the
+    server-wide allowance on self-hosted servers). The unspent budgets of jobs still in progress are already
+    committed, so two jobs cannot both count on the same dollars."""
+    cap = billing.allowance(s, project_id)
+    if cap is None:
         return None
     active = s.execute(select(Job.budget_usd, Job.spent_usd).where(Job.project_id == project_id, Job.status.in_(("queued", "running", "paused")), Job.budget_usd.is_not(None))).all()
     reserved = sum(max(0.0, b - (sp or 0.0)) for b, sp in active)
     return max(0.0, cap - month_spend(s, project_id) - reserved)
 
 
-def enqueue(s: Session, *, project_id: str, kind: str, payload: dict[str, Any], priority: int = 0, max_attempts: int = 3, budget_usd: float | None = None) -> Job:
+def enqueue(s: Session, *, project_id: str, kind: str, payload: dict[str, Any], priority: int = 0, max_attempts: int = 3,
+            budget_usd: float | None = None, not_before: Any = None) -> Job:
     if kind in SPENDING and (left := allowance_left(s, project_id)) is not None:
         if left <= 0:
             raise AllowanceExhausted(
-                f"This workspace has used its ${settings().monthly_allowance_usd:.2f} model allowance for this month, including jobs still running. "
+                f"This workspace has used its ${billing.allowance(s, project_id) or 0:.2f} model allowance for this month, including jobs still running. "
                 "It renews on the 1st; until then, stop a running job or wait for one to finish."
             )
         budget_usd = left if budget_usd is None else min(budget_usd, left)  # the job stops itself at this spend
-    job = Job(project_id=project_id, kind=kind, payload=payload, priority=priority, max_attempts=max_attempts, budget_usd=budget_usd)
+    job = Job(project_id=project_id, kind=kind, payload=payload, priority=priority, max_attempts=max_attempts, budget_usd=budget_usd, not_before=not_before)
     s.add(job)
     s.flush()
     emit(s, project_id=project_id, stream=job.id, type="job.queued", summary=f"{kind} queued", data={"kind": kind})
@@ -76,7 +78,8 @@ def claim(s: Session, worker_id: str, kinds: list[str] | None = None) -> Job | N
     lease = timedelta(seconds=settings().lease_seconds)
     q = (
         select(Job)
-        .where(or_(Job.status == "queued", (Job.status == "running") & (Job.lease_expires_at < now())))
+        .where(or_((Job.status == "queued") & (Job.not_before.is_(None) | (Job.not_before <= now())),
+                   (Job.status == "running") & (Job.lease_expires_at < now())))
         .order_by(Job.priority.desc(), Job.created_at)
         .limit(1)
         .with_for_update(skip_locked=True)

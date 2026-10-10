@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -40,6 +41,14 @@ class Settings:
     max_active_builds: int = 0  # per project; 0 = no limit (set both on a shared server)
     max_active_runs: int = 0
     monthly_allowance_usd: float = 0.0  # model spend a workspace may use per calendar month on the server's keys; 0 = no limit
+    plans: bool = False  # enforce the hosted plans (free, pro, team, enterprise); self-hosted servers leave this off
+    admin_emails: frozenset[str] = frozenset()  # operator admins (Google sign-in only): see every workspace, set any plan
+    quiet_hours_utc: str = "18:00-02:00"  # when free-plan evaluations may start (HH:MM-HH:MM, UTC; may cross midnight)
+    public_url: str = "http://localhost:7800"  # where browsers reach this server (checkout return links)
+    dodo_api_key: str | None = None
+    dodo_webhook_key: str | None = None
+    dodo_environment: str = "test_mode"  # test_mode | live_mode
+    dodo_products: dict = field(default_factory=dict)  # item (pro_monthly, ..., episodes_1000, build_1) -> Dodo product id
     container_memory: str = "1g"
     container_cpus: str = "1.0"
     container_pids: int = 256
@@ -76,6 +85,9 @@ def settings() -> Settings:
     roots = tuple(
         Path(p).resolve() for p in env("REHEARSAL_SOURCE_ROOTS", "./examples").split(",") if p.strip()
     )
+    quiet = env("REHEARSAL_QUIET_HOURS_UTC", "18:00-02:00")
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d", quiet):
+        raise ValueError(f"REHEARSAL_QUIET_HOURS_UTC must look like 18:00-02:00, not {quiet!r}")
     default_chain = "groq:openai/gpt-oss-120b,openrouter:openai/gpt-oss-120b,google:gemini-2.5-flash"
     return Settings(
         database_url=env(
@@ -98,6 +110,14 @@ def settings() -> Settings:
         max_active_builds=int(env("REHEARSAL_MAX_ACTIVE_BUILDS", "0")),
         max_active_runs=int(env("REHEARSAL_MAX_ACTIVE_RUNS", "0")),
         monthly_allowance_usd=float(env("REHEARSAL_MONTHLY_ALLOWANCE_USD", "0")),
+        plans=env("REHEARSAL_PLANS", "off").lower() in ("on", "true", "1"),
+        admin_emails=frozenset(e.strip().lower() for e in env("REHEARSAL_ADMIN_EMAILS", "").split(",") if e.strip()),
+        quiet_hours_utc=quiet,
+        public_url=env("REHEARSAL_PUBLIC_URL", "http://localhost:7800").rstrip("/"),
+        dodo_api_key=env("DODO_PAYMENTS_API_KEY") or None,
+        dodo_webhook_key=env("DODO_PAYMENTS_WEBHOOK_KEY") or None,
+        dodo_environment=env("DODO_PAYMENTS_ENVIRONMENT", "test_mode"),
+        dodo_products={k: env(f"DODO_PRODUCT_{k.upper()}", "") for k in ("pro_monthly", "pro_yearly", "team_monthly", "team_yearly", "episodes_1000", "build_1")},
         container_memory=env("REHEARSAL_CONTAINER_MEMORY", "1g"),
         container_cpus=env("REHEARSAL_CONTAINER_CPUS", "1.0"),
         container_pids=int(env("REHEARSAL_CONTAINER_PIDS", "256")),
