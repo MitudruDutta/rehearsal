@@ -618,3 +618,27 @@ def test_custom_prompt_with_braces_and_no_placeholder_still_gets_the_job_instruc
     policy = ep.LLMPolicy(ep.AgentProfile(name="mine", system_prompt='Answer as JSON like {"ok": true}.'), "local:m")
     text = policy.system_prompt(engine, engine.state.actors["agent"])
     assert text.startswith('Answer as JSON like {"ok": true}.') and "Your assignment: act" in text
+
+
+
+def test_every_evaluation_episode_is_stress_tested_by_default(make_engine):
+    from rehearsal.core.contracts import EventAction, ScheduledEvent, TrajectoryStep, Trigger
+
+    def engine_with(events=(), policy=None, stress=True):
+        eng = make_engine(policy or BatchPolicy([call("complete")]), default_stress=stress)
+        eng.scenario = eng.scenario.model_copy(update={"reference": [TrajectoryStep(actor="agent", tool="mutate", args={})], "events": list(events)})
+        return eng
+
+    plain = engine_with()
+    plain.run()
+    assert plain.gateway.faults.get("mutate") == ["rate_limit"]  # refused once, not carried out; a careful agent retries
+    timeout = ScheduledEvent(id="t", trigger=Trigger(kind="at_step", step=0), actions=[EventAction(kind="fault", tool="mutate", fault_mode="drop_response")])
+    own = engine_with([timeout])
+    own.run()
+    assert "rate_limit" not in (own.gateway.faults.get("mutate") or [])  # the job's own stress is kept as written
+    replay = engine_with(policy=ep.ScriptedPolicy([TrajectoryStep(actor="agent", tool="complete", args={"summary": "x"})]))
+    replay.run()
+    assert not replay.gateway.faults.get("mutate")  # validation replays stay exact
+    off = engine_with(stress=False)
+    off.run()
+    assert not off.gateway.faults.get("mutate")

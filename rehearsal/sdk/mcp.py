@@ -118,11 +118,12 @@ def build_server(client: Rehearsal | None = None) -> Any:
         return {"id": p["id"], "name": p["name"], "version": p["version"]}
 
     @mcp.tool()
-    def run_evaluation(world_version_id: str, agent_ids: list[str], splits: list[str] | None = None, repeats: int = 1, budget_usd: float | None = None) -> dict[str, Any]:
-        """Run agents through the jobs of a published world version. splits: any of train, dev, holdout (default dev).
+    def run_evaluation(world_version_id: str, agent_ids: list[str], splits: list[str] | None = None, repeats: int | None = None, budget_usd: float | None = None) -> dict[str, Any]:
+        """Run agents through the jobs of a published world version. By default every job (train, dev, holdout) is run
+        twice, with the default stress layer on. Narrow it with splits (any of train, dev, holdout) and repeats.
         Spends model money (about $0.02 per episode). Ask the user first."""
-        r = c.post("/v1/evaluations", {"world_version_id": world_version_id, "profile_ids": agent_ids, "splits": splits or ["dev"], "repeats": repeats,
-                                       **({"budget_usd": budget_usd} if budget_usd else {})})
+        r = c.post("/v1/evaluations", {"world_version_id": world_version_id, "profile_ids": agent_ids, **({"splits": splits} if splits else {}),
+                                       **({"repeats": repeats} if repeats else {}), **({"budget_usd": budget_usd} if budget_usd else {})})
         return {**r, "watch": link(f"/app/run/?id={r['run_id']}")}
 
     @mcp.tool()

@@ -647,9 +647,11 @@ def get_profile(prof_id: str, p: Principal = Depends(principal)) -> dict[str, An
 class EvaluationIn(BaseModel):
     world_version_id: str
     profile_ids: list[str] = Field(min_length=1)
-    splits: list[Literal["train", "dev", "holdout"]] = Field(default_factory=lambda: ["dev"])
+    # Properly tested by default: every job, twice, with the default stress layer on.
+    splits: list[Literal["train", "dev", "holdout"]] = Field(default_factory=lambda: ["train", "dev", "holdout"])
     scenario_ids: list[str] | None = None
-    repeats: int = Field(default=1, ge=1, le=20)
+    repeats: int = Field(default=2, ge=1, le=20)
+    default_stress: bool = True
     budget_usd: float | None = None
     max_episode_cost_usd: float | None = None
 
@@ -681,7 +683,7 @@ def create_evaluation(body: EvaluationIn, p: Principal = Depends(principal)) -> 
         left = queue.allowance_left(s, p.project_id)
         total = body.budget_usd if left is None else min(body.budget_usd or left, left)
         budget = total / shards if total is not None else None  # shards share the run's budget, not one each
-        jobs = [queue.enqueue(s, project_id=p.project_id, kind="evaluation", payload={"run_id": run.id, "max_episode_cost_usd": body.max_episode_cost_usd}, budget_usd=budget, max_attempts=5)
+        jobs = [queue.enqueue(s, project_id=p.project_id, kind="evaluation", payload={"run_id": run.id, "max_episode_cost_usd": body.max_episode_cost_usd, "default_stress": body.default_stress}, budget_usd=budget, max_attempts=5)
                 for _ in range(shards)]
         run.job_id = jobs[0].id
         emit(s, project_id=p.project_id, stream=run.id, type="run.queued", summary=f"{n} episodes queued", data={"shards": shards})

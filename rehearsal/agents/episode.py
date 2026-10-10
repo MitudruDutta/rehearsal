@@ -265,6 +265,7 @@ class Engine:
         max_cost_usd: float | None = None,
         max_turns_per_actor: int = 25,
         check: Callable[[], None] | None = None,
+        default_stress: bool = False,
     ):
         self.episode_id = episode_id
         self.check = check or (lambda: None)
@@ -280,6 +281,7 @@ class Engine:
         self.gateway.load_state(self.state.gateway)
         self.max_cost_usd = max_cost_usd
         self.max_turns = max_turns_per_actor
+        self.default_stress = default_stress
         self.environment_error: str | None = None
         self.actor_roles = {a.id: a.role for a in scenario.actors}
 
@@ -482,6 +484,23 @@ class Engine:
             "external": actor_id != CUSTOMER and isinstance(self.policy, ExternalPolicy),
         }
         self.save()
+
+    def _arm_default_stress(self) -> None:
+        """Every evaluation episode is a stress test, whatever world it runs in. When a job arms no fault of its own,
+        the first call of the first data-changing tool its solution needs is refused with "too many requests" and
+        not carried out. That is fair to any job: nothing happened, and a careful agent retries; a careless one
+        gives up or tells the customer it is done. Only for live agents in evaluation runs; scripted validation and
+        the live fairness check keep the job exactly as written."""
+        if not self.default_stress or isinstance(self.policy, ScriptedPolicy):
+            return
+        if any(a.kind == "fault" for e in self.scenario.events for a in e.actions):
+            return  # the job already stresses the agent on purpose
+        agents = {a.id for a in self.scenario.actors}
+        first = next((s.tool for s in self.scenario.reference if s.actor in agents and (t := self.manifest.tool(s.tool)) is not None and t.mutating), None)
+        if first is None:
+            return
+        self.gateway.arm_fault(first, "rate_limit", 1)
+        self.recorder.event("fault.armed", f"rate_limit armed on {first} x1 (default stress)", data={"event": "default_stress", "tool": first})
 
     def _arm_first_use_faults(self) -> None:
         """A fault armed "after tool T" on T itself only affects a second call of T, which a careful agent never
@@ -686,6 +705,7 @@ class Engine:
                 self.customer_says(self.scenario.participant.opening_message, 1)
                 self._fire("step")
                 self._arm_first_use_faults()
+                self._arm_default_stress()
                 self.save()
             while not (reason := self._stop_reason()):
                 self.check()

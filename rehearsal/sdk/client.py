@@ -94,8 +94,10 @@ class Profiles(_Resource):
 
 
 class Evaluations(_Resource):
-    def create(self, world_version_id: str, profile_ids: list[str], splits: list[str] | None = None, repeats: int = 1, **fields: Any) -> dict[str, Any]:
-        return self.c.post("/v1/evaluations", {"world_version_id": world_version_id, "profile_ids": profile_ids, "splits": splits or ["dev"], "repeats": repeats, **fields})
+    def create(self, world_version_id: str, profile_ids: list[str], splits: list[str] | None = None, repeats: int | None = None, **fields: Any) -> dict[str, Any]:
+        """Without splits or repeats, the server runs every job twice with the default stress layer on."""
+        return self.c.post("/v1/evaluations", {"world_version_id": world_version_id, "profile_ids": profile_ids, **({"splits": splits} if splits else {}),
+                                               **({"repeats": repeats} if repeats else {}), **fields})
 
     def compare(self, run_a: str, run_b: str | None = None) -> dict[str, Any]:
         return self.c.get("/v1/compare", params={"run_a": run_a, **({"run_b": run_b} if run_b else {})})
