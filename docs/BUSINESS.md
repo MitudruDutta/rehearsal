@@ -1,6 +1,6 @@
 # How Rehearsal makes money
 
-Inputs for a cfo.ai business plan (pricing, costs, revenue, runway). No generated cfo.ai plan or plan link is recorded yet. Unit costs below are **measured** on this deployment (October 2026: four published worlds, about 60 evaluation episodes). Prices, revenue and runway figures are **assumptions** to be decided and modelled in cfo.ai.
+Inputs for, and results of, the cfo.ai business plan (pricing, costs, revenue, runway). Unit costs below are **measured** on this deployment (October 2026: four published worlds, about 60 evaluation episodes). Revenue and runway figures are **assumptions** modelled in cfo.ai. The chosen pricing is Option C adjusted (see below).
 
 ## The one-line pitch
 
@@ -45,7 +45,7 @@ Today teams choose between testing on production (unsafe), mocks (they agree wit
 
 Distribution today: the Python package, the `rehearsal` container image (`Dockerfile`), and a single-host stack (`infra/compose.full.yaml`).
 
-## Pricing (decision pending: model both options in cfo.ai)
+## Pricing (chosen: Option C adjusted)
 
 The value metric is **world builds** and **episodes rehearsed**: they grow with how seriously a team tests, and they are what costs us money. Applications cost nothing until they are built, so the number of applications is a secondary limit. Customers use only a Rehearsal API key; all model calls run on Rehearsal's model account, so model cost is our cost of revenue.
 
@@ -67,7 +67,20 @@ The value metric is **world builds** and **episodes rehearsed**: they grow with 
 | Team | $149 per month | 20 | 8 per month | 4,000 per month | 4 | about $120 |
 | Enterprise | negotiated, from $3,000 per month | custom | custom | custom | own runner (VPC), SSO, own model key | custom |
 
-Overage for both options: $15 per extra world build, $40 per extra 1,000 episodes. Costs "at full use" assume every included build and episode is used; most customers use far less, so real margins are higher. Free-trial abuse is limited by Google sign-in, one trial per device and IP address, and optionally a card check before the free build. Every job has a hard spend cap, and each workspace has a monthly cap, so no account can spend more than its plan.
+**Option C adjusted (chosen 10 October 2026: most users with a healthy margin)**
+
+| Plan | Price | Applications | World builds | Episodes | Parallel sandboxes |
+|---|---|---|---|---|---|
+| Free (forever) | $0 | 1 | 1 (stops at $5) | 40 per month, queued to quiet hours | 1 |
+| Pro | $29 per month | 3 | 2 per month | 750 per month | 2 |
+| Team | $149 per month | 20 | 8 per month | 3,000 per month | 4 |
+| Enterprise | negotiated, from $3,000 per month | custom | custom | custom | own runner (VPC), SSO, own model key |
+
+Pro and Team cost 25% less with the customer's own model key (we pay no model cost for them). Yearly billing gives two months free. Overage: $15 per extra world build, $30 per extra 1,000 episodes. Free episodes run in quiet hours, when runner machines are idle and off-peak model prices apply.
+
+Options A and B were modelled first:
+
+Overage for options A and B: $15 per extra world build, $40 per extra 1,000 episodes. Costs "at full use" assume every included build and episode is used; most customers use far less, so real margins are higher. Free-trial abuse is limited by Google sign-in, one trial per device and IP address, and optionally a card check before the free build. Every job has a hard spend cap, and each workspace has a monthly cap, so no account can spend more than its plan.
 
 Price anchor: an engineer spending two weeks building and maintaining a test harness for one application costs roughly $8,000 to $12,000 fully loaded (assumption: $200k to $300k per year).
 
@@ -119,6 +132,27 @@ Ari built a 24-month model (October 2026 to September 2028) from the measured un
 
 **The finding that matters more than price:** costs are small (about $2k a month), so the first $3,000 enterprise deal makes Rehearsal profitable almost on its own. It lands in month 4 in the base case and month 12 in the conservative case; in the conservative case cash runs out under either option with a $15k buffer. Landing enterprise pilots early moves break-even; pricing barely does.
 
+**Second round: Option C (for the most users and paying customers).** Option C makes the free plan permanent and Pro cheaper, to win more users. Ari modelled it against B with smaller allowances, in the base case, assuming 25% more paying self-serve customers than B, three times more free users, and episode cost halved from January 2027 in every scenario.
+
+| Base case, month 24 | B, smaller allowances | C as first proposed | C adjusted (chosen) |
+|---|---|---|---|
+| Active users | 1,139 | 3,319 | 3,319 |
+| Paying customers | 163 | 207 | 207 |
+| Revenue over 24 months | $371k | $379k | $385k |
+| Gross margin | 69.6% | 47.6% (below the 60% target) | 60.9% |
+| Lowest cash balance | $8.1k | $4.9k | $7.3k |
+| Cash in month 24 | $225k | $148k | $202k |
+
+C as first proposed gave free users 100 episodes a month and 40% off for an own model key. About 3,100 active free users at 100 episodes cost about $5.6k a month and need 38 runner machines against 18, which pulls margin below 60%. C adjusted gives free users 40 episodes queued to quiet hours and 25% off for an own model key, and keeps margin above 60%.
+
+**Ari's recommendation: C adjusted** for the most users with healthy profit: about three times the active users of B and 27% more paying customers, for about $23k less cash at month 24. Choose B with smaller allowances only if profit matters more than reach.
+
+What to watch:
+- In the upside case, C adjusted drops below 60% margin at about 10,000 free users; cut free episodes or ask for a card before that.
+- The growth assumption is generous: 25% more paying customers from three times more free users implies about 0.8% conversion. At 2% conversion, C has about 90 paying self-serve customers by month 12 but a 51.6% margin.
+- Yearly plans are modelled as monthly payments, so real cash is better than shown.
+- In the conservative case every option runs $7k to $12k short before the first enterprise deal: that is a funding question, not a pricing one.
+
 Estimates still to be corrected by the founders: pay of $700 a month each plus 10% overhead, tools $150 a month, hosting $100 a month plus $2 per paying customer, other admin $200 a month, starting cash $15,000, self-serve churn 3% a month, free-user drop-off 10% a month, and payment fees 3.5%.
 
 ## Go-to-market
@@ -139,7 +173,7 @@ Estimates still to be corrected by the founders: pay of $700 a month each plus 1
 | Base | 30 | 3 | $24,000 |
 | Upside | 80 | 8 | $64,000 |
 
-Arithmetic (to be redone with the chosen option): the figures above assumed a $499 Team plan plus about $100 overage, and Enterprise at $3,000 to $3,200. With Option A or B, multiply customers by the chosen plan prices; expect most self-serve revenue from the middle plan.
+These were the first inputs to cfo.ai and assumed an early $499 Team plan. The cfo.ai results above replace them: with Option C adjusted, the base case reaches about 207 paying customers and $385k revenue over 24 months.
 
 ## Costs and runway inputs (assumptions)
 
@@ -163,4 +197,4 @@ Runway = cash ÷ (monthly costs − monthly revenue). Enter the team's actual ca
 
 ## What to enter into cfo.ai
 
-Business model: SaaS with an open-source core, usage-based overage. Pricing: Option A or B above (enter both and compare). Cost of revenue: measured cost per world build ($1.70 to $8.84, base case $5) and per episode ($0.02), plus runner hours ($0.27 each). Customer acquisition: pilots and open-source conversion (assume 2% of active self-hosted teams convert per month). Headcount: founding team. Cash on hand: actual figure.
+Business model: SaaS with an open-source core, usage-based overage. Pricing: Option C adjusted above (A and B were modelled for comparison). Cost of revenue: measured cost per world build ($1.70 to $8.84, base case $5) and per episode ($0.02), plus runner hours ($0.27 each). Customer acquisition: pilots and open-source conversion (assume 2% of active self-hosted teams convert per month). Headcount: founding team. Cash on hand: actual figure.

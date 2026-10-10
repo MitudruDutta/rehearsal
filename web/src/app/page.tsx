@@ -105,9 +105,10 @@ const MEASURES = [
 ];
 
 const TIERS = [
-  { name: "Open source", price: "$0", unit: "self-hosted", points: ["World Compiler, runner, console, CLI, and SDK", "Unlimited worlds and rehearsals on your machines", "Bring your own model key"], cta: "Read the install guide", href: "#faq" },
-  { name: "Team", price: "$499", unit: "/ month, hosted", points: ["10 world builds and 5,000 episodes included", "$20 per extra build, $0.05 per extra episode", "Hosted sandboxes, readiness board, run history"], cta: "Start free", href: "/app/", featured: true },
-  { name: "Enterprise", price: "from $3,000", unit: "/ month", points: ["Runner inside your own cloud account", "Single sign-on, audit export, retention controls", "Private held-out evaluation of vendor agents"], cta: "Talk to us", href: "#cta" },
+  { name: "Free", price: "$0", unit: "forever", points: ["1 application, built into a practice world once", "40 episodes a month, run in quiet hours", "1 sandbox at a time"], cta: "Start free", href: "/app/" },
+  { name: "Pro", price: "$29", unit: "/ month", points: ["3 applications, 2 world builds a month", "750 episodes a month, run at once", "2 sandboxes at a time", "25% off with your own model key"], cta: "Start free", href: "/app/", featured: true },
+  { name: "Team", price: "$149", unit: "/ month", points: ["20 applications, 8 world builds a month", "3,000 episodes a month", "4 sandboxes at a time", "25% off with your own model key"], cta: "Start free", href: "/app/" },
+  { name: "Enterprise", price: "Custom", unit: "from $3,000 a month", points: ["Runner inside your own cloud account", "Single sign-on, audit export, retention controls", "Private held-out evaluation of vendor agents"], cta: "Talk to us", href: "#cta" },
 ];
 
 const FAQ = [
@@ -225,11 +226,11 @@ export default function Landing() {
 
       <section id="pricing" className="border-t border-border/60 bg-card/30">
         <div className="mx-auto max-w-7xl px-4 py-24 md:px-8">
-          <SectionHead title="Pricing" body="Self-host the open-source core for free. Pay when you want us to run the sandboxes, or to run them inside your own cloud." />
-          <div className="mt-14 grid gap-4 lg:grid-cols-3">
+          <SectionHead title="Pricing" body="Start free and keep the free plan. Pay when you rehearse more often. The open-source core stays free to self-host with your own model key." />
+          <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {TIERS.map((t) => (
               <SpotlightCard key={t.name} className={t.featured ? "border-primary/60 shadow-[0_0_0_1px_var(--primary),0_20px_60px_-20px_var(--primary)]" : ""}>
-                <div className="flex items-center justify-between"><h3 className="font-semibold">{t.name}</h3>{t.featured && <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">Most teams</span>}</div>
+                <div className="flex items-center justify-between"><h3 className="font-semibold">{t.name}</h3>{t.featured && <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">Recommended</span>}</div>
                 <p className="mt-5"><span className="font-heading text-4xl font-bold">{t.price}</span> <span className="text-sm text-muted-foreground">{t.unit}</span></p>
                 <ul className="mt-6 space-y-2.5 text-sm">
                   {t.points.map((p) => <li key={p} className="flex gap-2"><CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />{p}</li>)}
@@ -238,6 +239,7 @@ export default function Landing() {
               </SpotlightCard>
             ))}
           </div>
+          <p className="mt-8 text-center text-sm text-muted-foreground">Yearly plans get two months free. Extra use costs $15 per world build and $30 per 1,000 episodes. Every job has a spend cap, so a bill never surprises you.</p>
         </div>
       </section>
 
