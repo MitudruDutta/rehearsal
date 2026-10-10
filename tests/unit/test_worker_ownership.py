@@ -157,13 +157,14 @@ def test_api_commands_keep_owner_changes_in_the_same_locked_transaction(monkeypa
     from types import SimpleNamespace as NS
     from rehearsal.api import app as api_module
     from rehearsal.api.auth import Principal
-    job = NS(status="failed", pause_requested=False, cancel_requested=False)
+    job = NS(kind="world_build", status="failed", pause_requested=False, cancel_requested=False, not_before=None)
     s = NS(refresh=Mock())
     @contextmanager
     def transaction():
         yield s
     monkeypatch.setattr(api_module, "session", transaction)
     monkeypatch.setattr(api_module, "_get", lambda *a: job)
+    monkeypatch.setattr(api_module.billing, "check_retry", lambda *a: None)
     def apply(session, row, cmd):
         assert session is s and row is job
         row.status = status

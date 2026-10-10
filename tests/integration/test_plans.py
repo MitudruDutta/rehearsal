@@ -239,3 +239,153 @@ def test_quiet_window_crosses_midnight(monkeypatch):
         assert billing.quiet_start(at(17, 59)) == at(18)
     finally:
         settings.cache_clear()
+
+
+def _stop_run(run_id: str) -> None:
+    with session() as s:  # what stopped shards do to their run
+        for j in queue.run_jobs(s, run_id):
+            if j.status in ("queued", "running", "paused"):
+                j.status = "cancelled"
+                queue._fail_owner(s, j, "cancelled")
+
+
+def test_restarting_a_stopped_run_counts_its_episodes_again(plans):
+    from tests.integration.test_api_queue import _published_world
+
+    project, auth, org_id = _workspace(f"rst-{uuid.uuid4().hex[:6]}")
+    client = TestClient(app)
+    wv = _published_world(project, scenarios=10)
+    prof = client.post("/v1/agent-profiles", headers=auth, json={"name": "baseline"}).json()["id"]
+    a = client.post("/v1/evaluations", headers=auth, json={"world_version_id": wv, "profile_ids": [prof], "repeats": 2}).json()
+    _stop_run(a["run_id"])  # 20 episodes never started: not counted
+    b = client.post("/v1/evaluations", headers=auth, json={"world_version_id": wv, "profile_ids": [prof], "repeats": 3})
+    assert b.status_code == 202, b.text  # 30 of 40 now in use
+    again = client.post(f"/v1/runs/{a['run_id']}/commands", headers=auth, json={"command": "retry"})
+    assert again.status_code == 402 and "brings back 20 episodes" in again.json()["detail"]  # stop and restart cannot dodge the limit
+    _stop_run(b.json()["run_id"])
+    again = client.post(f"/v1/runs/{a['run_id']}/commands", headers=auth, json={"command": "retry"})
+    assert again.status_code == 200 and again.json()["status"] == "queued"
+    with session() as s:
+        shard = queue.run_jobs(s, a["run_id"])[0]
+        assert shard.not_before is not None and shard.not_before > now()  # still waits for quiet hours
+    assert client.get("/v1/billing", headers=auth).json()["usage"]["episodes"] == 20
+
+
+def test_jobs_get_their_own_spend_cap_not_the_whole_allowance(plans):
+    from tests.integration.test_api_queue import _published_world
+
+    project, auth, org_id = _workspace(f"cap-{uuid.uuid4().hex[:6]}")
+    with session() as s:
+        s.get(Organization, org_id).plan_override = "pro"  # $60 a month
+    client = TestClient(app)
+    app_id = _app(client, auth)
+    build = client.post("/v1/world-builds", headers=auth, json={"application_id": app_id}).json()
+    wv = _published_world(project, scenarios=5)
+    prof = client.post("/v1/agent-profiles", headers=auth, json={"name": "baseline"}).json()["id"]
+    run = client.post("/v1/evaluations", headers=auth, json={"world_version_id": wv, "profile_ids": [prof], "repeats": 2})
+    assert run.status_code == 202, run.text  # the build in progress did not reserve the whole month
+    with session() as s:
+        assert s.get(Job, build["job_id"]).budget_usd == billing.DEFAULT_BUDGET_USD["world_build"]
+        shards = queue.run_jobs(s, run.json()["run_id"])
+        assert abs(sum(j.budget_usd for j in shards) - 10 * billing.EPISODE_BUDGET_USD) < 1e-9
+
+
+def test_a_paid_plan_that_ended_without_news_is_checked_again(plans, monkeypatch):
+    project, auth, org_id = _workspace(f"old-{uuid.uuid4().hex[:6]}")
+    old = (now() - timedelta(days=5)).isoformat()
+    with session() as s:
+        s.get(Organization, org_id).billing = {"customer_id": "cus_x", "subscription_id": "sub_x", "status": "active", "plan": "team", "period_end": old, "synced_at": old}
+
+    def unreachable(*a, **k):
+        raise billing.BillingError("down")
+
+    monkeypatch.setattr(billing, "_dodo", unreachable)
+    client = TestClient(app)
+    assert client.get("/v1/billing", headers=auth).json()["plan"]["name"] == "free"  # 5 days past the period: no longer paid
+    renewed = (now() + timedelta(days=25)).isoformat()
+    monkeypatch.setattr(billing, "_dodo", lambda method, path, **kw: {"items": [{"subscription_id": "sub_x", "status": "active", "product_id": "pdt_team_m",
+                                                                                 "next_billing_date": renewed}]} if path == "/subscriptions" else {"items": []})
+    with session() as s:
+        billing.lock(s, project)  # any limit check re-reads a stale subscription first
+    assert client.get("/v1/billing", headers=auth).json()["plan"]["name"] == "team"
+
+
+def test_no_second_subscription_while_one_is_on_hold(plans, monkeypatch):
+    project, auth, org_id = _workspace(f"hold-{uuid.uuid4().hex[:6]}")
+    with session() as s:
+        s.get(Organization, org_id).billing = {"customer_id": "cus_h", "subscription_id": "sub_h", "status": "on_hold", "plan": "pro"}
+    monkeypatch.setattr(billing, "_dodo", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not call Dodo")))
+    r = TestClient(app).post("/v1/billing/checkout", headers=auth, json={"item": "pro_monthly"})
+    assert r.status_code == 409 and "on hold" in r.json()["detail"]
+
+
+def test_a_misconfigured_webhook_secret_is_reported_not_crashed(plans, monkeypatch):
+    monkeypatch.setenv("DODO_PAYMENTS_WEBHOOK_KEY", "whsec_not base64!")
+    settings.cache_clear()
+    body = b"{}"
+    r = TestClient(app).post("/v1/billing/webhook", content=body, headers=_signed(body, "msg_bad"))
+    assert r.status_code == 500 and "signing secret" in r.json()["detail"]
+
+
+def test_refunded_top_up_is_removed_and_not_added_again(plans, monkeypatch):
+    project, auth, org_id = _workspace(f"ref-{uuid.uuid4().hex[:6]}")
+    pay = f"pay_{uuid.uuid4().hex[:10]}"
+    with session() as s:
+        s.get(Organization, org_id).billing = {"customer_id": f"cus_{org_id}", "subscription_id": "sub_r", "status": "active", "plan": "pro"}
+    payment = {"payment_id": pay, "status": "succeeded", "created_at": now().isoformat(), "product_cart": [{"product_id": "pdt_build", "quantity": 3}]}
+    monkeypatch.setattr(billing, "_dodo", lambda method, path, **kw: (
+        {"items": []} if path == "/subscriptions" else {"items": [{"payment_id": pay, "status": "succeeded"}]} if path == "/payments" else payment))
+    client = TestClient(app)
+    assert client.post("/v1/billing/sync", headers=auth).json()["usage"]["extra_builds"] == 3
+    body = json.dumps({"type": "refund.succeeded", "data": {"payload_type": "Refund", "refund_id": "ref_1", "payment_id": pay, "status": "succeeded",
+                                                             "customer": {"customer_id": f"cus_{org_id}"}}}).encode()
+    assert client.post("/v1/billing/webhook", content=body, headers=_signed(body, f"msg_{uuid.uuid4().hex}")).json() == {"ok": True}
+    assert client.get("/v1/billing", headers=auth).json()["usage"]["extra_builds"] == 0
+    assert client.post("/v1/billing/sync", headers=auth).json()["usage"]["extra_builds"] == 0  # the payment still says succeeded
+
+
+def test_grace_period_lasts_until_dodos_deadline(plans, monkeypatch):
+    project, auth, org_id = _workspace(f"grace-{uuid.uuid4().hex[:6]}")
+    ended = (now() - timedelta(days=6)).isoformat()
+    sub = {"subscription_id": "sub_g", "status": "past_due", "product_id": "pdt_pro_m", "next_billing_date": ended, "metadata": {"org_id": org_id}}
+    with session() as s:
+        s.get(Organization, org_id).billing = {"customer_id": f"cus_{org_id}", "subscription_id": "sub_g", "status": "past_due", "plan": "pro", "period_end": ended}
+    monkeypatch.setattr(billing, "_dodo", lambda method, path, **kw: {"items": [sub]} if path == "/subscriptions" else {"items": []})
+    client = TestClient(app)
+    assert client.get("/v1/billing", headers=auth).json()["plan"]["name"] == "free"  # no deadline known: 3 days after the period
+    deadline = (now() + timedelta(days=10)).isoformat()
+    body = json.dumps({"type": "subscription.past_due", "data": {**sub, "past_due_ends_at": deadline, "customer": {"customer_id": f"cus_{org_id}"}}}).encode()
+    assert client.post("/v1/billing/webhook", content=body, headers=_signed(body, f"msg_{uuid.uuid4().hex}")).status_code == 200
+    assert client.get("/v1/billing", headers=auth).json()["plan"]["name"] == "pro"  # Dodo's grace window still open
+    assert client.post("/v1/billing/change", headers=auth, json={"item": "team_monthly"}).status_code == 409  # Dodo refuses plan changes now
+
+
+def test_plan_change_keeps_the_current_plan_if_the_charge_fails(plans, monkeypatch):
+    project, auth, org_id = _workspace(f"chg-{uuid.uuid4().hex[:6]}")
+    sent = {}
+    with session() as s:
+        s.get(Organization, org_id).billing = {"customer_id": f"cus_{org_id}", "subscription_id": "sub_c", "status": "active", "plan": "pro"}
+
+    def fake(method, path, **kw):
+        if path.endswith("/change-plan"):
+            sent.update(kw["json"])
+            return {}
+        return {"items": []}
+
+    monkeypatch.setattr(billing, "_dodo", fake)
+    assert TestClient(app).post("/v1/billing/change", headers=auth, json={"item": "team_monthly"}).status_code == 200
+    assert sent == {"product_id": "pdt_team_m", "quantity": 1, "proration_billing_mode": "prorated_immediately", "on_payment_failure": "prevent_change"}
+
+
+def test_a_test_key_never_reaches_live_mode(plans, monkeypatch):
+    monkeypatch.setenv("DODO_PAYMENTS_API_KEY", "dodo_test_abc")
+    monkeypatch.setenv("DODO_PAYMENTS_ENVIRONMENT", "live_mode")
+    settings.cache_clear()
+    with pytest.raises(billing.BillingError, match="test key"):
+        billing._dodo("GET", "/subscriptions")
+
+
+def test_a_garbled_signature_is_refused_not_crashed(plans):
+    body = b"{}"
+    headers = {**_signed(body, "msg_x"), "webhook-signature": "v1,ééé".encode("latin-1")}  # raw bytes, as any client could send
+    assert TestClient(app).post("/v1/billing/webhook", content=body, headers=headers).status_code == 401

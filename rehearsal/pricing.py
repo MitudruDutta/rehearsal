@@ -3,8 +3,8 @@
 A call is charged at, in order of preference:
 
 1. the cost the provider returned for that request (OpenRouter ``usage.cost``);
-2. the serving provider's own published price list (Nebius and OpenRouter
-   expose per-token prices on their model endpoints);
+2. the serving provider's own published price list (Nebius, OpenRouter and
+   LiteLLM proxies expose per-token prices on their model endpoints);
 3. a price from ``pricing.yaml`` (or ``REHEARSAL_PRICES``) for providers that
    publish no machine-readable prices; each entry names its source and date.
 
@@ -17,6 +17,7 @@ price, cost is reported as unknown rather than invented; tokens are always kept.
 from __future__ import annotations
 
 import json
+import math
 import logging
 import os
 import re
@@ -24,6 +25,7 @@ import statistics
 import threading
 import time
 from dataclasses import asdict, dataclass
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +36,7 @@ log = logging.getLogger(__name__)
 TTL_S = 6 * 3600
 _lock = threading.Lock()
 _cache: dict[str, tuple[float, Any]] = {}
+require_known_prices: ContextVar[bool] = ContextVar("require_known_prices", default=False)
 
 
 @dataclass
@@ -45,6 +48,10 @@ class Quote:
     source: str  # human-readable origin, e.g. "nebius price list"
     url: str = ""
     as_of: str = ""
+
+    def __post_init__(self) -> None:
+        if any(not math.isfinite(v) or v < 0 for v in (self.input_per_m, self.output_per_m)):
+            raise ValueError("model prices must be finite and non-negative")
 
     def cost(self, prompt_tokens: int, completion_tokens: int) -> float:
         return (prompt_tokens * self.input_per_m + completion_tokens * self.output_per_m) / 1e6
@@ -64,9 +71,12 @@ def _cached(key: str, loader: Any) -> Any:
         value = loader()
     except Exception as exc:  # noqa: BLE001 - a missing source must not break model calls
         log.info("price source %s unavailable: %s", key, exc)
-        value = None
+        value = hit[1] if hit else None  # retain the last published price during an outage
+        with _lock:
+            _cache[key] = (time.time() - TTL_S + 30, value)  # retry failed sources soon
+        return value
     with _lock:
-        _cache[key] = (time.time(), value)
+        _cache[key] = (time.time() if value else time.time() - TTL_S + 30, value)
     return value
 
 
@@ -104,6 +114,21 @@ def _openrouter_list() -> dict[str, Quote]:
     return out
 
 
+def _litellm_list() -> dict[str, Quote]:
+    """A LiteLLM proxy publishes the per-token price it charges each key (GET /model/info)."""
+    key = os.environ.get("LITELLM_API_KEY")
+    if not key:
+        return {}
+    url = os.environ.get("LITELLM_BASE_URL", "https://litellm.vision.aivar.app/v1").removesuffix("/").removesuffix("/v1") + "/model/info"
+    out = {}
+    for m in httpx.get(url, headers={"Authorization": f"Bearer {key}"}, timeout=20).json().get("data", []):
+        info = m.get("model_info") or {}
+        if info.get("input_cost_per_token") is not None and info.get("output_cost_per_token") is not None:
+            out[m["model_name"]] = Quote("litellm", m["model_name"], float(info["input_cost_per_token"]) * 1e6, float(info["output_cost_per_token"]) * 1e6,
+                                         "litellm proxy price list", url, _today())
+    return out
+
+
 def _overrides() -> dict[str, Quote]:
     """pricing.yaml: {"provider:model": {input_per_m, output_per_m, source, url, as_of}}."""
     out: dict[str, Quote] = {}
@@ -122,7 +147,7 @@ def _overrides() -> dict[str, Quote]:
     return out
 
 
-LISTS = {"nebius": _nebius_list, "openrouter": _openrouter_list}
+LISTS = {"nebius": _nebius_list, "openrouter": _openrouter_list, "litellm": _litellm_list}
 
 
 # --------------------------------------------------------------------------- lookups

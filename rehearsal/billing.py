@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import func, not_, select
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -70,6 +70,11 @@ ITEMS: dict[str, dict[str, Any]] = {
     "build_1": {"credit": "builds", "per_unit": 1, "usd": 10.0},
 }
 PAID = ("active", "past_due")  # past_due: a renewal failed and Dodo's grace period is running; access stays
+STALE_AFTER = timedelta(days=3)  # a paid period this long over without news from Dodo no longer counts as paid
+# Spend caps for jobs started without one on a plan with a model-spend safety net, so one job cannot reserve the whole
+# month's allowance and block every other job while it runs. Measured: builds $1.70-8.84, episodes $0.016-0.018.
+DEFAULT_BUDGET_USD = {"world_build": 20.0, "world_validate": 3.0, "improvement": 2.0}
+EPISODE_BUDGET_USD = 0.06
 
 
 class PlanLimit(Exception):
@@ -124,10 +129,39 @@ def org_of(s: Session, project_id: str) -> Organization:
 
 
 def lock(s: Session, project_id: str) -> Organization:
-    """Serializes limit checks of one workspace across requests and API replicas (released at commit)."""
+    """Serializes limit checks of one workspace across requests and API replicas (released at commit). A paid period
+    that ended without news from Dodo (a lost webhook) is re-read first, so the plan is never stale by more than that."""
     org = org_of(s, project_id)
     s.refresh(org, with_for_update=True)
+    b = org.billing or {}
+    if billing_enabled() and b.get("status") in PAID and _ended(b) and _when(b.get("synced_at")) < now() - timedelta(minutes=10):
+        try:
+            sync(s, org)
+        except BillingError:
+            pass  # Dodo unreachable: the grace period below still applies
     return org
+
+
+def _when(iso: Any) -> datetime:
+    try:
+        value = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return value if value.tzinfo else value.replace(tzinfo=now().tzinfo)
+    except ValueError:
+        return datetime.min.replace(tzinfo=now().tzinfo)
+
+
+def _ended(b: dict[str, Any]) -> bool:
+    return bool(b.get("period_end")) and _when(b["period_end"]) < now()
+
+
+def paid(b: dict[str, Any]) -> bool:
+    """A subscription that Dodo says is paid, and whose period did not end more than STALE_AFTER ago. During Dodo's
+    grace period (past_due) access lasts until past_due_ends_at, which only webhooks carry."""
+    if b.get("status") not in PAID:
+        return False
+    if b.get("status") == "past_due" and b.get("past_due_ends_at"):
+        return now() < _when(b["past_due_ends_at"])
+    return not (b.get("period_end") and _when(b["period_end"]) + STALE_AFTER < now())
 
 
 def owner(s: Session, org: Organization) -> User | None:
@@ -144,7 +178,7 @@ def plan_of(s: Session, org: Organization) -> Plan:
         base = PLANS[org.plan_override]
     elif is_admin(owner(s, org)):
         base = PLANS["internal"]
-    elif billing.get("status") in PAID and billing.get("plan") in PLANS:
+    elif paid(billing) and billing.get("plan") in PLANS:
         base = PLANS[billing["plan"]]
     else:
         base = PLANS["free"]
@@ -267,6 +301,33 @@ def check_evaluation(s: Session, project_id: str, episodes: int) -> EvaluationGr
     return EvaluationGrant(free, quiet_start() if plan.quiet_hours else None)
 
 
+def check_retry(s: Session, project_id: str, job: Job) -> Any:
+    """A stopped or failed evaluation shard that is restarted brings its run's unstarted episodes back, and takes a
+    sandbox again: both count against the plan as if the run were new. Returns the job's new not_before."""
+    if job.kind not in ("evaluation", "world_build"):
+        return job.not_before
+    org = lock(s, project_id)
+    plan = plan_of(s, org)
+    used = usage(s, org, plan)
+    if job.kind == "world_build":
+        if plan.active_builds is not None and used["active_builds"] >= plan.active_builds:
+            raise PlanLimit(f"All {plan.active_builds} build slots of the {plan.title} plan are in use.", 429)
+        if plan.build_budget_usd is not None:
+            job.budget_usd = min(job.budget_usd, plan.build_budget_usd) if job.budget_usd is not None else plan.build_budget_usd
+        job.payload = {**job.payload, "options": {**job.payload.get("options", {}), "parallel": plan.sandboxes or 0}}
+        return job.not_before
+    run = s.get(Run, job.payload.get("run_id"))
+    if run is not None and run.status in ("failed", "cancelled") and plan.episodes is not None:
+        back = s.scalar(select(func.count()).select_from(Episode).where(Episode.run_id == run.id, Episode.status == "pending")) or 0
+        left = plan.episodes + used["extra_episodes"] - used["episodes"]
+        if back > left:
+            raise PlanLimit(f"Restarting this run brings back {back} episodes it never started, and the workspace has {max(0, left)} left this month "
+                            f"(renews {next_month():%d %b}).{_more(plan)}")
+    if plan.sandboxes is not None and used["sandboxes"] >= plan.sandboxes:
+        raise PlanLimit(f"All {plan.sandboxes} sandbox{'es' * (plan.sandboxes != 1)} of the {plan.title} plan are in use. Wait for a run to finish, or stop it.", status=429)
+    return quiet_start() if plan.quiet_hours else None
+
+
 # --------------------------------------------------------------------------- summary for the console
 
 
@@ -278,7 +339,7 @@ def summary(s: Session, org: Organization) -> dict[str, Any]:
         "plan": asdict(plan), "usage": used, "month": month_start().strftime("%Y-%m"), "renews": next_month().date().isoformat(),
         "quiet_hours_utc": settings().quiet_hours_utc if plan.quiet_hours else None, "next_quiet_start": (q.isoformat() if plan.quiet_hours and (q := quiet_start()) else None),
         "override": org.plan_override, "limits_override": org.limits_override or {},
-        "subscription": {k: billing.get(k) for k in ("status", "plan", "interval", "period_end", "cancel_at_period_end")} if billing.get("subscription_id") else None,
+        "subscription": {**{k: billing.get(k) for k in ("status", "plan", "interval", "period_end", "cancel_at_period_end")}, "paid": paid(billing)} if billing.get("subscription_id") else None,
         "billing_enabled": billing_enabled(), "items": sorted(k for k in ITEMS if settings().dodo_products.get(k)),
         "plans": {k: asdict(v) for k, v in PLANS.items() if k != "internal"},
     }
@@ -294,9 +355,14 @@ def billing_enabled() -> bool:
 
 def _dodo(method: str, path: str, **kw: Any) -> Any:
     cfg = settings()
-    base = "https://live.dodopayments.com" if cfg.dodo_environment == "live_mode" else "https://test.dodopayments.com"
+    live = cfg.dodo_environment == "live_mode"  # anything else is test mode, so a typo can never charge real cards
+    key = cfg.dodo_api_key or ""
+    if (live and key.startswith("dodo_test_")) or (not live and key.startswith("dodo_live_")):
+        raise BillingError(f"DODO_PAYMENTS_API_KEY is a {'test' if live else 'live'} key but DODO_PAYMENTS_ENVIRONMENT is {cfg.dodo_environment}.", 503)
+    base = "https://live.dodopayments.com" if live else "https://test.dodopayments.com"
     try:
-        r = httpx.request(method, base + path, headers={"Authorization": f"Bearer {cfg.dodo_api_key}"}, timeout=20, **kw)
+        # short timeout: a webhook re-reads several resources and Dodo gives up on a delivery after 30 seconds
+        r = httpx.request(method, base + path, headers={"Authorization": f"Bearer {key}"}, timeout=8, **kw)
     except httpx.HTTPError as exc:
         raise BillingError(f"Could not reach Dodo Payments ({type(exc).__name__}); try again in a minute.") from exc
     if r.status_code >= 400:
@@ -328,8 +394,11 @@ def checkout(s: Session, org: Organization, item: str, quantity: int = 1) -> str
     product = _product(item)
     plan = plan_of(s, org)
     if "plan" in ITEMS[item]:
-        if (org.billing or {}).get("status") in PAID:
+        status = (org.billing or {}).get("status")
+        if status in PAID:
             raise BillingError("This workspace already has a subscription: change its plan instead.", 409)
+        if status in ("on_hold", "paused"):  # a second subscription would charge twice once the first one recovers
+            raise BillingError("This workspace's subscription is on hold. Update the payment method in the payment portal to resume it.", 409)
         quantity = 1
     elif not plan.top_ups:
         raise BillingError("Top-ups are for paid plans. Upgrade to Pro first.", 409)
@@ -342,10 +411,13 @@ def change_plan(s: Session, org: Organization, item: str) -> None:
     billing = org.billing or {}
     if "plan" not in ITEMS.get(item, {}):
         raise BillingError(f"{item} is not a plan", 422)
-    if billing.get("status") not in PAID:
+    if billing.get("status") == "past_due":  # Dodo rejects plan changes until the failed renewal is paid
+        raise BillingError("The last renewal payment failed. Update the payment method in the payment portal, then change the plan.", 409)
+    if billing.get("status") != "active":
         raise BillingError("No active subscription to change; choose a plan to subscribe.", 409)
+    # prevent_change: if the charge fails, the workspace stays on its current plan instead of going on hold
     _dodo("POST", f"/subscriptions/{billing['subscription_id']}/change-plan",
-          json={"product_id": _product(item), "quantity": 1, "proration_billing_mode": "prorated_immediately"})
+          json={"product_id": _product(item), "quantity": 1, "proration_billing_mode": "prorated_immediately", "on_payment_failure": "prevent_change"})
     sync(s, org)
 
 
@@ -360,6 +432,95 @@ def _item_of(product_id: str | None) -> str | None:
     return next((k for k, v in settings().dodo_products.items() if v and v == product_id), None)
 
 
+def _all_dodo(path: str, **params: Any):
+    """Dodo pages start at zero and contain at most 100 items."""
+    seen: set[str] = set()
+    for page in range(1000):
+        items = _dodo("GET", path, params={**params, "page_size": 100, "page_number": page}).get("items", [])
+        fresh = 0
+        for item in items:
+            identity = str(item.get("payment_id") or item.get("subscription_id") or "")
+            if identity and identity not in seen:
+                fresh += 1
+                seen.add(identity)
+                yield item
+        if len(items) < 100:
+            return
+        if not fresh:
+            raise BillingError("Dodo repeated a billing page; synchronization was not applied.")
+    raise BillingError("Dodo billing history exceeds the supported pagination range.")
+
+
+def _payment_credits(s: Session, org: Organization | None, payment_id: str) -> list[PlanCredit]:
+    ref = f"dodo:{payment_id}"
+    query = select(PlanCredit).where(or_(PlanCredit.ref == ref, PlanCredit.ref.startswith(ref + ":", autoescape=True)))
+    if org is not None:
+        query = query.where(PlanCredit.org_id == org.id)
+    return list(s.scalars(query))
+
+
+def _retained_units(full: dict[str, Any], quantities: dict[str, int]) -> dict[str, int]:
+    if full.get("refund_status") == "full":
+        return dict.fromkeys(quantities, 0)
+    if full.get("refund_status") != "partial":
+        return quantities
+    items = _dodo("GET", f"/payments/{full['payment_id']}/line-items").get("items", [])
+    if len(items) != len(quantities):
+        raise BillingError("Refund invoice lines cannot be matched one-to-one to products; the line and product counts differ.")
+    result = {}
+    used: set[int] = set()
+    for pid, quantity in quantities.items():
+        if len(quantities) == 1 and len(items) == 1:
+            matches = [0]
+        else:
+            name = _dodo("GET", f"/products/{pid}").get("name")
+            matches = [index for index, item in enumerate(items) if name and item.get("name") == name]
+        if len(matches) != 1 or matches[0] in used:
+            # Invoice lines expose no product id. Never guess which entitlement
+            # was refunded if names cannot establish a unique correspondence.
+            raise BillingError("Refund invoice lines cannot be matched uniquely to products; reconcile their names in Dodo.")
+        used.add(matches[0])
+        line = items[matches[0]]
+        remaining = int(line["refundable_amount"])
+        if remaining < 0:
+            raise BillingError("Dodo returned a negative refundable amount.")
+        # A partial refund keeps access until the whole invoice line is refunded.
+        result[pid] = 0 if remaining == 0 else quantity
+    return result
+
+
+def _sync_payment(s: Session, org: Organization, full: dict[str, Any]) -> None:
+    if full.get("status") != "succeeded" or (full.get("metadata") or {}).get("org_id", org.id) != org.id:
+        return
+    recorded = _payment_credits(s, None, full["payment_id"])
+    if any(credit.org_id != org.id for credit in recorded):
+        return
+    cart = full.get("product_cart") or []
+    quantities: dict[str, int] = {}
+    for line in cart:
+        pid = line.get("product_id")
+        if pid:
+            quantities[pid] = quantities.get(pid, 0) + int(line.get("quantity") or 1)
+    retained = _retained_units(full, quantities)
+    existing = {credit.ref: credit for credit in recorded}
+    paid_at = _when(full.get("created_at") or now().isoformat())
+    ref = f"dodo:{full['payment_id']}"
+    for pid, units in retained.items():
+        item = ITEMS.get(_item_of(pid) or "", {})
+        if "credit" not in item:
+            continue
+        key = ref if len(cart) == 1 else f"{ref}:{pid}"
+        credit = existing.get(key)
+        quantity = item["per_unit"] * units
+        if credit is None:
+            s.add(PlanCredit(org_id=org.id, kind=item["credit"], quantity=quantity,
+                            month=month_start(paid_at).strftime("%Y-%m"), ref=key,
+                            note=f"top-up {_item_of(pid)} x{quantities[pid]}"))
+        elif full.get("refund_status"):
+            credit.quantity = min(credit.quantity, quantity)  # a stale read cannot restore refunded credits
+    s.flush()
+
+
 def sync(s: Session, org: Organization) -> dict[str, Any]:
     """Reads the workspace's subscriptions and payments back from Dodo and applies them. Safe to call any number of times."""
     billing = dict(org.billing or {})
@@ -367,7 +528,7 @@ def sync(s: Session, org: Organization) -> dict[str, Any]:
     if not billing_enabled() or not cid:
         return billing
     mine = lambda x: (x.get("metadata") or {}).get("org_id", org.id) == org.id  # noqa: E731 - one Dodo customer could be shared by email
-    subs = [x for x in _dodo("GET", "/subscriptions", params={"customer_id": cid, "page_size": 100}).get("items", [])
+    subs = [x for x in _all_dodo("/subscriptions", customer_id=cid)
             if mine(x) and ITEMS.get(_item_of(x.get("product_id")) or "", {}).get("plan")]
     if subs:
         def key(x: dict[str, Any]) -> tuple:
@@ -377,21 +538,19 @@ def sync(s: Session, org: Organization) -> dict[str, Any]:
         item = ITEMS[_item_of(cur["product_id"]) or ""]
         billing.update(subscription_id=cur["subscription_id"], status=cur.get("status"), plan=item["plan"], interval=item["interval"],
                        period_end=cur.get("next_billing_date"), cancel_at_period_end=bool(cur.get("cancel_at_next_billing_date")))
-    for pay in _dodo("GET", "/payments", params={"customer_id": cid, "status": "succeeded", "page_size": 100}).get("items", []):
-        ref = f"dodo:{pay['payment_id']}"
-        if pay.get("subscription_id") or (pay.get("subscription_ids") or []) or s.scalar(select(func.count()).select_from(PlanCredit).where(PlanCredit.ref == ref)):
+        if billing["status"] != "past_due":
+            billing.pop("past_due_ends_at", None)
+    else:
+        for key in ("subscription_id", "status", "plan", "interval", "period_end", "cancel_at_period_end", "past_due_ends_at"):
+            billing.pop(key, None)
+    for pay in _all_dodo("/payments", customer_id=cid, status="succeeded"):
+        if pay.get("subscription_id") or (pay.get("subscription_ids") or []):
+            continue
+        recorded = _payment_credits(s, None, pay["payment_id"])
+        if any(credit.org_id != org.id for credit in recorded) or (recorded and not pay.get("refund_status")):
             continue
         full = _dodo("GET", f"/payments/{pay['payment_id']}")
-        if full.get("status") != "succeeded" or not mine(full):
-            continue
-        paid_at = datetime.fromisoformat(str(full.get("created_at") or pay.get("created_at") or now().isoformat()).replace("Z", "+00:00"))
-        for line in full.get("product_cart") or []:
-            item = ITEMS.get(_item_of(line.get("product_id")) or "", {})
-            if "credit" in item:
-                s.add(PlanCredit(org_id=org.id, kind=item["credit"], quantity=item["per_unit"] * int(line.get("quantity") or 1),
-                                 month=month_start(paid_at).strftime("%Y-%m"), ref=ref if len(full["product_cart"]) == 1 else f"{ref}:{line['product_id']}",
-                                 note=f"top-up {_item_of(line.get('product_id'))} x{line.get('quantity') or 1}"))
-        s.flush()
+        _sync_payment(s, org, full)
     billing["synced_at"] = now().isoformat()
     org.billing = billing
     return billing
@@ -405,9 +564,12 @@ def verify_webhook(headers: Any, body: bytes) -> None:
         raise BillingError("missing webhook signature", 401)
     if abs(time.time() - int(ts)) > 300:
         raise BillingError("webhook timestamp too old", 401)
-    key = base64.b64decode(secret.removeprefix("whsec_"))
+    try:
+        key = base64.b64decode(secret.removeprefix("whsec_"), validate=True)
+    except ValueError as exc:
+        raise BillingError("DODO_PAYMENTS_WEBHOOK_KEY is not a valid signing secret (whsec_...)", 500) from exc
     want = base64.b64encode(hmac.new(key, f"{wid}.{ts}.".encode() + body, hashlib.sha256).digest()).decode()
-    if not any(hmac.compare_digest(want, part.split(",", 1)[1]) for part in sigs.split() if part.startswith("v1,")):
+    if not any(hmac.compare_digest(want.encode(), part.split(",", 1)[1].encode()) for part in sigs.split() if part.startswith("v1,")):
         raise BillingError("bad webhook signature", 401)
 
 
@@ -417,3 +579,22 @@ def org_for_event(s: Session, data: dict[str, Any]) -> Organization | None:
         return org
     cid = (data.get("customer") or {}).get("customer_id")
     return s.scalars(select(Organization).where(Organization.billing["customer_id"].astext == cid)).first() if cid else None
+
+
+def apply_event(s: Session, org: Organization, event: dict[str, Any]) -> None:
+    """What only the webhook says: the grace-period deadline, and refunds of top-ups. A refunded top-up keeps its
+    credit row at quantity 0, so a later sync cannot add it again (the payment itself stays "succeeded")."""
+    data = event.get("data") or {}
+    etype = str(event.get("type", ""))
+    billing = dict(org.billing or {})
+    if etype.startswith("subscription.") and data.get("past_due_ends_at") and data.get("subscription_id") == billing.get("subscription_id"):
+        billing["past_due_ends_at"] = data["past_due_ends_at"]
+        org.billing = billing
+    if etype == "refund.succeeded" and data.get("payment_id"):
+        if data.get("is_partial"):
+            full = _dodo("GET", f"/payments/{data['payment_id']}")
+            full["refund_status"] = full.get("refund_status") or "partial"
+            _sync_payment(s, org, full)
+        else:
+            for credit in _payment_credits(s, org, data["payment_id"]):
+                credit.note, credit.quantity = f"{credit.note}; refunded ({credit.quantity} removed)", 0

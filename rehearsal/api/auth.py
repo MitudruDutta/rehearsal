@@ -258,6 +258,9 @@ def _user_principal(request: Request, data: dict[str, object]) -> Principal:
 
 
 def principal(request: Request) -> Principal:
+    cached = getattr(request.state, "authenticated_principal", None)
+    if isinstance(cached, Principal):
+        return cached
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
         p = verify_key(header[7:].strip())

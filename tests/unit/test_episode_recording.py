@@ -30,6 +30,10 @@ def store(monkeypatch):
 
     monkeypatch.setattr(ev, "session", transaction)
     monkeypatch.setattr(ev, "emit", lambda s, **kw: s.add(kw))
+    def record_spend(s, job, usd, tokens=0):
+        job.spent_usd += usd
+        job.tokens += tokens
+    monkeypatch.setattr(ev.queue, "record_spend", record_spend)  # ledger persistence has its own database tests
     db.ctx = NS(spent=0.0, owned=lambda s: s.job)
     return db
 

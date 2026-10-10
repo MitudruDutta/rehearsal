@@ -40,7 +40,7 @@ class Settings:
     build_parallel: int = 4  # scenarios a build writes and validates at once (validation lanes each run a copy of the world)
     max_active_builds: int = 0  # per project; 0 = no limit (set both on a shared server)
     max_active_runs: int = 0
-    monthly_allowance_usd: float = 0.0  # model spend a workspace may use per calendar month on the server's keys; 0 = no limit
+    monthly_allowance_usd: float = 0.0  # self-hosted server-wide model spend per calendar month; 0 = no limit
     plans: bool = False  # enforce the hosted plans (free, pro, team, enterprise); self-hosted servers leave this off
     admin_emails: frozenset[str] = frozenset()  # operator admins (Google sign-in only): see every workspace, set any plan
     quiet_hours_utc: str = "18:00-02:00"  # when free-plan evaluations may start (HH:MM-HH:MM, UTC; may cross midnight)

@@ -154,12 +154,17 @@ export function RunView({ runId, episodeId }: { runId: string; episodeId?: strin
           <>
             {selected && ep.data?.status === "running" && <Intervene episodeId={selected} goals={ep.data?.scenario?.goals || []} />}
             {r?.status === "running" && <Button variant="outline" onClick={() => command("pause")}><Pause /> Pause</Button>}
-            {r?.status === "running" && <Button variant="outline" className="text-destructive" onClick={() => command("stop")}><Square /> Stop</Button>}
+            {(r?.status === "running" || r?.status === "queued") && <Button variant="outline" className="text-destructive" onClick={() => command("stop")}><Square /> Stop</Button>}
             {r?.status === "finished" && profileIds.map((pid) => <Button key={pid} variant="outline" onClick={() => improve(pid)}><Sparkles /> Improve {episodes.data?.find((e) => e.profile_id === pid)?.profile}</Button>)}
             {r?.status === "finished" && <Button onClick={() => go(routes.compare(runId))}><GitCompareArrows /> Compare</Button>}
           </>
         }
       />
+      {r?.status === "queued" && r.config?.starts_at && new Date(r.config.starts_at) > new Date() && (
+        <div className="mb-3 rounded-lg border bg-muted/40 p-3 text-sm">
+          On the free plan, evaluations start in quiet hours. This run starts at {new Date(r.config.starts_at).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })} your time. Paid plans start runs at once: see Billing.
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
         <Tone tone="cue">Request v{goalEv?.goal_version ?? 1}</Tone>
         {selectedRow && <span className="text-muted-foreground">{selectedRow.scenario} with {selectedRow.profile}</span>}
