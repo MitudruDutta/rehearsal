@@ -45,7 +45,7 @@ server = [
 ]
 telemetry = ["tracing[openai]>=1.4.25; python_version < '3.14'"]  # tracing supports Python < 3.14 only; tracing turns itself off without it
 training = ["openenv-core>=0.2", "kaggle>=1.7"]
-mcp = ["mcp>=1.9"]  # `rehearsal mcp`: lets an AI assistant use Rehearsal with your API key
+mcp = ["mcp>=1.9,<2"]  # FastMCP uses the SDK v1 API; v2 removes it.
 all = ["rehearsal-kit[server,telemetry]"]
 dev = ["rehearsal-kit[server]", "pytest>=8", "pytest-asyncio>=0.23", "build>=1.2", "twine>=6"]
 

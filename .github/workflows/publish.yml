@@ -39,7 +39,7 @@ jobs:
         run: |
           npm install --global pnpm@10.33.0
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev,mcp,telemetry]'
+          python -m pip install -e '.[dev,mcp,telemetry]' langchain langchain-openai
       - name: Run isolated unit tests
         run: >-
           python -B -m pytest tests/unit --confcutdir=tests/unit
