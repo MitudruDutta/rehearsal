@@ -1,0 +1,5 @@
+{
+    "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+    "name": "rehearsal",
+    "description": "Rehearsal for AI coding agents: build a sandboxed practice world from a real application, run an AI agent through jobs where the customer changes their mind and writes fail, score every attempt against the application's own database, and improve the agent. Includes the Rehearsal skill and MCP server."
+}

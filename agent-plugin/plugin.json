@@ -1,0 +1,45 @@
+{
+    "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+    "name": "rehearsal",
+    "version": "0.1.1",
+    "description": "Rehearsal for AI coding agents: build a sandboxed practice world from a real application, run an AI agent through jobs where the customer changes their mind and writes fail, score every attempt against the application's own database, and improve the agent. Includes the Rehearsal skill and MCP server.",
+    "author": {
+        "name": "Rehearsal",
+        "url": "https://github.com/MitudruDutta/rehearsal"
+    },
+    "homepage": "https://github.com/MitudruDutta/rehearsal",
+    "repository": "https://github.com/MitudruDutta/rehearsal",
+    "license": "MIT",
+    "keywords": [
+        "rehearsal",
+        "ai-agents",
+        "agent-evaluation",
+        "testing",
+        "sandbox",
+        "mcp",
+        "skills"
+    ],
+    "extensions": {
+        "com.openai": {
+            "interface": {
+                "displayName": "Rehearsal",
+                "shortDescription": "Test and improve AI agents on real apps",
+                "longDescription": "Rehearsal compiles a real application into a sandboxed practice world with fictional data and validated jobs, runs an AI agent through them with a simulated customer who changes their mind and injected faults, and scores every attempt with read-only checks against the application's own database. The skill teaches the workflow; the MCP server adds applications, builds worlds, runs evaluations, explains failed episodes, and proposes a better agent version. It asks before starting anything that spends the workspace's allowance.",
+                "developerName": "Rehearsal",
+                "category": "Developer Tools",
+                "capabilities": [
+                    "Build practice worlds",
+                    "Run agent evaluations",
+                    "Explain failed episodes",
+                    "Improve agent instructions"
+                ],
+                "websiteURL": "https://github.com/MitudruDutta/rehearsal",
+                "defaultPrompt": [
+                    "Run the baseline agent on the Mattermost world and tell me why it failed.",
+                    "Compare my agent with baseline on the held-out jobs.",
+                    "Test my LangGraph agent against the Gitea world."
+                ]
+            }
+        }
+    }
+}

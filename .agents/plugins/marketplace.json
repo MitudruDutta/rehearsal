@@ -1,0 +1,20 @@
+{
+    "name": "rehearsal",
+    "interface": {
+        "displayName": "Rehearsal"
+    },
+    "plugins": [
+        {
+            "name": "rehearsal",
+            "source": {
+                "source": "local",
+                "path": "./agent-plugin"
+            },
+            "policy": {
+                "installation": "AVAILABLE",
+                "authentication": "ON_INSTALL"
+            },
+            "category": "Developer Tools"
+        }
+    ]
+}

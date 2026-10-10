@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "rehearsal": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "--from",
+                "rehearsal-kit[mcp]>=0.1.1",
+                "rehearsal",
+                "mcp"
+            ]
+        }
+    }
+}

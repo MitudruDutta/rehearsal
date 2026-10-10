@@ -36,6 +36,8 @@ class Settings:
     google_client_id: str | None = None  # enables "Sign in with Google" in the console
     signup: str = "closed"  # "open" lets anyone create an organisation and get an admin key from the console
     lease_seconds: int = 60
+    db_pool_size: int = 10  # connections each process keeps; managed databases cap the total (Supabase free: 60)
+    db_max_overflow: int = 20
     run_parallel: int = 4  # evaluation shards per run: each is one job, one worker, one sandbox
     build_parallel: int = 4  # scenarios a build writes and validates at once (validation lanes each run a copy of the world)
     max_active_builds: int = 0  # per project; 0 = no limit (set both on a shared server)
@@ -105,6 +107,8 @@ def settings() -> Settings:
         google_client_id=env("GOOGLE_CLIENT_ID") or None,
         signup=env("REHEARSAL_SIGNUP", "closed"),
         lease_seconds=int(env("REHEARSAL_LEASE_SECONDS", "60")),
+        db_pool_size=int(env("REHEARSAL_DB_POOL_SIZE", "10")),
+        db_max_overflow=int(env("REHEARSAL_DB_MAX_OVERFLOW", "20")),
         run_parallel=int(env("REHEARSAL_RUN_PARALLEL", "4")),
         build_parallel=int(env("REHEARSAL_BUILD_PARALLEL", "4")),
         max_active_builds=int(env("REHEARSAL_MAX_ACTIVE_BUILDS", "0")),

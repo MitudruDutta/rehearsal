@@ -54,14 +54,16 @@ def main(argv: list[str] | None = None) -> None:
         hint = HINTS.get(exc.status) or ("The server had a problem; try again, and check the server log if it persists." if exc.status >= 500 else "")
         sys.exit(f"Error ({exc.status}): {exc.detail}" + (f"\n{hint}" if hint else ""))
     except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-        url = os.environ.get("REHEARSAL_URL", "http://127.0.0.1:7800")
-        sys.exit(f"Cannot reach Rehearsal at {url} ({exc.__class__.__name__}). Check REHEARSAL_URL and that the server is running.")
+        from .client import DEFAULT_URL, saved_login
+
+        url = os.environ.get("REHEARSAL_URL") or saved_login().get("url") or DEFAULT_URL
+        sys.exit(f"Cannot reach Rehearsal at {url} ({exc.__class__.__name__}). Check the URL (`rehearsal login --url ...`) and that the server is running.")
     except httpx.TimeoutException:
         sys.exit("Rehearsal did not answer in time. Try again; long work runs as jobs, so check 'rehearsal jobs show JOB_ID'.")
     except ValueError as exc:
         if "REHEARSAL_API_KEY" not in str(exc):
             raise
-        sys.exit("Set REHEARSAL_API_KEY (create a key on the console's API keys page) and REHEARSAL_URL.")
+        sys.exit("Not signed in. Run `rehearsal login` with an API key from the console's API keys page (or set REHEARSAL_API_KEY and REHEARSAL_URL).")
     except ModuleNotFoundError as exc:
         if (exc.name or "").split(".")[0] not in SERVER_MODULES:
             raise
@@ -101,7 +103,11 @@ def _main(argv: list[str] | None = None) -> None:
     w.add_argument("--kinds", default="", help="comma-separated job kinds")
     w.add_argument("--once", action="store_true", help="exit when the queue is empty")
     sub.add_parser("openapi", help="print the OpenAPI document")
-    sub.add_parser("mcp", help="run the MCP server for AI assistants (stdio; uses REHEARSAL_API_KEY and REHEARSAL_URL)")
+    lg = sub.add_parser("login", help="save the server URL and an API key for the CLI, SDK and MCP server")
+    lg.add_argument("--url", default=None, help="Rehearsal server, for example https://rehearsal.example.com")
+    lg.add_argument("--key", default=None, help="API key (rh_...); asked for when omitted, so it stays out of shell history")
+    sub.add_parser("logout", help="forget the saved API key")
+    sub.add_parser("mcp", help="run the MCP server for AI assistants (stdio; uses `rehearsal login`, or REHEARSAL_API_KEY and REHEARSAL_URL)")
     sk = sub.add_parser("skill", help="install the Rehearsal skill for Claude Code and other agents")
     sk.add_argument("action", choices=["install", "print"])
     sk.add_argument("--dir", default=None, help="skills folder (default ~/.claude/skills)")
@@ -243,6 +249,25 @@ def _main(argv: list[str] | None = None) -> None:
         from ..worker.main import run_worker
 
         run_worker([k for k in args.kinds.split(",") if k] or None, once=args.once)
+    elif args.cmd == "login":
+        import getpass
+
+        from .client import DEFAULT_URL, Rehearsal, save_login, saved_login
+
+        login = saved_login()
+        url = (args.url or os.environ.get("REHEARSAL_URL") or input(f"Rehearsal server [{login.get('url') or DEFAULT_URL}]: ").strip()
+               or login.get("url") or DEFAULT_URL).rstrip("/")
+        key = (args.key or getpass.getpass("API key (create one on the console's API keys page): ")).strip()
+        if not key.startswith("rh_"):
+            sys.exit("That is not a Rehearsal API key; keys start with rh_.")
+        me = Rehearsal(api_key=key, base_url=url).get("/v1/me")  # fails with a clear message on a wrong key or URL
+        path = save_login(url, key)
+        print(f"Signed in to {me.get('organization') or 'your workspace'} (project {me.get('project')}) at {url}. Saved to {path}.")
+    elif args.cmd == "logout":
+        from .client import config_path
+
+        config_path().unlink(missing_ok=True)
+        print("Signed out: the saved API key is removed.")
     elif args.cmd == "mcp":
         try:
             from .mcp import main as mcp_main

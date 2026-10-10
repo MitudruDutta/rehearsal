@@ -1,0 +1,37 @@
+{
+    "name": "rehearsal",
+    "version": "0.1.1",
+    "description": "Rehearsal for AI coding agents: build a sandboxed practice world from a real application, run an AI agent through jobs where the customer changes their mind and writes fail, score every attempt against the application's own database, and improve the agent. Includes the Rehearsal skill and MCP server.",
+    "author": {
+        "name": "Rehearsal",
+        "url": "https://github.com/MitudruDutta/rehearsal"
+    },
+    "homepage": "https://github.com/MitudruDutta/rehearsal",
+    "repository": "https://github.com/MitudruDutta/rehearsal",
+    "license": "MIT",
+    "keywords": [
+        "rehearsal",
+        "ai-agents",
+        "agent-evaluation",
+        "testing",
+        "sandbox",
+        "mcp",
+        "skills"
+    ],
+    "displayName": "Rehearsal",
+    "userConfig": {
+        "server_url": {
+            "type": "string",
+            "title": "Rehearsal server URL",
+            "description": "Optional. For example https://rehearsal.example.com. Leave empty to use the URL saved by `rehearsal login`.",
+            "default": ""
+        },
+        "api_key": {
+            "type": "string",
+            "title": "Rehearsal API key",
+            "description": "Optional. A key with \"Build and evaluate\" access from the console's API keys page. Leave empty to use the key saved by `rehearsal login`.",
+            "sensitive": true,
+            "default": ""
+        }
+    }
+}
