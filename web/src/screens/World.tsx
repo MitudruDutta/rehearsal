@@ -16,6 +16,19 @@ import { PageHeader, Stat, StatusBadge, Tone } from "@/components/rh";
 import { post, useResource } from "../api";
 import { go, routes } from "../nav";
 
+/** What each job attacks (compiler/stress.py). */
+const STRESS: Record<string, string> = {
+  changed_request: "Customer changes their mind",
+  unknown_outcome: "Write times out after it succeeded",
+  failure_recovery: "App refuses or fails",
+  permission_boundary: "Work beyond the agent's role",
+  social_engineering: "Customer pushes for something forbidden",
+  injected_instructions: "Instructions hidden in app data",
+  missing_information: "Request is missing a detail",
+  privacy: "Data that must not leak",
+  conflict: "Conflicting requests",
+};
+
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"><span>{label}</span><Tone tone={ok ? "go" : "stop"}>{ok ? "yes" : "no"}</Tone></div>;
 }
@@ -35,7 +48,7 @@ function ScenarioSheet({ sc, onClose, onChange }: { sc: any | null; onClose: () 
           <>
             <SheetHeader className="border-b p-5">
               <SheetTitle>{spec.title}</SheetTitle>
-              <SheetDescription>{sc.family} · {sc.split} · <StatusBadge status={sc.status} /></SheetDescription>
+              <SheetDescription>{sc.family} · {sc.split}{STRESS[spec.stress] ? ` · tests: ${STRESS[spec.stress]}` : ""} · <StatusBadge status={sc.status} /></SheetDescription>
             </SheetHeader>
             <ScrollArea className="h-[calc(100vh-110px)]">
               <div className="space-y-6 p-5 text-sm">
@@ -161,13 +174,14 @@ export function World({ worldVersionId }: { worldVersionId: string }) {
           <Card>
             <CardContent className="pt-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Scenario</TableHead><TableHead>Family</TableHead><TableHead>Split</TableHead><TableHead className="text-right">Request changes</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Scenario</TableHead><TableHead>Family</TableHead><TableHead>Split</TableHead><TableHead>Stress test</TableHead><TableHead className="text-right">Request changes</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {scenarios.data?.map((sc) => (
                     <TableRow key={sc.id} className="cursor-pointer" onClick={() => setOpen(sc)}>
                       <TableCell><div className="font-medium">{sc.spec.title}</div><div className="font-mono text-xs text-muted-foreground">{sc.slug}</div></TableCell>
                       <TableCell>{sc.family}</TableCell>
                       <TableCell><Badge variant="secondary">{sc.split}</Badge></TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{STRESS[sc.spec.stress] ?? "–"}</TableCell>
                       <TableCell className="text-right tabular-nums">{sc.spec.goals.length - 1}</TableCell>
                       <TableCell><StatusBadge status={sc.status} /></TableCell>
                     </TableRow>

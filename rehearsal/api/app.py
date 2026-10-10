@@ -757,7 +757,7 @@ class InterventionIn(BaseModel):
     text: str | None = None
     goal_version: int | None = None
     tool: str | None = None
-    fault_mode: Literal["drop_response", "error", "timeout_before"] | None = None
+    fault_mode: Literal["drop_response", "error", "timeout_before", "rate_limit"] | None = None
     role: str | None = None
     count: int = 1
 

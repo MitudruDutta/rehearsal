@@ -1,0 +1,80 @@
+# Full single-host stack: database, API + console, and workers.
+#   cp infra/deploy.env.example infra/deploy.env   # then fill it in
+#   docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d
+#   docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api rehearsal bootstrap
+# More workers make runs faster: an evaluation run is split into up to REHEARSAL_RUN_PARALLEL shards, one worker each.
+#   docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d --scale worker=6
+# With a domain, add `--profile public`: Caddy serves https://$REHEARSAL_DOMAIN with an automatic certificate.
+# The worker controls the host Docker daemon to run sandboxes. Run this stack on a
+# dedicated runner VM; for arbitrary third-party repositories use per-job VM isolation.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: rehearsal, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set a database password}", POSTGRES_DB: rehearsal }
+    volumes: [rehearsal-pg:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U rehearsal"], interval: 2s, retries: 30 }
+
+  migrate:
+    build: { context: .., dockerfile: Dockerfile }
+    entrypoint: ["sh", "-c"]
+    command: ["mkdir -p /var/lib/rehearsal/artifacts && chown rehearsal:rehearsal /var/lib/rehearsal/artifacts && chmod 2775 /var/lib/rehearsal/artifacts && exec rehearsal migrate"]
+    user: root
+    volumes: ["/var/lib/rehearsal:/var/lib/rehearsal"]
+    environment: &env
+      REHEARSAL_DATABASE_URL: postgresql+psycopg://rehearsal:${POSTGRES_PASSWORD}@postgres:5432/rehearsal
+      REHEARSAL_SESSION_SECRET: ${REHEARSAL_SESSION_SECRET:?set a random session secret}
+      REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
+      REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
+      REHEARSAL_MODEL_PARTICIPANT: ${REHEARSAL_MODEL_PARTICIPANT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      TRACING_API_KEY: ${TRACING_API_KEY:-}
+      REHEARSAL_SIGNUP: ${REHEARSAL_SIGNUP:-closed}
+      # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.
+      REHEARSAL_MAX_ACTIVE_BUILDS: ${REHEARSAL_MAX_ACTIVE_BUILDS:-2}
+      REHEARSAL_MAX_ACTIVE_RUNS: ${REHEARSAL_MAX_ACTIVE_RUNS:-2}
+      REHEARSAL_RUN_PARALLEL: ${REHEARSAL_RUN_PARALLEL:-4}
+      REHEARSAL_BUILD_PARALLEL: ${REHEARSAL_BUILD_PARALLEL:-4}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # only Caddy (same compose network) reaches the API, so trust its X-Forwarded-Proto for Secure cookies
+      FORWARDED_ALLOW_IPS: "*"
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    build: { context: .., dockerfile: Dockerfile }
+    environment: *env
+    ports: ["127.0.0.1:7800:7800"]
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7800/v1/health')"], interval: 10s, retries: 6 }
+    restart: unless-stopped
+    # Uploaded sources and generated artifacts must be visible to API and worker.
+    volumes: ["/var/lib/rehearsal:/var/lib/rehearsal"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  worker:
+    build: { context: .., dockerfile: Dockerfile }
+    entrypoint: ["sh", "-c"]
+    command: ["umask 0002; exec rehearsal worker"]
+    environment:
+      <<: *env
+      REHEARSAL_DATA_DIR: /var/lib/rehearsal
+    # Snapshots are bind-mounted into helper containers by path, so the data
+    # directory must have the same path on the host and in the worker.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/rehearsal:/var/lib/rehearsal
+    user: "root:rehearsal"
+    restart: unless-stopped
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  caddy:
+    profiles: ["public"]
+    image: caddy:2.10-alpine
+    command: ["caddy", "reverse-proxy", "--from", "${REHEARSAL_DOMAIN:-localhost}", "--to", "api:7800"]
+    ports: ["80:80", "443:443"]
+    volumes: [caddy-data:/data]
+    restart: unless-stopped
+    depends_on: { api: { condition: service_healthy } }
+
+volumes:
+  rehearsal-pg:
+  caddy-data:

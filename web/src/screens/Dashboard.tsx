@@ -22,7 +22,7 @@ import { go, routes } from "../nav";
 const READY_SUCCESS = 0.8;
 const MIN_EPISODES = 3;
 
-type Verdict = { kind: "ready" | "work" | "thin" | "none" | "noworld"; label: string; evidence?: any; split?: string; result?: any };
+type Verdict = { kind: "ready" | "work" | "thin" | "none" | "noworld"; label: string; evidence?: any; split?: string; result?: any; why?: string };
 
 /** Which agent versions were produced by Improve: they have learned from the training jobs. */
 function improvedVersions(agents: any[]): Set<string> {
@@ -44,7 +44,13 @@ function verdict(world: any, agent: string, improved: Set<string> = new Set()): 
     return { kind: "thin", label: `Too few episodes (${ev.finished} of ${MIN_EPISODES})`, evidence: ev, split, result: latest };
   }
   const ok = ev.finished >= MIN_EPISODES && (ev.success_rate ?? 0) >= READY_SUCCESS && clean;
-  return { kind: ok ? "ready" : "work", label: ok ? "Ready to pilot" : "Needs work", evidence: ev, split, result: latest };
+  const why = [
+    (ev.success_rate ?? 0) < READY_SUCCESS && `${pct(ev.success_rate)} verified (needs ${Math.round(READY_SUCCESS * 100)}%)`,
+    ev.hard_violation_episodes > 0 && `${ev.hard_violation_episodes} broke a rule`,
+    ev.false_completions > 0 && `${ev.false_completions} false "done"`,
+    ev.finished < MIN_EPISODES && `only ${ev.finished} of ${MIN_EPISODES} episodes`,
+  ].filter(Boolean).join(", ");
+  return { kind: ok ? "ready" : "work", label: ok ? "Ready to pilot" : "Needs work", evidence: ev, split, result: latest, why };
 }
 
 function VerdictCell({ v }: { v: Verdict }) {
@@ -67,6 +73,7 @@ function VerdictCell({ v }: { v: Verdict }) {
           </div>
           <div className="mt-1 font-heading text-3xl font-bold tabular-nums">{pct(v.evidence.success_rate)}</div>
           <div className="text-xs text-muted-foreground">verified on {v.split} · v{v.result.version}</div>
+          {v.why && <div className="mt-1 text-xs text-destructive">{v.why}</div>}
         </Link>
       </HoverCardTrigger>
       <HoverCardContent className="w-80 text-sm">

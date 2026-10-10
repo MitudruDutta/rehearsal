@@ -186,3 +186,19 @@ def test_external_agents_see_the_same_tool_results_as_hosted_agents():
     assert _mask(result, "external.action.result") == result  # same as the hosted agent's view
     assert _mask(result, "compiler.tool")["result"]["body"]["token"] == "[REDACTED]"  # console events stay masked
     assert "sk-" not in str(_mask({"result": "key sk-proj-abcdefghijklmnopqrstuvwxyz123456"}, "external.action.result"))
+
+
+
+def test_rate_limited_write_is_refused_and_not_carried_out():
+    from types import SimpleNamespace
+
+    from rehearsal.core.contracts import ServiceSpec, ToolSpec, WorldManifest
+    from rehearsal.runner.gateway import Gateway
+
+    sent = []
+    manifest = WorldManifest(name="w", services=[ServiceSpec(name="app", image="x", port=80)],
+                             tools=[ToolSpec(name="create_post", description="d", service="app", method="POST", path="/posts", mutating=True, roles=[])])
+    gw = Gateway(SimpleNamespace(http=lambda *a, **k: sent.append(a)), manifest, {})
+    gw.arm_fault("create_post", "rate_limit", 1)
+    res = gw._dispatch(manifest.tool("create_post"), {"operation_id": "op1", "role": "staff", "path": "/posts", "json": {}, "query": {}})
+    assert res.status == "FAILED" and res.visible["status"] == 429 and "not carried out" in res.visible["error"] and sent == []
