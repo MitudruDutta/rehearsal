@@ -6,11 +6,12 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
 
 import jwt
 from fastapi import HTTPException, Request
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -159,6 +160,8 @@ def google_user(claims: dict[str, object], allow_new: bool) -> tuple[str, str | 
             user = s.scalars(select(User).where(User.email == email)).first()
             if user is None and not allow_new:
                 raise HTTPException(403, "sign-up is closed on this server; ask an organisation owner to add you")
+            if user is not None:
+                user.password_hash = None  # nobody verified the address behind that password: whoever chose it loses it
             user = user or User(email=email)
             user.google_sub = str(claims["sub"])
             s.add(user)
@@ -178,13 +181,31 @@ def default_project(s: Session, user_id: str) -> str | None:
     return row[0] if row else None
 
 
-def create_workspace(user_id: str, org_name: str, project_name: str) -> str:
-    """Onboarding: an organisation owned by this user, with its first project."""
+FREE_PER_DEVICE_DAYS = 90
+FREE_PER_IP = (3, 30)  # workspaces, days: offices and campuses share one address
+
+
+def create_workspace(user_id: str, org_name: str, project_name: str, *, device: str | None = None, ip: str | None = None) -> str:
+    """Onboarding: an organisation owned by this user, with its first project. With plans on, every new workspace
+    starts on the free plan, so one person cannot collect free plans: one owned workspace per account, one per
+    browser, and a few per network address (operator admins are exempt)."""
+    from .. import billing
+
     with session() as s:
         user = s.get(User, user_id)
         if user is None:
             raise HTTPException(401, "session revoked")
-        org = Organization(name=org_name.strip(), owner_name=user.name)
+        if settings().plans and not billing.is_admin(user):
+            s.execute(text("SELECT pg_advisory_xact_lock(hashtext('free-workspaces'))"))  # serializes concurrent sign-ups
+            owned = s.scalar(select(func.count()).select_from(Membership).where(Membership.user_id == user.id, Membership.role == "owner"))
+            if owned:
+                raise HTTPException(409, "This account already owns a workspace. Sign in to it, or ask us if you need a second one.")
+            since = lambda days: now() - timedelta(days=days)  # noqa: E731
+            if device and s.scalar(select(func.count()).select_from(Organization).where(Organization.created_device == device, Organization.created_at >= since(FREE_PER_DEVICE_DAYS))):
+                raise HTTPException(409, "This browser already created a free workspace. Sign in with the account that owns it, or upgrade that workspace.")
+            if ip and (s.scalar(select(func.count()).select_from(Organization).where(Organization.created_ip == ip, Organization.created_at >= since(FREE_PER_IP[1]))) or 0) >= FREE_PER_IP[0]:
+                raise HTTPException(429, "Too many free workspaces were created from this network recently. Try again later, or contact us.")
+        org = Organization(name=org_name.strip(), owner_name=user.name, created_device=device, created_ip=ip)
         s.add(org)
         s.flush()
         s.add(Membership(user_id=user.id, org_id=org.id, role="owner"))
@@ -215,7 +236,8 @@ def user_cookie(user_id: str, project_id: str | None) -> str:
 
 
 ROLE_SCOPES = {"owner": ["admin"], "admin": ["admin"], "member": ["read", "write", "evaluator"]}
-BEFORE_ONBOARDING = {"/v1/me", "/v1/onboarding/workspace"}  # all a signed-in user without a project may call
+BEFORE_ONBOARDING = {"/v1/me", "/v1/onboarding/workspace"}
+DEVICE_COOKIE = "rh_device"  # random per browser, set at sign-in; limits free workspaces per browser  # all a signed-in user without a project may call
 
 
 def _user_principal(request: Request, data: dict[str, object]) -> Principal:
@@ -259,7 +281,11 @@ def authorize(request: Request, p: Principal) -> Principal:
     path = request.url.path.rstrip("/")
     if path in BEFORE_ONBOARDING:
         return p
-    if path.startswith(("/v1/api-keys", "/v1/credentials")):
+    if path.startswith("/v1/admin"):
+        if not p.user_id:
+            raise HTTPException(403, "operator admin pages need a console sign-in, not an API key")
+        p.require("read" if request.method in ("GET", "HEAD", "OPTIONS") else "write")  # the handler checks the operator admin list
+    elif path.startswith(("/v1/api-keys", "/v1/credentials", "/v1/billing/checkout", "/v1/billing/change", "/v1/billing/portal")):
         p.require("admin")
     elif path.startswith("/v1/episodes/") and (
         path.endswith("/observation") or "/actions" in path

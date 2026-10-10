@@ -44,11 +44,15 @@ def build_server(client: Rehearsal | None = None) -> Any:
 
     @mcp.tool()
     def workspace_status() -> dict[str, Any]:
-        """Model spend this month, the workspace's monthly allowance and what is left, and what exists in the workspace."""
+        """The workspace's plan and what it has left this month (applications, world builds, episodes, sandboxes), model
+        spend against the monthly allowance, and what exists in the workspace."""
         usage = c.get("/v1/usage")
+        b = c.get("/v1/billing")
+        plan = {"name": b["plan"]["title"], "limits": {k: b["plan"][k] for k in ("applications", "builds", "episodes", "sandboxes")},
+                "used": b["usage"], "renews": b["renews"], "quiet_hours_utc": b.get("quiet_hours_utc"), "more": link("/app/billing/")}
         worlds = c.get("/v1/worlds")
         published = [v for w in worlds for v in w["versions"] if v["status"] == "published"]
-        return {"usage": usage, "applications": len(c.get("/v1/applications")), "published_world_versions": len(published),
+        return {"plan": plan, "usage": usage, "applications": len(c.get("/v1/applications")), "published_world_versions": len(published),
                 "agents": len(c.get("/v1/agent-profiles")), "console": link("/app/")}
 
     @mcp.tool()

@@ -41,6 +41,37 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(200))
     owner_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     owner_email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)  # set by self-serve sign-up
+    plan_override: Mapped[str | None] = mapped_column(String(20), nullable=True)  # set by an operator admin; wins over billing
+    limits_override: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")  # admin: custom plan limits
+    billing: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")  # Dodo customer and subscription, as last synced
+    created_device: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)  # browser that created it (free-plan abuse)
+    created_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class PlanCredit(Base):
+    """Builds or episodes added to one month of a workspace's plan: a paid top-up, or a grant by an operator admin."""
+
+    __tablename__ = "plan_credits"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("crd"))
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))  # builds | episodes
+    quantity: Mapped[int] = mapped_column(Integer)
+    month: Mapped[str] = mapped_column(String(7))  # YYYY-MM (UTC)
+    ref: Mapped[str] = mapped_column(String(120), unique=True)  # dodo:<payment_id> or admin:<id>: applying twice is impossible
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
+class BillingEvent(Base):
+    """Received Dodo webhooks (deduplicated by webhook-id) and admin plan changes: the billing audit trail."""
+
+    __tablename__ = "billing_events"
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    type: Mapped[str] = mapped_column(String(80))
+    org_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    actor: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 
@@ -290,6 +321,7 @@ class Job(Base):
     pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     budget_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    not_before: Mapped[datetime | None] = mapped_column(nullable=True)  # not claimed before this time (free plan: quiet hours)
     spent_usd: Mapped[float] = mapped_column(Float, default=0.0)
     tokens: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(default=now)

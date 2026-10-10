@@ -148,7 +148,7 @@ def _lanes_compiler(monkeypatch, parallel):
     c.ck, c._lock, c._save = {"secrets": {}, "base_snapshot": "/snap"}, threading.RLock(), lambda ck: None
     main = SimpleNamespace(name="main")
     c.instance, c.manifest, c.world_key, c.log = (lambda: main), (lambda: None), (lambda: "k"), (lambda *a: None)
-    c.app, c.destroy = SimpleNamespace(source_dir=None), destroyed.append
+    c.app, c.destroy, c.options = SimpleNamespace(source_dir=None), destroyed.append, pipeline.BuildOptions()
     return c, main, made, destroyed
 
 
@@ -232,3 +232,10 @@ def test_written_jobs_must_contain_the_attack_their_category_promises():
     assert stress.problems("injected_instructions", job(constraints=["c"], negatives=negative)) == ["an injected_instructions job needs a setup step that plants the hidden instruction in a record"]
     limited = [ScheduledEvent(id="r", trigger=Trigger(kind="at_step", step=0), actions=[EventAction(kind="fault", tool="create_post", fault_mode="rate_limit")])]
     assert stress.problems("failure_recovery", job(events=limited)) == []
+
+
+def test_a_build_uses_no_more_lanes_than_its_plan_allows(monkeypatch):
+    c, main, made, destroyed = _lanes_compiler(monkeypatch, parallel=4)
+    c.options = c.options.__class__(parallel=1)  # free plan: one sandbox
+    c._in_parallel(list(range(5)), lambda item, inst: None, own_sandbox=True)
+    assert made == []  # one lane uses the main sandbox only

@@ -34,7 +34,7 @@ SERVER_MODULES = {"fastapi", "uvicorn", "sqlalchemy", "alembic", "psycopg", "its
 
 HINTS = {
     401: "Check REHEARSAL_API_KEY: the key is missing, mistyped, or revoked. Create one on the console's API keys page.",
-    402: "The workspace's monthly model allowance is used up. It renews on the 1st.",
+    402: "The workspace's plan does not cover this. See the console's Billing page for what is left and how to get more.",
     403: "This API key's access does not allow that. Use a key with \"Build and evaluate\" or \"Full access\".",
     404: "Check the id: list what exists with 'rehearsal apps list', 'worlds list', 'profiles list' or 'runs show'.",
     409: "Not possible in the current state; the message above says why.",
@@ -237,6 +237,7 @@ def _main(argv: list[str] | None = None) -> None:
     elif args.cmd == "serve":
         import uvicorn
 
+        # uvicorn trusts X-Forwarded-For/-Proto from FORWARDED_ALLOW_IPS (compose sets it for Caddy), so client addresses are real
         uvicorn.run("rehearsal.api.app:app", host=args.host, port=args.port, log_level="info", timeout_graceful_shutdown=5)
     elif args.cmd == "worker":
         from ..worker.main import run_worker
