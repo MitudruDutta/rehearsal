@@ -150,7 +150,7 @@ function Room({ mode, doorRef }: { mode: "episode" | "compiler"; doorRef: React.
 
 // ---------------------------------------------------------------------------- desks
 
-function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: RoomModel; onSelect: (s: Selection) => void; selected: boolean }) {
+function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: RoomModel; onSelect?: (s: Selection) => void; selected: boolean }) {
   const screen = useRef<THREE.MeshStandardMaterial>(null);
   const leds = useRef<THREE.MeshStandardMaterial[]>([]);
   const [tone, setTone] = useState<Tone | null>(null);
@@ -168,9 +168,11 @@ function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: Roo
       if (m) m.emissiveIntensity = (Math.floor(clock.elapsedTime * 4) + j * 3) % 5 === 0 ? 1.6 : 0.25;
     });
   });
-  const pick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation();
-    onSelect({ kind: "desk", id: desk.id });
+  // without onSelect the room is a recording to watch, and nothing reacts to the pointer
+  const hot = onSelect && {
+    onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onSelect({ kind: "desk", id: desk.id }); },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); document.body.style.cursor = "pointer"; },
+    onPointerOut: () => { document.body.style.cursor = ""; },
   };
   let body: React.ReactNode;
   if (desk.kind === "rack") {
@@ -229,10 +231,10 @@ function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: Roo
   }
   const plate = selected ? "bg-primary text-primary-foreground" : tone === "go" ? "bg-success text-white" : tone === "stop" ? "bg-destructive text-white" : tone === "cue" ? "bg-warning text-black" : tone === "plain" ? "bg-[#e4e0ff] text-slate-900" : "bg-white/90 text-slate-900 hover:bg-white";
   return (
-    <group position={[desk.x, 0, DESK_Z]} onClick={pick} onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }} onPointerOut={() => (document.body.style.cursor = "")}>
+    <group position={[desk.x, 0, DESK_Z]} {...hot}>
       {body}
       <Html position={[0, 2.95, -0.3]} center zIndexRange={[20, 0]}>
-        <button onClick={() => onSelect({ kind: "desk", id: desk.id })} className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[12px] font-semibold shadow-md ring-1 ring-black/20 transition-colors ${plate}`}>
+        <button disabled={!onSelect} onClick={() => onSelect?.({ kind: "desk", id: desk.id })} className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[12px] font-semibold shadow-md ring-1 ring-black/20 transition-colors ${plate} ${onSelect ? "" : "pointer-events-none"}`}>
           {desk.label}
         </button>
       </Html>
@@ -244,7 +246,7 @@ function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: Roo
 
 type View = { activity: string; tone: Tone; bubble: string; task: string; badge: Tone | "" };
 
-function Person({ actor, onSelect, selected }: { actor: Actor; onSelect: (s: Selection) => void; selected: boolean }) {
+function Person({ actor, onSelect, selected }: { actor: Actor; onSelect?: (s: Selection) => void; selected: boolean }) {
   const group = useRef<THREE.Group>(null);
   const legL = useRef<THREE.Group>(null);
   const legR = useRef<THREE.Group>(null);
@@ -277,11 +279,12 @@ function Person({ actor, onSelect, selected }: { actor: Actor; onSelect: (s: Sel
       setView({ activity: actor.activity, tone: actor.activityTone, bubble, task, badge });
     }
   });
-  const pick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation();
-    onSelect({ kind: "actor", id: actor.id });
+  const hot = onSelect && {
+    onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onSelect({ kind: "actor", id: actor.id }); },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHover(true); document.body.style.cursor = "pointer"; },
+    onPointerOut: () => { setHover(false); document.body.style.cursor = ""; },
   };
-  const limb = (ref: React.RefObject<THREE.Group | null>, x: number, y: number, w: number, len: number, color: number) => (
+  const limb =(ref: React.RefObject<THREE.Group | null>, x: number, y: number, w: number, len: number, color: number) => (
     <group ref={ref} position={[x, y, 0]}>
       <RoundedBox args={[w, len, w * 1.1]} radius={0.04} position={[0, -len / 2, 0]} castShadow>
         <Mat color={hex(color)} />
@@ -290,12 +293,7 @@ function Person({ actor, onSelect, selected }: { actor: Actor; onSelect: (s: Sel
   );
   const dot = actor.kind === "customer" ? "#f5a524" : actor.kind === "verifier" ? "#3ecf8e" : hex(c.shirt);
   return (
-    <group
-      ref={group}
-      onClick={pick}
-      onPointerOver={(e) => { e.stopPropagation(); setHover(true); document.body.style.cursor = "pointer"; }}
-      onPointerOut={() => { setHover(false); document.body.style.cursor = ""; }}
-    >
+    <group ref={group} {...hot}>
       {limb(legL, -0.12, 0.52, 0.18, 0.52, c.pants)}
       {limb(legR, 0.12, 0.52, 0.18, 0.52, c.pants)}
       <RoundedBox args={[0.52, 0.6, 0.3]} radius={0.08} position={[0, 0.82, 0]} castShadow><Mat color={hex(c.shirt)} /></RoundedBox>
@@ -319,15 +317,17 @@ function Person({ actor, onSelect, selected }: { actor: Actor; onSelect: (s: Sel
           {view.bubble && <div className="max-w-[240px] rounded-xl border-2 border-slate-900 bg-[#fffdf6] px-3 py-1.5 text-center text-[13px] font-medium leading-snug text-slate-900 shadow-lg">{view.bubble}</div>}
           {!view.bubble && view.task && <div className="max-w-[230px] rounded-lg bg-warning px-2.5 py-1 text-center text-[12px] font-semibold leading-snug text-black shadow-md">Task from {view.task}</div>}
           <button
-            onClick={() => onSelect({ kind: "actor", id: actor.id })}
-            className={`pointer-events-auto flex items-center gap-1.5 rounded-md px-2 py-[3px] text-[12px] font-semibold shadow-md ring-1 ring-black/30 ${selected ? "bg-primary text-primary-foreground" : "bg-slate-900/85 text-white hover:bg-slate-900"}`}
+            disabled={!onSelect}
+            onClick={() => onSelect?.({ kind: "actor", id: actor.id })}
+            className={`flex items-center gap-1.5 rounded-md px-2 py-[3px] text-[12px] font-semibold shadow-md ring-1 ring-black/30 ${onSelect ? "pointer-events-auto" : ""} ${selected ? "bg-primary text-primary-foreground" : "bg-slate-900/85 text-white hover:bg-slate-900"}`}
           >
             <span className="size-2 rounded-full" style={{ background: dot }} />
             {actor.label}
             {view.badge === "go" && <span className="text-success">✓</span>}
             {view.badge === "stop" && <span className="text-destructive">✕</span>}
           </button>
-          <div className="max-w-[210px] truncate rounded px-1.5 py-0.5 text-[11px] font-semibold shadow" style={{ background: `${TONE_HEX[view.tone]}e6`, color: view.tone === "cue" || view.tone === "plain" ? "#0f1012" : "#fff" }}>
+          {/* two short lines, not one long one: seats are about one name chip apart, and a wide pill covers the neighbour's */}
+          <div className="line-clamp-2 max-w-[112px] rounded px-1.5 py-0.5 text-center text-[11px] font-semibold leading-tight text-balance wrap-anywhere shadow" style={{ background: `${TONE_HEX[view.tone]}e6`, color: view.tone === "cue" || view.tone === "plain" ? "#0f1012" : "#fff" }}>
             {view.activity}
           </div>
         </div>
@@ -532,10 +532,10 @@ export function Stage({
         </Environment>
         <Room mode={mode} doorRef={doorRef} />
         {ready && m.desks.map((d) => (
-          <DeskPiece key={`${d.id}-${m.version}`} desk={d} model={m} onSelect={select} selected={selected?.kind === "desk" && selected.id === d.id} />
+          <DeskPiece key={`${d.id}-${m.version}`} desk={d} model={m} onSelect={onSelect && select} selected={selected?.kind === "desk" && selected.id === d.id} />
         ))}
         {ready && [...m.actors.values()].map((a) => (
-          <Person key={a.id} actor={a} onSelect={select} selected={selected?.kind === "actor" && selected.id === a.id} />
+          <Person key={a.id} actor={a} onSelect={onSelect && select} selected={selected?.kind === "actor" && selected.id === a.id} />
         ))}
         <Links model={m} />
         <Flights model={m} />
@@ -550,7 +550,7 @@ export function Stage({
           {banner.text}
         </div>
       )}
-      <div className="pointer-events-none absolute bottom-2 right-3 text-xs text-white/50">Click a person or desk to inspect; drag to look around</div>
+      <div className="pointer-events-none absolute bottom-2 right-3 text-xs text-white/50">{onSelect ? "Click a person or desk to inspect; drag to look around" : "Drag to look around"}</div>
     </div>
   );
 }

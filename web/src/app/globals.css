@@ -82,6 +82,30 @@
   --sidebar-ring: #8b7dff;
 }
 
+/* "Wave": the landing hero, which sits on Hokusai's Great Wave. Its colours come from the print: the night-sea
+   indigo of the water for the ground, the cream of the paper for text and for the main action, misty blue for
+   quiet text, and surfaces of sea glass that let the picture show through. Used together with .dark, so the hero
+   looks the same in the light and dark themes, like the black frame around it. */
+.wave {
+  --background: #070b1c;
+  --foreground: #f6efdf;
+  --card: rgb(9 15 38 / 0.62);
+  --card-foreground: #f6efdf;
+  --popover: #0b1230;
+  --popover-foreground: #f6efdf;
+  --primary: #f2e7cf;
+  --primary-foreground: #0d1740;
+  --secondary: rgb(28 42 86 / 0.6);
+  --secondary-foreground: #f6efdf;
+  --muted: rgb(30 44 90 / 0.5);
+  --muted-foreground: #b3bfda;
+  --accent: rgb(40 58 112 / 0.55);
+  --accent-foreground: #f6efdf;
+  --border: rgb(178 198 236 / 0.22);
+  --input: rgb(178 198 236 / 0.28);
+  --ring: #c9d7f6;
+}
+
 @theme inline {
   --font-sans: var(--font-ui-next), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-head-next), var(--font-ui-next), ui-sans-serif, system-ui, sans-serif;

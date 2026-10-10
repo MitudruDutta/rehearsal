@@ -4,18 +4,16 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import type { RhEvent } from "../api";
 import { ActivityFeed, NowCaption, PhaseStepper } from "@/components/rh";
-import { Inspector } from "@/components/inspector";
-import type { Selection } from "../stage/Stage";
 
 const Stage = dynamic(() => import("../stage/Stage").then((m) => m.Stage), { ssr: false });
 
 /** The hero: the console's own build view (phases, 3D room, activity feed) replaying a recorded Gitea build.
- * Every event is real and redacted; only the pace is changed. */
+ * Every event is real and redacted; only the pace is changed. It is a recording to watch: the console's
+ * click-to-inspect panel is left out, because it opens over the whole page. */
 export function HeroWindow({ src = "/replays/gitea-build.json" }: { src?: string }) {
   const [all, setAll] = useState<RhEvent[]>([]);
   const [shown, setShown] = useState<RhEvent[]>([]);
   const [beat, setBeat] = useState<RhEvent | null>(null);
-  const [selection, setSelection] = useState<Selection | null>(null);
   useEffect(() => {
     fetch(src).then((r) => (r.ok ? r.json() : { events: [] })).then((d) => setAll(d.events || [])).catch(() => setAll([]));
   }, [src]);
@@ -36,7 +34,8 @@ export function HeroWindow({ src = "/replays/gitea-build.json" }: { src?: string
     return { done, active: started[started.length - 1] };
   }, [shown]);
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-[0_30px_120px_-30px_color-mix(in_srgb,var(--primary)_45%,transparent)]">
+    // a pane of glass over the hero's picture: the card colour there is see-through, and the blur keeps the text readable
+    <div className="overflow-hidden rounded-xl border bg-card shadow-[0_30px_100px_-30px_rgb(2_6_24/0.9)] backdrop-blur-md">
       <div className="flex items-center gap-2 border-b px-4 py-2.5">
         <span className="size-2.5 rounded-full bg-[#ff5f57]" /><span className="size-2.5 rounded-full bg-[#febc2e]" /><span className="size-2.5 rounded-full bg-[#28c840]" />
         <span className="ml-3 truncate rounded-md bg-muted px-3 py-0.5 font-mono text-xs text-muted-foreground">rehearsal / applications / gitea / build</span>
@@ -45,12 +44,11 @@ export function HeroWindow({ src = "/replays/gitea-build.json" }: { src?: string
       <div className="border-b px-4 py-3"><PhaseStepper done={phases.done} active={phases.active} /></div>
       <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0">
-          <Stage events={shown} mode="compiler" onBeat={setBeat} onSelect={setSelection} selected={selection} height="min(44vw, 470px)" label="Replay of a recorded World Compiler build" />
+          <Stage events={shown} mode="compiler" onBeat={setBeat} height="min(44vw, 470px)" label="Replay of a recorded World Compiler build" />
           <NowCaption ev={beat} fallback="Loading the recording" />
         </div>
-        <div className="hidden lg:block"><ActivityFeed events={shown} height="calc(min(44vw, 470px) + 48px)" onPick={(id) => setSelection({ kind: "actor", id })} /></div>
+        <div className="hidden lg:block"><ActivityFeed events={shown} height="calc(min(44vw, 470px) + 48px)" /></div>
       </div>
-      <Inspector open={!!selection} onOpenChange={(o) => !o && setSelection(null)} selection={selection} mode="compiler" events={shown} />
     </div>
   );
 }

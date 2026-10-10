@@ -62,18 +62,19 @@ export const PHASE_KEYS = ["inspect", "plan", "materialize", "discover", "seed",
 export function PhaseStepper({ done, active, failed, compact }: { done: Set<string> | string[]; active?: string; failed?: boolean; compact?: boolean }) {
   const d = new Set(done);
   return (
-    <ol className={cn("grid gap-1.5", compact ? "grid-cols-9" : "grid-cols-3 md:grid-cols-9")} aria-label="Compiler phases">
+    // each step shares the list's rows (bar, name, status), so a name that wraps to two lines keeps every status level
+    <ol className={cn("grid gap-x-1.5", compact ? "grid-cols-9" : "grid-cols-3 md:grid-cols-9")} aria-label="Compiler phases">
       {PHASES.map((label, i) => {
         const key = PHASE_KEYS[i];
         const state = d.has(key) ? "done" : active === key ? (failed ? "failed" : "active") : "todo";
         return (
-          <li key={key} className="min-w-0">
+          <li key={key} className={cn("min-w-0", !compact && "row-span-3 grid grid-rows-subgrid pb-2.5 md:pb-0")}>
             <div className={cn("h-1.5 rounded-full", state === "done" ? "bg-success" : state === "active" ? "animate-pulse bg-primary" : state === "failed" ? "bg-destructive" : "bg-muted")} />
             {!compact && (
-              <div className="mt-2">
-                <div className={cn("truncate text-[13px] font-medium", state === "todo" && "text-muted-foreground")}>{i + 1}. {label}</div>
+              <>
+                <div className={cn("mt-2 text-[13px] font-medium leading-snug text-pretty", state === "todo" && "text-muted-foreground")}>{i + 1}. {label}</div>
                 <div className="text-xs text-muted-foreground">{state === "done" ? "done" : state === "active" ? (failed ? "stopped" : "in progress") : "waiting"}</div>
-              </div>
+              </>
             )}
           </li>
         );
@@ -109,7 +110,7 @@ export function ActivityFeed({ events, onPick, height = "calc(54vw)" }: { events
           const who = actorOf(ev);
           return (
             <li key={ev.event_id} className={cn("flex gap-3 border-l-[3px] px-3 py-2.5", ROW_TONE(ev.type))}>
-              <button className="shrink-0 rounded-md focus-visible:ring-2 focus-visible:ring-ring" onClick={() => who && onPick?.(who)} title={who ? `Inspect ${who}` : undefined} disabled={!who}>
+              <button className="shrink-0 rounded-md focus-visible:ring-2 focus-visible:ring-ring" onClick={() => who && onPick?.(who)} title={who && onPick ? `Inspect ${who}` : undefined} disabled={!who || !onPick}>
                 <ActorAvatar id={who} />
               </button>
               <div className="min-w-0 text-sm leading-snug">
@@ -128,7 +129,7 @@ export function NowCaption({ ev, fallback }: { ev: RhEvent | null; fallback: str
   return (
     <div className="mt-3 flex min-h-14 items-center gap-3 rounded-xl border bg-card px-4 py-3" aria-live="polite">
       <ActorAvatar id={ev ? actorOf(ev) : null} className="size-9" />
-      <span className="text-[15px] font-medium">{ev ? describe(ev) : fallback}</span>
+      <span className="min-w-0 text-[15px] font-medium break-words">{ev ? describe(ev) : fallback}</span>
     </div>
   );
 }
