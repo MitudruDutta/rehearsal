@@ -162,6 +162,46 @@ def billing_quote(provider: str, model: str) -> Quote | None:
     return (_cached("overrides", _overrides) or {}).get(f"{provider}:{model}")
 
 
+_refreshing: set[str] = set()
+
+
+def _refresh_later(keys: list[str]) -> None:
+    """Loads price sources in a background thread, once per source at a time."""
+    with _lock:
+        keys = [k for k in keys if k not in _refreshing]
+        _refreshing.update(keys)
+    if not keys:
+        return
+
+    def load() -> None:
+        for k in keys:
+            try:
+                _cached(k, LISTS.get(k, _overrides))
+            finally:
+                with _lock:
+                    _refreshing.discard(k)
+
+    threading.Thread(target=load, name="price-refresh", daemon=True).start()
+
+
+def cached_quote(provider: str, model: str) -> Quote | None:
+    """The billing price from memory only: never waits on the network, so it is safe inside telemetry callbacks that
+    have a deadline. A source that is missing or stale is reloaded in the background for the next call."""
+    keys = ([provider] if provider in LISTS else []) + ["overrides"]
+    with _lock:
+        hits = {k: _cache.get(k) for k in keys}
+    stale = [k for k, hit in hits.items() if hit is None or time.time() - hit[0] >= TTL_S]
+    if stale:
+        _refresh_later(stale)
+    listing = (hits.get(provider) or (0.0, None))[1] or {}
+    return listing.get(model) or ((hits["overrides"] or (0.0, None))[1] or {}).get(f"{provider}:{model}")
+
+
+def warm(providers: set[str]) -> None:
+    """Starts loading the price lists of these providers in the background (called when telemetry starts)."""
+    _refresh_later([p for p in sorted(providers) if p in LISTS] + ["overrides"])
+
+
 def market(model: str) -> dict[str, Any] | None:
     """What hosts on OpenRouter charge for the same model (planning reference only)."""
     listing = _cached("openrouter", _openrouter_list) or {}

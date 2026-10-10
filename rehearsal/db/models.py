@@ -120,6 +120,24 @@ class ApiKey(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
+class CliLogin(Base):
+    """A terminal asking to sign in (`rehearsal login`). A signed-in owner approves it in the console; the terminal
+    then collects a new API key with its device code. The key is created at that moment and never stored readable."""
+
+    __tablename__ = "cli_logins"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("cli"))
+    user_code: Mapped[str] = mapped_column(String(16), unique=True)  # shown in the terminal and the browser
+    device_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the terminal's secret device code
+    client: Mapped[str] = mapped_column(String(200), default="")  # user@host of the terminal
+    requested_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | approved | denied | claimed
+    project_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    api_key_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime] = mapped_column()
+
+
 class Credential(Base):
     """A reference to a secret (environment variable name on the runner) or an
     encrypted value. Values are never returned by the API."""

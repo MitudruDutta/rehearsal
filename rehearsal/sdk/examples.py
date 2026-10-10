@@ -80,7 +80,7 @@ def export_example(client: Rehearsal, world_version_id: str) -> dict[str, Any]:
         "",
         "| Scenario | Family | Split | Goal changes |",
         "|---|---|---|---|",
-        *[f"| {s['spec']['title']} | {s['family']} | {s['split']} | {len(s['spec']['goals']) - 1} |" for s in sorted(scenarios, key=lambda x: (x["split"], x["slug"]))],
+        *[f"| {s['spec'].get('title', s['slug'])} | {s['family']} | {s['split']} | {max(0, len(s['spec'].get('goals') or []) - 1)} |" for s in sorted(scenarios, key=lambda x: (x["split"], x["slug"]))],
         "",
         "Train scenarios are in `scenarios/train/`. Dev and held-out scenarios are kept in the private evaluation bundle.",
         "",
