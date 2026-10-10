@@ -1,0 +1,10 @@
+# Prices for providers that do not publish machine-readable prices.
+# Copy to pricing.yaml (or set REHEARSAL_PRICING_FILE). Each entry must say where
+# the number came from and when; Rehearsal records that source with every cost.
+#
+# "groq:openai/gpt-oss-120b":
+#   input_per_m: 0.15
+#   output_per_m: 0.60
+#   source: groq pricing page
+#   url: https://groq.com/pricing
+#   as_of: 2026-10-09

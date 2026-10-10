@@ -1,0 +1,10 @@
+.git
+.env
+var/
+**/__pycache__
+**/*.pyc
+web/node_modules
+web/.next
+web/out
+rehearsal/api/static
+*.egg-info
