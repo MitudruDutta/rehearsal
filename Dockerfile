@@ -8,6 +8,8 @@ RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY web/ ./
+# public contact for the landing page ("Talk to us"), baked into the static console: --build-arg NEXT_PUBLIC_CONTACT_EMAIL=...
+ARG NEXT_PUBLIC_CONTACT_EMAIL="" NEXT_PUBLIC_CONTACT_URL=""
 RUN mkdir -p ../rehearsal/api && pnpm build
 
 FROM python:3.12-slim-bookworm

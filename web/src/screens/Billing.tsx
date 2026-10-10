@@ -35,9 +35,35 @@ function Meter({ label, used, limit, note }: { label: string; used: number; limi
   );
 }
 
+/** The plan someone picked on the pricing page, one click from payment. It never pays or switches by itself. */
+function Chosen({ item, d, busy, onBuy }: { item: string; d: any; busy: boolean; onBuy: () => void }) {
+  const [name, period] = item.split("_");
+  const p = PRICES[name];
+  if (!p || !["monthly", "yearly"].includes(period)) return null;
+  const interval = period === "monthly" ? "month" : "year";
+  const sub = d.subscription;
+  const current = !!sub?.paid && sub.plan === name && sub.interval === interval;
+  const managed = d.plan.name === "internal" || d.plan.name === "enterprise";
+  const ready = d.billing_enabled && d.items.includes(item) && !current && !managed;
+  return (
+    <Card className="mb-4 border-primary/50 bg-primary/5">
+      <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6">
+        <div>
+          <div className="font-semibold">{name[0].toUpperCase() + name.slice(1)} plan, billed {period}: ${interval === "month" ? p.month : p.year} a {interval}</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {current ? "This is already your plan." : managed ? "An operator manages this workspace's plan." : !d.billing_enabled ? "Payments are not set up on this server yet." : `${p.blurb}. You pay on Dodo Payments' secure page and can cancel at any time.`}
+          </p>
+        </div>
+        {ready && <Button onClick={onBuy} disabled={busy}><CreditCard /> {sub?.paid ? `Switch to ${name}` : "Continue to payment"}</Button>}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Billing() {
   const b = useResource<any>("/v1/billing");
   const back = useQuery("checkout");
+  const buy = useQuery("buy"); // a plan chosen on the pricing page, e.g. pro_monthly
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -86,6 +112,7 @@ export function Billing() {
           </>
         ) : undefined}
       />
+      {buy && <Chosen item={buy} d={d} busy={busy === buy} onBuy={() => (subscribed ? change(buy) : checkout(buy))} />}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 space-y-4">
           <Card>

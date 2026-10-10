@@ -95,7 +95,7 @@ export function ApiKeys() {
         title="API keys"
         description="Use Rehearsal from an AI assistant over MCP, from the terminal, from Python, or over HTTP. Give each person, pipeline or agent its own key, so you can revoke one without stopping the others."
       />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-4">
         <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader>
@@ -111,7 +111,7 @@ export function ApiKeys() {
                 <div className="grid gap-1.5">
                   <Label htmlFor="key-access">Access</Label>
                   <Select value={scope} onValueChange={setScope}>
-                    <SelectTrigger id="key-access"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="key-access" className="w-full min-w-0"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(ACCESS).map(([k, a]) => (
                         <SelectItem key={k} value={k}><span className="font-medium">{a.label}</span><span className="ml-2 text-muted-foreground">{a.detail}</span></SelectItem>
@@ -123,14 +123,6 @@ export function ApiKeys() {
               </form>
               {created && <KeyReveal apiKey={created} />}
             </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Connect</CardTitle>
-              <CardDescription>{created ? "Your new key is filled in below." : "Replace rh_your_key with a key you created."}</CardDescription>
-            </CardHeader>
-            <CardContent><Connect apiKey={created} /></CardContent>
           </Card>
 
           <Card>
@@ -168,6 +160,13 @@ export function ApiKeys() {
                 </details>
               )}
             </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Connect</CardTitle>
+              <CardDescription>{created ? "Your new key is filled in below." : "Replace rh_your_key with a key you created."}</CardDescription>
+            </CardHeader>
+            <CardContent><Connect apiKey={created} /></CardContent>
           </Card>
         </div>
 

@@ -1,4 +1,4 @@
-import { Activity, CircleCheck, Database, GitCompareArrows, MessageSquareDiff, ShieldCheck, TimerOff, Workflow, ListChecks, Repeat, BadgeCheck, CopyX, MessageCircleQuestion } from "lucide-react";
+import { Activity, CircleCheck, Database, GitCompareArrows, MessageSquareDiff, ShieldCheck, TimerOff, Workflow } from "lucide-react";
 import Link from "next/link";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -7,173 +7,23 @@ import { SpotlightCard } from "@/components/blocks/spotlight-card";
 import { HeroWindow } from "../landing/HeroWindow";
 import { InstallChip } from "../landing/InstallChip";
 import { PixelBackdrop } from "../landing/PixelBackdrop";
+import { PixelTrail } from "../landing/PixelTrail";
+import { CompilerScene, CustomerScene, FaultScene, ImproveScene, TraceScene, VerdictReport, VerifyScene } from "../landing/Showcase";
 import { NavActions, StartCta } from "../landing/SessionCta";
 
-// Where pilot requests go (booking page, form, or mailto), set at deploy time.
-const CONTACT = process.env.NEXT_PUBLIC_CONTACT_URL;
+// Where pilot and enterprise requests go, set at deploy time: a booking page or form, or else an email address.
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
+const CONTACT = process.env.NEXT_PUBLIC_CONTACT_URL || (CONTACT_EMAIL ? `mailto:${CONTACT_EMAIL}?subject=Rehearsal%20Enterprise` : undefined);
 
 // Where "Docs" leads. Until the documentation site planned in handbook/DOCS_SITE_PLAN.md exists, that is the API
 // reference the server generates at /docs; set this at deploy time to point at the site instead.
 const DOCS = process.env.NEXT_PUBLIC_DOCS_URL || "/docs";
 
-/* ---- small illustrations inside the bento cards: example content, styled like the console ---- */
-
-function Mono({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`font-mono text-[12px] leading-relaxed ${className}`}>{children}</div>;
-}
-
-/** A small window that frames an illustration: a title bar with a label, then the content. */
-function Pane({ label, aside, children, className = "" }: { label: string; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`overflow-hidden rounded-lg border bg-card shadow-[0_10px_28px_-14px_rgb(0_0_0/0.55)] ${className}`}>
-      <div className="flex items-center gap-2 border-b px-3 py-1.5 text-[11px] text-muted-foreground">
-        <span className="flex gap-1" aria-hidden="true">
-          <i className="size-1.5 rounded-full bg-muted-foreground/35" /><i className="size-1.5 rounded-full bg-muted-foreground/35" /><i className="size-1.5 rounded-full bg-muted-foreground/35" />
-        </span>
-        <span className="truncate font-mono">{label}</span>
-        {aside && <span className="ml-auto shrink-0">{aside}</span>}
-      </div>
-      <div className="p-3">{children}</div>
-    </div>
-  );
-}
-
-const PHASES = ["Read the source", "Plan the runtime", "Start the sandbox", "Find the API", "Seed fictional data", "Choose agent tools", "Write jobs", "Validate", "Publish"];
-
-function CompilerVisual() {
-  return (
-    <Pane label="world build · gitea" aside={<span className="tabular-nums">5 of 9</span>} className="mx-auto max-w-xl">
-      <ol className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px] sm:grid-cols-3">
-        {PHASES.map((p, i) => (
-          <li key={p} className="flex min-w-0 items-center gap-2">
-            {i < 5 ? (
-              <CircleCheck className="size-3.5 shrink-0 text-success" />
-            ) : i === 5 ? (
-              <span className="grid size-3.5 shrink-0 place-items-center"><span className="size-2 animate-pulse rounded-full bg-primary shadow-[0_0_8px_var(--primary)]" /></span>
-            ) : (
-              <span className="size-3.5 shrink-0 rounded-full border border-muted-foreground/35" />
-            )}
-            <span className={`truncate ${i < 5 ? "" : i === 5 ? "font-medium" : "text-muted-foreground"}`}>{p}</span>
-          </li>
-        ))}
-      </ol>
-      <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted"><div className="h-full w-[60%] rounded-full bg-linear-to-r from-success to-primary" /></div>
-    </Pane>
-  );
-}
-
-function CustomerVisual() {
-  const face = <span className="grid size-6 shrink-0 place-items-center rounded-full border bg-muted text-[10px] font-semibold text-muted-foreground" aria-hidden="true">C</span>;
-  return (
-    <div className="mx-auto max-w-sm space-y-2 text-[13px]">
-      <div className="flex items-end gap-2">
-        {face}
-        <div className="rounded-2xl rounded-bl-sm border bg-card px-3 py-1.5 text-muted-foreground line-through decoration-muted-foreground/60">Refund order 4182, please.</div>
-      </div>
-      <div className="flex items-center gap-2 pl-8 text-[11px] text-warning">
-        <span className="h-px flex-1 bg-warning/30" />
-        <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 font-medium">request changed · v2</span>
-        <span className="h-px flex-1 bg-warning/30" />
-      </div>
-      <div className="flex items-end gap-2">
-        {face}
-        <div className="rounded-2xl rounded-bl-sm border bg-card px-3 py-1.5 shadow-[0_8px_20px_-12px_rgb(0_0_0/0.5)]">Actually, make it store credit instead.</div>
-      </div>
-    </div>
-  );
-}
-
-function FaultVisual() {
-  return (
-    <Pane label="episode · tool calls" className="mx-auto max-w-sm">
-      <Mono className="space-y-2">
-        <div className="flex items-center gap-1.5">
-          <span className="w-8 shrink-0 text-muted-foreground">POST</span><span className="truncate">/refunds</span>
-          <span className="ml-auto shrink-0 rounded border border-destructive/40 bg-destructive/10 px-1.5 text-[11px] text-destructive">timeout · injected</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-8 shrink-0 text-muted-foreground">GET</span><span className="truncate">/refunds?order=4182</span>
-          <span className="ml-auto shrink-0 rounded border px-1.5 text-[11px] text-muted-foreground">1 found</span>
-        </div>
-        <div className="flex items-center gap-2 border-t pt-2 text-success"><CircleCheck className="size-3.5 shrink-0" /><span className="truncate">already refunded, no retry</span></div>
-      </Mono>
-    </Pane>
-  );
-}
-
-function VerifyVisual() {
-  return (
-    <div className="mx-auto grid max-w-2xl items-center gap-3 sm:grid-cols-[1.25fr_1fr]">
-      <Pane label="check · read-only">
-        <Mono className="grid grid-cols-[auto_1fr] gap-x-3">
-          <span className="select-none text-right text-muted-foreground/50" aria-hidden="true">1<br />2</span>
-          <span><span className="text-primary">SELECT</span> count(*) <span className="text-primary">FROM</span> refunds<br /><span className="text-primary">WHERE</span> order_id = 4182;</span>
-        </Mono>
-        <div className="mt-2 border-t pt-2 font-mono text-[11px] text-muted-foreground">→ count = <span className="text-foreground">1</span>, read after the episode</div>
-      </Pane>
-      <ul className="space-y-1.5 text-[12px]">
-        {["Goal reached", "No duplicate refund", "Claim matches records"].map((check) => (
-          <li key={check} className="flex items-center gap-2 rounded-md border border-success/25 bg-success/10 px-2.5 py-1.5">
-            <CircleCheck className="size-3.5 shrink-0 text-success" /><span className="truncate">{check}</span>
-            <span className="ml-auto font-mono text-[11px] text-success">pass</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ImproveVisual() {
-  return (
-    <Pane label="agent instructions" aside={<span className="rounded border px-1.5 font-mono">v1 → v2</span>} className="mx-auto max-w-2xl">
-      <Mono className="space-y-1">
-        <div className="flex gap-2 rounded bg-destructive/10 px-2 py-0.5 text-destructive"><span className="select-none" aria-hidden="true">−</span><span className="min-w-0 md:truncate">Retry any refund call that fails.</span></div>
-        <div className="flex gap-2 rounded bg-success/10 px-2 py-0.5 text-success"><span className="select-none" aria-hidden="true">+</span><span className="min-w-0 md:truncate">Before retrying, check whether the refund already exists.</span></div>
-        <div className="flex gap-2 rounded bg-success/10 px-2 py-0.5 text-success"><span className="select-none" aria-hidden="true">+</span><span className="min-w-0 md:truncate">Re-read the latest customer message before acting.</span></div>
-      </Mono>
-      <div className="mt-2.5 truncate text-[11px] text-muted-foreground">Proposed from failed training jobs</div>
-    </Pane>
-  );
-}
-
-// name, depth in the tree, where its bar starts and how wide it is (percent of the episode), colour
-const SPANS: [string, number, number, number, string][] = [
-  ["episode · changed-mind", 0, 0, 100, "bg-primary/60"],
-  ["llm · deepseek-v4.1-flash", 1, 3, 34, "bg-primary"],
-  ["tool · create_refund", 1, 39, 20, "bg-info"],
-  ["tool · list_refunds", 1, 61, 16, "bg-info"],
-  ["verifier · 3 passed", 1, 82, 16, "bg-success"],
-];
-
-function TraceVisual() {
-  return (
-    <Pane label="trace · rehearse-agent" className="mx-auto max-w-sm">
-      <div className="space-y-1.5 font-mono text-[11px]">
-        {SPANS.map(([name, depth, from, width, colour]) => (
-          <div key={name} className="grid grid-cols-[minmax(0,2.4fr)_1fr] items-center gap-2.5">
-            <span className={`truncate ${depth ? "text-muted-foreground" : ""}`} style={{ paddingLeft: depth * 10 }}>{name}</span>
-            <span className="relative h-1.5 rounded-full bg-muted"><span className={`absolute inset-y-0 rounded-full ${colour}`} style={{ left: `${from}%`, width: `${width}%` }} /></span>
-          </div>
-        ))}
-      </div>
-    </Pane>
-  );
-}
-
-const MEASURES = [
-  { icon: BadgeCheck, title: "Verified success", body: "The outcome exists in your application's own records." },
-  { icon: ShieldCheck, title: "Rule violations", body: "Anything your checks say must never happen, like touching the wrong account." },
-  { icon: CopyX, title: "Duplicate side effects", body: "A second refund, email, or shipment caused by a blind retry." },
-  { icon: Repeat, title: "Recovery after faults", body: "Whether the agent finished correctly after a request failed or timed out." },
-  { icon: ListChecks, title: "False “done” claims", body: "The agent said it finished; the records say otherwise." },
-  { icon: MessageCircleQuestion, title: "Unneeded questions", body: "Interruptions to the customer beyond what the job required." },
-];
-
 const TIERS = [
   { name: "Free", price: "$0", unit: "forever", points: ["1 application, built into a practice world once", "40 episodes a month, run in quiet hours", "1 sandbox at a time"], cta: "Start free", href: "/app/" },
-  { name: "Pro", price: "$29", unit: "/ month", points: ["3 applications, 2 world builds a month", "750 episodes a month, run at once", "2 sandboxes at a time", "Top-ups when you need more"], cta: "Start free", href: "/app/", featured: true },
-  { name: "Team", price: "$149", unit: "/ month", points: ["20 applications, 8 world builds a month", "3,000 episodes a month", "4 sandboxes at a time", "Top-ups when you need more"], cta: "Start free", href: "/app/" },
-  { name: "Enterprise", price: "Custom", unit: "from $3,000 a month", points: ["Runner inside your own cloud account", "Single sign-on, audit export, retention controls", "Private held-out evaluation of vendor agents"], cta: "Talk to us", href: "#cta" },
+  { name: "Pro", price: "$29", unit: "/ month", points: ["3 applications, 2 world builds a month", "750 episodes a month, run at once", "2 sandboxes at a time", "Top-ups when you need more"], cta: "Buy Pro", href: "/app/billing/?buy=pro_monthly", featured: true },
+  { name: "Team", price: "$149", unit: "/ month", points: ["20 applications, 8 world builds a month", "3,000 episodes a month", "4 sandboxes at a time", "Top-ups when you need more"], cta: "Buy Team", href: "/app/billing/?buy=team_monthly" },
+  { name: "Enterprise", price: "Custom", unit: "from $3,000 a month", points: ["Runner inside your own cloud account", "Single sign-on, audit export, retention controls", "Private held-out evaluation of vendor agents"], cta: "Talk to us", href: CONTACT || "#cta" },
 ];
 
 const FAQ = [
@@ -251,17 +101,19 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Between the two pictures the page is black, like their frames, in both themes; the mouse leaves blue pixels on it */}
+      <PixelTrail className="dark bg-black text-foreground">
       {/* Features: bento grid */}
-      <section id="features" className="border-t border-border/60">
-        <div className="mx-auto max-w-7xl px-4 py-24 md:px-8">
+      <section id="features">
+        <div className="mx-auto max-w-[1760px] px-4 py-24 md:px-8 xl:px-12">
           <SectionHead title="Everything a rehearsal needs, built from your app" body="Mocks agree with whatever the agent does, and production is too risky to practise in. Rehearsal builds the middle ground automatically." />
           <BentoGrid className="mt-14">
-            <BentoCard className="lg:col-span-2"Icon={Workflow} name="The World Compiler" description="An agent reads your source, starts your real images in an isolated sandbox, seeds fictional data, chooses the tools each role may use, and writes jobs it proves can be passed and failed." visual={<CompilerVisual />} href="#live" cta="Watch a build" />
-            <BentoCard Icon={MessageSquareDiff} name="Customers who change their minds" description="Simulated customers revise requests mid-task. Agents that finish the old request get caught." visual={<CustomerVisual />} />
-            <BentoCard Icon={TimerOff} name="Failures on purpose" description="Requests time out after the change went through. Blind retries show up as duplicates." visual={<FaultVisual />} />
-            <BentoCard className="lg:col-span-2"Icon={Database} name="Verified in your database, not by an LLM" description="Read-only checks against the application's own records decide every outcome, so a confident agent can't talk its way to a pass." visual={<VerifyVisual />} />
-            <BentoCard className="lg:col-span-2"Icon={GitCompareArrows} name="Improve the agent, then compare" description="The improvement agent proposes changes from failed training jobs. Compare versions on jobs neither version has seen." visual={<ImproveVisual />} />
-            <BentoCard Icon={Activity} name="Every step traced" description="Each build and rehearsal is a Tracing trace: model calls, tool calls, and checks." visual={<TraceVisual />} />
+            <BentoCard className="lg:col-span-2"Icon={Workflow} name="The World Compiler" description="An agent reads your source, starts your real images in an isolated sandbox, seeds fictional data, chooses the tools each role may use, and writes jobs it proves can be passed and failed." visual={<CompilerScene />} href="#live" cta="Watch a build" />
+            <BentoCard Icon={MessageSquareDiff} name="Customers who change their minds" description="Simulated customers revise requests mid-task. Agents that finish the old request get caught." visual={<CustomerScene />} />
+            <BentoCard Icon={TimerOff} name="Failures on purpose" description="Requests time out after the change went through. Blind retries show up as duplicates." visual={<FaultScene />} />
+            <BentoCard className="lg:col-span-2"Icon={Database} name="Verified in your database, not by an LLM" description="Read-only checks against the application's own records decide every outcome, so a confident agent can't talk its way to a pass." visual={<VerifyScene />} />
+            <BentoCard className="lg:col-span-2"Icon={GitCompareArrows} name="Improve the agent, then compare" description="The improvement agent proposes changes from failed training jobs. Compare versions on jobs neither version has seen." visual={<ImproveScene />} />
+            <BentoCard Icon={Activity} name="Every step traced" description="Each build and rehearsal is a Tracing trace: model calls, tool calls, and checks." visual={<TraceScene />} />
           </BentoGrid>
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed bg-card/40 px-5 py-4">
             <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">Coming soon</span>
@@ -272,33 +124,27 @@ export default function Landing() {
       </section>
 
       {/* What gets measured */}
-      <section className="border-t border-border/60 bg-card/30">
-        <div className="mx-auto max-w-7xl px-4 py-24 md:px-8">
-          <SectionHead title="A readiness verdict, with evidence" body="For every agent on every application: ready to pilot, or not yet. Each verdict links to the episodes behind it." />
-          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {MEASURES.map((m) => (
-              <SpotlightCard key={m.title}>
-                <m.icon className="size-5 text-primary" />
-                <h3 className="mt-4 font-semibold">{m.title}</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">{m.body}</p>
-              </SpotlightCard>
-            ))}
-          </div>
+      <section className="border-t border-white/10">
+        <div className="mx-auto max-w-[2400px] px-4 py-24 md:px-8 xl:px-16 2xl:px-24">
+          <SectionHead title="A readiness verdict, with evidence" body="For every agent on every application: ready to pilot, or not yet. Each measure links to the episodes behind it. Switch agents, or pick a measure to see its evidence." />
+          <div className="mt-14"><VerdictReport /></div>
         </div>
       </section>
 
-      <section id="pricing" className="border-t border-border/60 bg-card/30">
-        <div className="mx-auto max-w-7xl px-4 py-24 md:px-8">
+      <section id="pricing" className="border-t border-white/10">
+        <div className="mx-auto max-w-[1440px] px-4 py-24 md:px-8 xl:px-12">
           <SectionHead title="Pricing" body="Start free and keep the free plan. Pay when you rehearse more often. The open-source core stays free to self-host with your own model key." />
           <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {TIERS.map((t) => (
               <SpotlightCard key={t.name} className={t.featured ? "border-primary/60 shadow-[0_0_0_1px_var(--primary),0_20px_60px_-20px_var(--primary)]" : ""}>
-                <div className="flex items-center justify-between"><h3 className="font-semibold">{t.name}</h3>{t.featured && <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">Recommended</span>}</div>
-                <p className="mt-5"><span className="font-heading text-4xl font-bold">{t.price}</span> <span className="text-sm text-muted-foreground">{t.unit}</span></p>
-                <ul className="mt-6 space-y-2.5 text-sm">
+                <div className="flex min-h-[420px] flex-col lg:min-h-[460px] lg:p-2">
+                <div className="flex items-center justify-between"><h3 className="text-lg font-semibold">{t.name}</h3>{t.featured && <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">Recommended</span>}</div>
+                <p className="mt-6"><span className="font-heading text-5xl font-bold">{t.price}</span> <span className="text-sm text-muted-foreground">{t.unit}</span></p>
+                <ul className="mt-8 space-y-3.5 text-[15px]">
                   {t.points.map((p) => <li key={p} className="flex gap-2"><CircleCheck className="mt-0.5 size-4 shrink-0 text-success" />{p}</li>)}
                 </ul>
-                <Button asChild className="mt-8 w-full" variant={t.featured ? "default" : "outline"}>{t.href.startsWith("/") ? <Link href={t.href}>{t.cta}</Link> : <a href={t.href}>{t.cta}</a>}</Button>
+                <div className="mt-auto pt-8"><Button asChild className="w-full" variant={t.featured ? "default" : "outline"}>{t.href.startsWith("/") ? <Link href={t.href}>{t.cta}</Link> : <a href={t.href}>{t.cta}</a>}</Button></div>
+                </div>
               </SpotlightCard>
             ))}
           </div>
@@ -306,14 +152,18 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="faq" className="border-t border-border/60">
-        <div className="mx-auto max-w-3xl px-4 py-24 md:px-8">
-          <h2 className="text-center text-3xl font-bold tracking-tight md:text-[44px]">Questions</h2>
-          <Accordion type="single" collapsible className="mt-10">
+      <section id="faq" className="border-t border-white/10">
+        <div className="mx-auto grid max-w-[1440px] gap-10 px-4 py-24 md:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:gap-16 xl:px-12">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight md:text-[44px]">FAQ</h2>
+            <p className="mt-4 max-w-md text-lg text-muted-foreground">How Rehearsal treats your data, what it runs, and what it costs. Anything else: <a href="#cta" className="underline underline-offset-4 hover:text-foreground">ask us</a>.</p>
+          </div>
+          <Accordion type="single" collapsible>
             {FAQ.map(([q, a]) => <AccordionItem key={q} value={q}><AccordionTrigger className="text-left text-base">{q}</AccordionTrigger><AccordionContent className="text-muted-foreground">{a}</AccordionContent></AccordionItem>)}
           </Accordion>
         </div>
       </section>
+      </PixelTrail>
 
       {/* The page ends as it began, with a picture in a black frame and the "wave" palette. The closing call to
           action sits on the night sky; the product's name runs across the foot in outline, with the riders passing
