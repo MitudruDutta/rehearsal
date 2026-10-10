@@ -1,0 +1,118 @@
+# Third-party applications Rehearsal compiles into worlds. None were written by
+# the Rehearsal authors. Each entry pins the source commit inspected by the
+# compiler and the published images the runner executes.
+#
+# split: development applications may inform compiler development;
+#        holdout applications must not be inspected while developing the
+#        compiler. They measure whether compilation transfers.
+#
+# Licences travel with any exported world bundle that contains these images.
+
+applications:
+  - name: gitea
+    split: development
+    domain: code collaboration / issue tracking
+    license: MIT
+    source:
+      kind: git
+      url: https://github.com/go-gitea/gitea
+      ref: v28.1.0
+      commit: 4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9
+    images:
+      gitea: gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a
+
+  - name: chatwoot
+    split: development
+    domain: customer support desk
+    license: MIT (enterprise/ directory under a separate licence; not used)
+    source:
+      kind: git
+      url: https://github.com/chatwoot/chatwoot
+      ref: v4.18.0
+      commit: 9f920b549c14491a4e587687a3eed5d21c6ccc7d
+    images:
+      chatwoot: chatwoot/chatwoot:v4.18.0@sha256:b419dded7e9d2f54a24fd427b74ba7e6069d601b500618045c1eb6c01a1cc9a1
+      # Chatwoot's own compose files use pgvector (its schema enables the "vector" extension).
+      postgres: pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
+      redis: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+
+  - name: vikunja
+    split: development
+    domain: task and project management
+    license: AGPL-3.0
+    source:
+      kind: git
+      url: https://github.com/go-vikunja/vikunja
+      ref: v2.7.0
+      commit: a16be96aa454671fdf213b0fbe411dd38a098418
+    images:
+      vikunja: vikunja/vikunja:2.7.0@sha256:e2204a1c1c6a81e833c2b3a5442be182ca2335b54c2e7e37578cc3fe12a27cfc
+
+  - name: wordpress
+    split: development
+    domain: website and content management
+    license: GPL-2.0-or-later
+    source:
+      kind: git
+      url: https://github.com/WordPress/WordPress
+      ref: 7.1.3
+      commit: fc9832bef919c2a08541248db23af90d14ffb082
+    images:
+      wordpress: wordpress:7.1.3@sha256:8ecd8d8e374167ea22235acf30f80d1165b82f07ffa5bcef90c1cad8f7be251f
+      # WP-CLI image from the same official repository, for installing the site and creating users
+      wpcli: wordpress:cli@sha256:36243da432a0f0a3b56dc3240ecee9b159108d71305e7c064d987a20a465bfde
+      mariadb: mariadb:11.4@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+
+  - name: mattermost
+    split: development
+    domain: team chat
+    license: Team Edition binaries under MIT; source AGPL-3.0 / Apache-2.0
+    source:
+      kind: git
+      url: https://github.com/mattermost/mattermost
+      ref: v11.11.1
+      commit: 3acb3a7f684d11ccfcec4e5bd11c79f64e3eabf9
+    images:
+      mattermost: mattermost/mattermost-team-edition:11.11.1@sha256:6ad5912b45875ef2fafc41886b5a70a3ec1b6c17ec706e0492566e8a2fd8aa85
+      postgres: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+
+  - name: odoo
+    split: development
+    domain: ERP and CRM (sales, invoicing)
+    license: LGPL-3.0 (Community edition)
+    source:
+      kind: git
+      url: https://github.com/odoo/odoo
+      ref: "19.0"
+      # The official image is built from the 19.0 branch; this is the branch head when the image was pinned.
+      commit: dc2f9415c76505390739a062b96e8cb6b6f7e8a7
+    images:
+      odoo: odoo:19.0@sha256:dd9013e669caaa23d26765dc55814655eaeecca7cfc2c265dbabae913bce22fd
+      postgres: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+
+  - name: saleor
+    split: development
+    domain: commerce
+    license: BSD-3-Clause
+    source:
+      kind: git
+      url: https://github.com/saleor/saleor
+      ref: 3.23.40
+      commit: ee79049fd27d8091ab897ea3ed8145df0b3c9ae7
+    images:
+      saleor: ghcr.io/saleor/saleor:3.23.40@sha256:31353179436dd056b74c35ee2ede48fef91c383b501b1c0bf9f9eabdbe4a8a31
+      postgres: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+      redis: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+
+  - name: easyappointments
+    split: holdout
+    domain: appointment booking
+    license: GPL-3.0
+    source:
+      kind: git
+      url: https://github.com/alextselegidis/easyappointments
+      ref: 1.6.0
+      commit: 4bc7ecd51f3dade8e041558f2c23dda65bd6c43e
+    images:
+      easyappointments: alextselegidis/easyappointments:1.6.0@sha256:ab35b8872d5d3328fa3afb641a89a75f3c6f96f3fb98d6d6d3447fff9d357fa1
+      mysql: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
