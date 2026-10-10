@@ -162,12 +162,45 @@ def test_llm_spans_sent_to_tracing_carry_their_cost(monkeypatch):
     from rehearsal import pricing, telemetry
 
     monkeypatch.setattr(telemetry, "settings", lambda: SimpleNamespace(model_compiler="nebius:deepseek-ai/DeepSeek-V4.1-Flash", model_agent="", model_participant="", model_improver=""))
-    monkeypatch.setattr(pricing, "billing_quote", lambda provider, model: SimpleNamespace(cost=lambda p, c: (p * 0.30 + c * 1.20) / 1e6) if provider == "nebius" else None)
+    monkeypatch.setattr(pricing, "cached_quote", lambda provider, model: SimpleNamespace(cost=lambda p, c: (p * 0.30 + c * 1.20) / 1e6) if provider == "nebius" else None)
     span = {"attributes": {"tracing.span.kind": "llm", "tracing.llm.model_name": "deepseek-ai/DeepSeek-V4.1-Flash",
                            "tracing.llm.token_count.prompt": 1000, "tracing.llm.token_count.completion": 500}}
     assert abs(telemetry.mask(span)["attributes"]["tracing.llm.cost_usd"] - 0.0009) < 1e-9
     other = {"attributes": {"tracing.span.kind": "llm", "tracing.llm.model_name": "unknown-model"}}
     assert "tracing.llm.cost_usd" not in telemetry.mask(other)["attributes"]
+
+
+def test_masking_a_span_never_waits_on_the_network(monkeypatch):
+    """tracing drops a span whose mask misses its 5-second batch deadline: with no prices in memory the mask must
+    return at once (without a cost) and load the price list in the background, never inline."""
+    import threading
+    import time
+    from types import SimpleNamespace
+
+    from rehearsal import pricing, telemetry
+
+    monkeypatch.setattr(telemetry, "settings", lambda: SimpleNamespace(model_compiler="nebius:deepseek-ai/DeepSeek-V4.1-Flash", model_agent="", model_participant="", model_improver=""))
+    monkeypatch.setattr(pricing, "_cache", {})
+    monkeypatch.setattr(pricing, "_refreshing", set())
+    loaded, loader_thread = threading.Event(), {}
+
+    def slow_price_list():
+        loader_thread["name"] = threading.current_thread().name
+        time.sleep(0.5)  # a price list over a slow network
+        loaded.set()
+        return {"deepseek-ai/DeepSeek-V4.1-Flash": pricing.Quote("nebius", "deepseek-ai/DeepSeek-V4.1-Flash", 0.30, 1.20, "test")}
+
+    monkeypatch.setitem(pricing.LISTS, "nebius", slow_price_list)
+    monkeypatch.setattr(pricing, "_overrides", lambda: {})
+    span = {"attributes": {"tracing.span.kind": "llm", "tracing.llm.model_name": "deepseek-ai/DeepSeek-V4.1-Flash",
+                           "tracing.llm.token_count.prompt": 1000, "tracing.llm.token_count.completion": 500}}
+    started = time.perf_counter()
+    first = telemetry.mask(span)
+    assert time.perf_counter() - started < 0.2 and "tracing.llm.cost_usd" not in first["attributes"]  # did not wait
+    assert loaded.wait(5) and loader_thread["name"] == "price-refresh"  # loaded in the background
+    time.sleep(0.05)
+    again = {"attributes": dict(span["attributes"])}
+    assert abs(telemetry.mask(again)["attributes"]["tracing.llm.cost_usd"] - 0.0009) < 1e-9  # the next span is priced
 
 
 def test_tool_schemas_in_events_keep_fields_named_password():

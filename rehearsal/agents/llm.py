@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import httpx
 import openai
 
 from .. import pricing, telemetry
@@ -113,7 +114,10 @@ def _client(provider: str) -> Any:
             key = f"{key}.{secret}" if key and secret else ""
         if not key or not base:
             raise LLMError(f"{provider} is not configured ({key_env} / base URL missing)")
-        _clients[provider] = telemetry.wrap(openai.OpenAI(base_url=base, api_key=key, timeout=180.0, max_retries=0))
+        # A short connect timeout makes a dead route (for example a broken IPv6 or NAT64 path) fail fast, so the next
+        # address of the host (IPv4) is tried, instead of the call hanging for minutes before the fallback chain moves on.
+        timeout = httpx.Timeout(180.0, connect=10.0)
+        _clients[provider] = telemetry.wrap(openai.OpenAI(base_url=base, api_key=key, timeout=timeout, max_retries=0))
     return _clients[provider]
 
 

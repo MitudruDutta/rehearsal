@@ -99,7 +99,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       />
     );
   const nav = [...NAV, ...(me?.plan ? [BILLING] : []), ...(me?.is_admin ? [ADMIN] : [])];
-  const current = nav.find((n) => n.match.includes(norm)) ?? NAV[0];
+  const current = nav.find((n) => n.match.includes(norm)) ?? (norm === "/app/cli-login/" ? { ...NAV[0], label: "CLI sign-in" } : NAV[0]);
   const signOut = async () => {
     await api("/v1/session", { method: "DELETE" });
     location.reload();

@@ -35,6 +35,7 @@ from ..db.models import (
     Action,
     AgentProfileRow,
     BillingEvent,
+    CliLogin,
     PlanCredit,
     ApiKey,
     Application,
@@ -1374,6 +1375,107 @@ def new_key(body: KeyIn, p: Principal = Depends(principal)) -> dict[str, Any]:
     p.require("admin")
     with session() as s:
         return {"api_key": create_key(s, p.project_id, body.name, body.scopes), "note": "shown once; store it now"}
+
+
+# --------------------------------------------------------------------------- browser sign-in for the CLI
+# `rehearsal login` starts a request, opens the console's approval page, and polls. A signed-in owner or admin approves
+# it; the terminal's next poll creates a "Build and evaluate" key and returns it once. Nothing readable is stored.
+
+CLI_LOGIN_SECONDS = 600
+_CODE_LETTERS = "BCDFGHJKLMNPQRSTVWXZ"  # no vowels (no words) and no look-alikes such as 0/O or 1/I
+
+
+def _user_code() -> str:
+    import secrets
+
+    raw = "".join(secrets.choice(_CODE_LETTERS) for _ in range(8))
+    return f"{raw[:4]}-{raw[4:]}"
+
+
+def _cli_login(s: Any, code: str) -> CliLogin:
+    row = s.scalars(select(CliLogin).where(CliLogin.user_code == code.strip().upper()).with_for_update()).first()
+    if row is None:
+        raise HTTPException(404, "This sign-in code does not exist. Run `rehearsal login` again.")
+    if row.status == "pending" and row.expires_at < now():
+        raise HTTPException(410, "This sign-in request expired. Run `rehearsal login` again.")
+    return row
+
+
+class CliLoginIn(BaseModel):
+    client: str = Field(default="", max_length=200)
+
+
+@app.post("/v1/cli/logins", status_code=201)
+def cli_login_start(body: CliLoginIn, request: Request) -> dict[str, Any]:
+    """Starts a terminal sign-in. Returns the code to show, the page to open, and the secret device code to poll with."""
+    import secrets
+    from datetime import timedelta
+
+    _throttle(f"cli-login:{_ip(request)}", 20, 3600, "too many sign-in requests from this address; try again later")
+    device_code = secrets.token_urlsafe(32)
+    with session() as s:
+        for _ in range(5):  # 20^8 codes: a clash is rare, and the unique constraint catches it
+            code = _user_code()
+            if not s.scalar(select(func.count()).select_from(CliLogin).where(CliLogin.user_code == code)):
+                break
+        s.add(CliLogin(user_code=code, device_hash=hashlib.sha256(device_code.encode()).hexdigest(), client=body.client.strip()[:200],
+                       requested_ip=_ip(request), expires_at=now() + timedelta(seconds=CLI_LOGIN_SECONDS)))
+    base = str(request.base_url).rstrip("/")
+    return {"user_code": code, "device_code": device_code, "verification_url": f"{base}/app/cli-login/?code={code}",
+            "expires_in": CLI_LOGIN_SECONDS, "interval": 2}
+
+
+@app.get("/v1/cli/logins/{code}")
+def cli_login_info(code: str, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """What the approval page shows: which terminal asks, from where, and for which workspace."""
+    if not p.user_id:
+        raise HTTPException(403, "sign in to the console to approve a terminal")
+    with session() as s:
+        row = _cli_login(s, code)
+        project = s.get(Project, p.project_id)
+        org = s.get(Organization, project.org_id) if project else None
+        return {"user_code": row.user_code, "client": row.client, "requested_ip": row.requested_ip, "status": row.status,
+                "created_at": row.created_at.isoformat(), "expires_at": row.expires_at.isoformat(),
+                "workspace": org.name if org else None, "project": project.name if project else None, "can_approve": "admin" in p.scopes}
+
+
+@app.post("/v1/cli/logins/{code}/{decision}")
+def cli_login_decide(code: str, decision: Literal["approve", "deny"], p: Principal = Depends(principal)) -> dict[str, Any]:
+    if not p.user_id:
+        raise HTTPException(403, "sign in to the console to approve a terminal")
+    p.require("admin")  # approving creates an API key, which only owners and admins may do
+    with session() as s:
+        row = _cli_login(s, code)
+        if row.status != "pending":
+            raise HTTPException(409, f"This sign-in request is already {row.status}.")
+        row.status = "approved" if decision == "approve" else "denied"
+        row.project_id, row.approved_by = p.project_id, p.user_id
+        return {"status": row.status}
+
+
+class CliPollIn(BaseModel):
+    device_code: str = Field(min_length=20, max_length=200)
+
+
+@app.post("/v1/cli/logins/poll")
+def cli_login_poll(body: CliPollIn) -> dict[str, Any]:
+    """The terminal asks whether its request was approved. On the first poll after approval it receives a new API key,
+    exactly once."""
+    with session() as s:
+        row = s.scalars(select(CliLogin).where(CliLogin.device_hash == hashlib.sha256(body.device_code.encode()).hexdigest())
+                        .with_for_update()).first()
+        if row is None:
+            raise HTTPException(404, "unknown sign-in request")
+        if row.status == "pending":
+            return {"status": "expired" if row.expires_at < now() else "pending"}
+        if row.status != "approved":
+            return {"status": row.status}  # denied, or claimed already: a key is handed out only once
+        key = create_key(s, row.project_id, f"CLI: {row.client or 'terminal'}", ["write", "evaluator"])
+        row.status = "claimed"
+        row.api_key_id = s.scalars(select(ApiKey.id).where(ApiKey.prefix == key.split("_", 2)[1])).one()
+        project = s.get(Project, row.project_id)
+        org = s.get(Organization, project.org_id) if project else None
+        return {"status": "approved", "api_key": key, "workspace": org.name if org else None, "project": project.name if project else None}
 
 
 @app.delete("/v1/api-keys/{key_id}")
