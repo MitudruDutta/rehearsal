@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -29,6 +30,7 @@ PROVIDERS: dict[str, tuple[str, str]] = {
     "google": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GOOGLE_API_KEY"),
     "openai": ("https://api.openai.com/v1", "OPENAI_API_KEY"),
     "anthropic": ("https://api.anthropic.com/v1/", "ANTHROPIC_API_KEY"),
+    "litellm": ("https://litellm.vision.aivar.app/v1", "LITELLM_API_KEY"),  # a LiteLLM proxy (Claude, Amazon Nova); LITELLM_BASE_URL overrides
     "modal": ("", "MODAL_PROXY_TOKEN_ID"),  # base from MODAL_BASE_URL; key is "<token id>.<token secret>"
     "local": ("", "REHEARSAL_LOCAL_API_KEY"),  # base from REHEARSAL_LOCAL_BASE_URL (vLLM etc.)
     "custom": ("", "REHEARSAL_CUSTOM_API_KEY"),  # base from REHEARSAL_CUSTOM_BASE_URL
@@ -103,6 +105,8 @@ def _client(provider: str) -> Any:
         if provider in ("local", "custom"):
             base = os.environ.get(f"REHEARSAL_{provider.upper()}_BASE_URL", "http://127.0.0.1:8001/v1" if provider == "local" else "")
         key = os.environ.get(key_env) or ("local" if provider == "local" else "")
+        if provider == "litellm":
+            base = os.environ.get("LITELLM_BASE_URL", base)
         if provider == "modal":
             base = os.environ.get("MODAL_BASE_URL", "")
             secret = os.environ.get("MODAL_PROXY_TOKEN_SECRET", "")
@@ -241,6 +245,11 @@ def _try_chain(
         if _billing_blocked.get(provider, 0) > time.time():
             only_limits = False
             continue
+        quote = pricing.billing_quote(provider, model) if pricing.require_known_prices.get() else None
+        if pricing.require_known_prices.get() and quote is None:
+            only_limits = False
+            attempts.append(f"{provider}:{model} has no usable price; configure REHEARSAL_PRICING_FILE before spending against a budget")
+            continue
         for attempt in range(2):
             if check is not None:
                 check()
@@ -289,10 +298,15 @@ def _try_chain(
                 calls.append(ToolCall(tc.id or f"call_{len(calls)}", tc.function.name, args, tc.function.arguments or "", err))
             usage = resp.usage
             reported_cost = getattr(usage, "cost", None) if usage else None
-            cost = float(reported_cost) if reported_cost is not None else 0.0
+            try:
+                cost = float(reported_cost) if reported_cost is not None else 0.0
+                if not math.isfinite(cost) or cost < 0:
+                    raise ValueError("invalid reported cost")
+            except (TypeError, ValueError):
+                reported_cost, cost = None, 0.0
             source = "provider-reported" if reported_cost is not None else "unknown"
             if reported_cost is None and usage:
-                quote = pricing.billing_quote(provider, model)
+                quote = quote or pricing.billing_quote(provider, model)
                 if quote:
                     cost = quote.cost(usage.prompt_tokens or 0, usage.completion_tokens or 0)
                     source = f"{quote.source} ({quote.as_of})"

@@ -76,7 +76,9 @@ The value metric is **world builds** and **episodes rehearsed**: they grow with 
 | Team | $149 per month | 20 | 8 per month | 3,000 per month | 4 |
 | Enterprise | negotiated, from $3,000 per month | custom | custom | custom | own runner (VPC), SSO, own model key |
 
-Pro and Team cost 25% less with the customer's own model key (we pay no model cost for them). Yearly billing gives two months free. Overage: $15 per extra world build, $30 per extra 1,000 episodes. Free episodes run in quiet hours, when runner machines are idle and off-peak model prices apply.
+Yearly billing gives two months free. Extra use is sold as top-ups for the current month, paid up front: $15 per world build, $30 per 1,000 episodes. Prepaid top-ups replace metered overage, so no customer gets a bill they did not expect and we carry no unpaid usage. Free episodes run in quiet hours, when runner machines are idle and off-peak model prices apply. The 25% discount with the customer's own model key is planned, not built: it needs per-workspace model keys.
+
+How the plans are enforced (`rehearsal/billing.py`, on when `REHEARSAL_PLANS=on`): every limit is checked in the API under a lock on the workspace row, so concurrent requests, also on several API replicas, cannot go over. Episodes count from the moment a run is queued; episodes of a stopped run that never started are not counted. A failed build is retried for free. Each plan also has a monthly model-spend safety net (free $8, Pro $60, Team $250) that covers re-checks and improvements. Free workspaces: one per account, one per browser, three per network address a month. Operator admins (`REHEARSAL_ADMIN_EMAILS`, Google sign-in only) can put any workspace on any plan, change single limits, and grant extra builds or episodes. Payments run through Dodo Payments; webhooks only trigger a re-read of the subscription from the Dodo API, so repeated or out-of-order events cannot leave a workspace on the wrong plan.
 
 Options A and B were modelled first:
 

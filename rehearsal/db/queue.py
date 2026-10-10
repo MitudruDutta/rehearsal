@@ -9,15 +9,16 @@ persist a checkpoint after each completed phase and resume from it.
 from __future__ import annotations
 
 from datetime import timedelta
+import math
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from .. import billing
 from ..config import settings
 from .events import emit
-from .models import Episode, Job, Run, TrainingJob, WorldVersion, now
+from .models import Episode, Job, ModelSpend, Project, Run, TrainingJob, WorldVersion, now
 
 
 class JobCancelled(Exception):
@@ -42,8 +43,35 @@ class AllowanceExhausted(Exception):
 month_start = billing.month_start
 
 
+def spend_projects(project_id: str) -> Any:
+    """Hosted allowances belong to a workspace; a self-hosted cap covers the server."""
+    if not settings().plans:
+        return None
+    org = select(Project.org_id).where(Project.id == project_id).scalar_subquery()
+    return select(Project.id).where(Project.org_id == org)
+
+
 def month_spend(s: Session, project_id: str) -> float:
-    return float(s.scalar(select(func.coalesce(func.sum(Job.spent_usd), 0.0)).where(Job.project_id == project_id, Job.created_at >= month_start())) or 0.0)
+    q = select(func.coalesce(func.sum(ModelSpend.spent_usd), 0.0)).where(ModelSpend.month == month_start().strftime("%Y-%m"))
+    projects = spend_projects(project_id)
+    if projects is not None:
+        q = q.where(ModelSpend.project_id.in_(projects))
+    return float(s.scalar(q) or 0.0)
+
+
+def record_spend(s: Session, job: Job, usd: float, tokens: int = 0) -> None:
+    """Caller holds the job's ownership lock; usage and its dated ledger commit together."""
+    if not math.isfinite(usd) or usd < 0 or tokens < 0:
+        raise ValueError("model usage must be finite and non-negative")
+    job.spent_usd = (job.spent_usd or 0.0) + usd
+    job.tokens = (job.tokens or 0) + tokens
+    if usd:
+        month = month_start().strftime("%Y-%m")
+        row = s.scalars(select(ModelSpend).where(ModelSpend.job_id == job.id, ModelSpend.month == month)).first()
+        if row is None:
+            s.add(ModelSpend(job_id=job.id, project_id=job.project_id, month=month, spent_usd=usd))
+        else:
+            row.spent_usd += usd
 
 
 def allowance_left(s: Session, project_id: str) -> float | None:
@@ -53,20 +81,39 @@ def allowance_left(s: Session, project_id: str) -> float | None:
     cap = billing.allowance(s, project_id)
     if cap is None:
         return None
-    active = s.execute(select(Job.budget_usd, Job.spent_usd).where(Job.project_id == project_id, Job.status.in_(("queued", "running", "paused")), Job.budget_usd.is_not(None))).all()
+    q = select(Job.budget_usd, Job.spent_usd).where(Job.status.in_(("queued", "running", "paused")), Job.budget_usd.is_not(None))
+    projects = spend_projects(project_id)
+    if projects is not None:
+        q = q.where(Job.project_id.in_(projects))
+    active = s.execute(q).all()
     reserved = sum(max(0.0, b - (sp or 0.0)) for b, sp in active)
     return max(0.0, cap - month_spend(s, project_id) - reserved)
 
 
-def enqueue(s: Session, *, project_id: str, kind: str, payload: dict[str, Any], priority: int = 0, max_attempts: int = 3,
-            budget_usd: float | None = None, not_before: Any = None) -> Job:
-    if kind in SPENDING and (left := allowance_left(s, project_id)) is not None:
+def reserve(s: Session, project_id: str, kind: str, budget_usd: float | None) -> float | None:
+    if budget_usd is not None and (not math.isfinite(budget_usd) or budget_usd < 0):
+        raise ValueError("budget must be finite and non-negative")
+    if kind not in SPENDING:
+        return budget_usd
+    billing.lock(s, project_id)
+    if not settings().plans and settings().monthly_allowance_usd:
+        # Distinct organizations share this cap. Organization locks alone cannot serialize it.
+        s.execute(text("SELECT pg_advisory_xact_lock(731894211)"))
+    if (left := allowance_left(s, project_id)) is not None:
         if left <= 0:
             raise AllowanceExhausted(
                 f"This workspace has used its ${billing.allowance(s, project_id) or 0:.2f} model allowance for this month, including jobs still running. "
                 "It renews on the 1st; until then, stop a running job or wait for one to finish."
             )
+        if budget_usd is None:
+            budget_usd = billing.DEFAULT_BUDGET_USD.get(kind)
         budget_usd = left if budget_usd is None else min(budget_usd, left)  # the job stops itself at this spend
+    return budget_usd
+
+
+def enqueue(s: Session, *, project_id: str, kind: str, payload: dict[str, Any], priority: int = 0, max_attempts: int = 3,
+            budget_usd: float | None = None, not_before: Any = None) -> Job:
+    budget_usd = reserve(s, project_id, kind, budget_usd)
     job = Job(project_id=project_id, kind=kind, payload=payload, priority=priority, max_attempts=max_attempts, budget_usd=budget_usd, not_before=not_before)
     s.add(job)
     s.flush()
@@ -96,7 +143,8 @@ def claim(s: Session, worker_id: str, kinds: list[str] | None = None) -> Job | N
         job.status, job.error, job.finished_at = "failed", (job.error or "") + "\nlease expired too many times", now()
         emit(s, project_id=job.project_id, stream=job.id, type="job.failed", summary="gave up after repeated worker loss")
         job.lease_owner, job.lease_expires_at = None, None
-        _fail_owner(s, job)
+        if job.kind != "evaluation" or not release_shard(s, job):
+            _fail_owner(s, job)
         s.flush()
     job.status, job.lease_owner, job.lease_expires_at = "running", worker_id, now() + lease
     job.attempts += 1
@@ -112,7 +160,7 @@ def claim(s: Session, worker_id: str, kinds: list[str] | None = None) -> Job | N
     return job
 
 
-def heartbeat(s: Session, job_id: str, worker_id: str, attempt: int | None = None) -> Job:
+def heartbeat(s: Session, job_id: str, worker_id: str, attempt: int | None = None, *, check_commands: bool = True) -> Job:
     """Extends the lease; raises if this worker lost it, or a command arrived."""
     lease = timedelta(seconds=settings().lease_seconds)
     res = s.execute(
@@ -124,9 +172,9 @@ def heartbeat(s: Session, job_id: str, worker_id: str, attempt: int | None = Non
     ).first()
     if res is None:
         raise LeaseLost("lease lost")
-    if res.cancel_requested:
+    if check_commands and res.cancel_requested:
         raise JobCancelled("cancel requested")
-    if res.pause_requested:
+    if check_commands and res.pause_requested:
         raise JobPaused("pause requested")
     return s.get(Job, job_id)  # type: ignore[return-value]
 
@@ -161,6 +209,12 @@ def command(s: Session, job: Job, cmd: str) -> None:
     elif cmd == "resume" and job.status == "paused":
         job.status, job.pause_requested = "queued", False
     elif cmd == "retry" and job.status in ("failed", "cancelled"):  # continue from the last checkpoint
+        if job.kind in SPENDING:
+            remaining = None if job.budget_usd is None else max(0.0, job.budget_usd - (job.spent_usd or 0.0))
+            if remaining == 0:
+                raise AllowanceExhausted("This job already used its budget; start a new job with a new budget.")
+            remaining = reserve(s, job.project_id, job.kind, remaining)
+            job.budget_usd = None if remaining is None else (job.spent_usd or 0.0) + remaining
         job.status, job.attempts, job.error, job.finished_at = "queued", 0, None, None
         job.cancel_requested = job.pause_requested = False  # a stop sent before the failure must not cancel the retry
     elif cmd == "stop" and job.status in ("queued", "running", "paused"):

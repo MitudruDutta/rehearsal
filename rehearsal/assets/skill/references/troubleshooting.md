@@ -9,10 +9,10 @@ First rule: **a restart repeats the same work. It helps only when the cause has 
 | 401 | Key missing, wrong or revoked | Check that `REHEARSAL_API_KEY` is set. Ask the user for a new key from the API keys page. Never print the key |
 | 403 | The key's access does not allow this (for example a read-only key starting a build) | Ask the user for a key with "Build and evaluate" access |
 | 404 | Wrong id, or the item belongs to another workspace, or the application was removed | List again (`list_worlds`, `list_agents`) and use an id from the list |
-| 402 | Monthly model allowance used up | Do not retry. `workspace_status` shows the renewal date. The user can stop a running job to free its unspent budget |
+| 402 | The plan does not cover it: applications, world builds or episodes are used up, or the monthly model allowance is | Do not retry. The message says what is left. Offer a smaller run (one split, `repeats=1`), removing an application, or a top-up or upgrade on the console's Billing page. A failed build can still be retried for free |
 | 409 | Not possible in the current state: world not published, job already finished, wrong turn for a bring-your-own action | Read the message. Check the state, then do the right next step |
 | 422 | Bad arguments, or no approved jobs match the chosen splits | Check `list_scenarios` and the arguments |
-| 429 | Too many jobs in progress for this workspace | Wait for one to finish, or ask the user to stop one |
+| 429 | Too many jobs in progress, or every sandbox of the plan is in use by another run | Wait for one to finish, or ask the user to stop one |
 
 ## A world build failed
 

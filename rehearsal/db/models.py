@@ -331,6 +331,18 @@ class Job(Base):
     __table_args__ = (Index("jobs_claim", "status", "priority", "created_at"),)
 
 
+class ModelSpend(Base):
+    """Usage booked when recorded, rather than in the month the job was created."""
+
+    __tablename__ = "model_spend"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("spn"))
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    project_id: Mapped[str] = mapped_column(String(40), index=True)
+    month: Mapped[str] = mapped_column(String(7), index=True)
+    spent_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    __table_args__ = (UniqueConstraint("job_id", "month"),)
+
+
 class Artifact(Base):
     __tablename__ = "artifacts"
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("art"))

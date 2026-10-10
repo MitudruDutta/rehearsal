@@ -106,8 +106,8 @@ const MEASURES = [
 
 const TIERS = [
   { name: "Free", price: "$0", unit: "forever", points: ["1 application, built into a practice world once", "40 episodes a month, run in quiet hours", "1 sandbox at a time"], cta: "Start free", href: "/app/" },
-  { name: "Pro", price: "$29", unit: "/ month", points: ["3 applications, 2 world builds a month", "750 episodes a month, run at once", "2 sandboxes at a time", "25% off with your own model key"], cta: "Start free", href: "/app/", featured: true },
-  { name: "Team", price: "$149", unit: "/ month", points: ["20 applications, 8 world builds a month", "3,000 episodes a month", "4 sandboxes at a time", "25% off with your own model key"], cta: "Start free", href: "/app/" },
+  { name: "Pro", price: "$29", unit: "/ month", points: ["3 applications, 2 world builds a month", "750 episodes a month, run at once", "2 sandboxes at a time", "Top-ups when you need more"], cta: "Start free", href: "/app/", featured: true },
+  { name: "Team", price: "$149", unit: "/ month", points: ["20 applications, 8 world builds a month", "3,000 episodes a month", "4 sandboxes at a time", "Top-ups when you need more"], cta: "Start free", href: "/app/" },
   { name: "Enterprise", price: "Custom", unit: "from $3,000 a month", points: ["Runner inside your own cloud account", "Single sign-on, audit export, retention controls", "Private held-out evaluation of vendor agents"], cta: "Talk to us", href: "#cta" },
 ];
 
@@ -239,7 +239,7 @@ export default function Landing() {
               </SpotlightCard>
             ))}
           </div>
-          <p className="mt-8 text-center text-sm text-muted-foreground">Yearly plans get two months free. Extra use costs $15 per world build and $30 per 1,000 episodes. Every job has a spend cap, so a bill never surprises you.</p>
+          <p className="mt-8 text-center text-sm text-muted-foreground">Yearly plans get two months free. Need more in a month? Add 1,000 episodes for $30, or a world build for $15. Nothing renews by itself, and every job has a spend cap.</p>
         </div>
       </section>
 

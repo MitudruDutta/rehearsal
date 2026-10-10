@@ -46,5 +46,5 @@ def upgrade() -> None:
     here = Path(__file__).resolve().parent
     cfg = Config(str(here / "alembic.ini"))
     cfg.set_main_option("script_location", str(here / "migrations"))
-    cfg.set_main_option("sqlalchemy.url", settings().database_url)
+    cfg.set_main_option("sqlalchemy.url", settings().database_url.replace("%", "%%"))
     command.upgrade(cfg, "head")

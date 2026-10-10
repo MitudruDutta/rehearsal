@@ -80,6 +80,7 @@ class EpisodeState:
     opened: bool = False
     script_pos: int = 0
     repeated: bool = False  # default stress: the customer has already re-sent the request
+    environment_error: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -283,7 +284,9 @@ class Engine:
         self.max_cost_usd = max_cost_usd
         self.max_turns = max_turns_per_actor
         self.default_stress = default_stress
-        self.environment_error: str | None = None
+        self.environment_error = self.state.environment_error
+        if self.environment_error is None and self.state.termination == "environment_error":
+            self.environment_error = "episode stopped with an environment error"
         self.actor_roles = {a.id: a.role for a in scenario.actors}
 
     # ------------------------------------------------------------------ helpers
@@ -308,6 +311,7 @@ class Engine:
 
     def save(self) -> None:
         self.state.gateway = self.gateway.state()
+        self.state.environment_error = self.environment_error
         self.recorder.save(self.state)
 
     # ------------------------------------------------------------------ messaging
@@ -783,7 +787,7 @@ class Engine:
             journal = self.instance.journal()
             result = evaluate(Prober(self.instance), journal, self.scenario, self.variables, st.goal_version, stats)
         except Exception as exc:  # noqa: BLE001 - an oracle failure is an environment error, not an agent failure
-            stats.environment_error = f"oracle failed: {exc}"[:500]
+            self.environment_error = stats.environment_error = f"oracle failed: {exc}"[:500]
             result = OracleResult(goal_version=st.goal_version, goal_satisfied=False, hard_constraint_violations=[], check_results=[], environment_error=stats.environment_error, model_cost_usd=st.cost_usd, tokens=st.tokens, elapsed_ms=stats.elapsed_ms, claimed_complete=st.completed, rejected_attempts=st.rejected)
         self.recorder.event(
             "episode.finished",

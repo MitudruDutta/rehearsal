@@ -29,6 +29,7 @@ services:
       NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       NEATLOGS_API_KEY: ${NEATLOGS_API_KEY:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
       REHEARSAL_SIGNUP: ${REHEARSAL_SIGNUP:-closed}
       # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.
       REHEARSAL_MAX_ACTIVE_BUILDS: ${REHEARSAL_MAX_ACTIVE_BUILDS:-2}
@@ -67,7 +68,8 @@ services:
   worker:
     build: { context: .., dockerfile: Dockerfile }
     entrypoint: ["sh", "-c"]
-    command: ["umask 0002; exec rehearsal worker"]
+    # Compose escapes $$ so the container's own ID reaches the runner, including scaled workers.
+    command: ["umask 0002; REHEARSAL_WORKER_CONTAINER=$$HOSTNAME exec rehearsal worker"]
     environment:
       <<: *env
       REHEARSAL_DATA_DIR: /var/lib/rehearsal

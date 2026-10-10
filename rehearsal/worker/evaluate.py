@@ -23,6 +23,7 @@ from .. import telemetry
 from ..agents.episode import EpisodeState, Engine, ExternalPolicy, LLMPolicy
 from ..config import settings
 from ..core.contracts import AgentProfile, OracleResult, ScenarioSpec, WorldManifest
+from ..db import queue
 from ..db.queue import LeaseLost
 from ..db.events import emit
 from ..db.models import Action, AgentProfileRow, Episode, Event, Message, Run, Scenario, WorldVersion, now
@@ -91,8 +92,7 @@ class DBRecorder:
             ep.state = {**_jsonable(state.to_json()), "event_cursor": dict(self.cursor)}
             ep.cost_usd, ep.tokens = state.cost_usd, state.tokens
             if job is not None:
-                job.spent_usd = (job.spent_usd or 0.0) + delta
-                job.tokens = (job.tokens or 0) + tokens
+                queue.record_spend(s, job, delta, tokens)
             for kind, r in self.pending:
                 if kind == "action":
                     s.add(Action(episode_id=self.episode_id, finished_at=now(), **telemetry._redact_any(r)))
@@ -315,32 +315,30 @@ def handle(ctx: JobContext) -> dict[str, Any]:
         wv = {"manifest": wv_row.manifest, "secrets": wv_row.private["secrets"], "vars": wv_row.private["vars"], "snapshot_dir": str(settings().data_path(wv_row.snapshot_dir))}  # type: ignore[union-attr]
     manifest = WorldManifest.model_validate(wv["manifest"])
     inst: WorldInstance | None = None
-    try:
-        while True:
-            ctx.check()
-            eid = _claim(ctx, run_id)
-            if eid is None:
-                if _settle(ctx, run_id):
-                    break
-                continue
-            inst = inst or _instance(ctx, manifest, wv)  # a shard that finds no work never starts a sandbox
+    while True:
+        ctx.check()
+        eid = _claim(ctx, run_id)
+        if eid is None:
+            if _settle(ctx, run_id):
+                break
+            continue
+        inst = inst or _instance(ctx, manifest, wv)  # a shard that finds no work never starts a sandbox
+        try:
+            run_episode(ctx, inst, manifest, wv, eid)
+        except RuntimeError_ as exc:
+            _finish_error(ctx, eid, f"sandbox failure: {exc}")
+            inst = _instance(ctx, manifest, wv) if inst.alive() else _replace(ctx, inst, manifest, wv)
+        with session() as s:
+            done = s.scalar(select(func.count()).select_from(Episode).where(Episode.run_id == run_id, Episode.status.notin_(_OPEN)))
+        ctx.log("run.progress", f"{done}/{total} episodes done")
+    if ctx._stop is None:
+        rec = ctx.checkpoint.get("instance")
+        inst = inst or (WorldInstance(InstanceRecord.from_json(rec)) if rec else None)
+        if inst is not None:
             try:
-                run_episode(ctx, inst, manifest, wv, eid)
-            except RuntimeError_ as exc:
-                _finish_error(ctx, eid, f"sandbox failure: {exc}")
-                inst = _instance(ctx, manifest, wv) if inst.alive() else _replace(ctx, inst, manifest, wv)
-            with session() as s:
-                done = s.scalar(select(func.count()).select_from(Episode).where(Episode.run_id == run_id, Episode.status.notin_(_OPEN)))
-            ctx.log("run.progress", f"{done}/{total} episodes done")
-    finally:
-        if ctx._stop is None:
-            rec = ctx.checkpoint.get("instance")
-            inst = inst or (WorldInstance(InstanceRecord.from_json(rec)) if rec else None)
-            if inst is not None:
-                try:
-                    _destroy_owned(ctx, inst, clear=True)
-                except LeaseLost:
-                    pass  # Replacement worker owns the sandbox and its cleanup.
+                _destroy_owned(ctx, inst, clear=True)
+            except LeaseLost:
+                pass  # Replacement worker owns the sandbox and its cleanup.
     with session() as s:
         run = s.get(Run, run_id)
         return {"run_id": run_id, "overall": (run.summary or {}).get("overall")}  # type: ignore[union-attr]

@@ -82,7 +82,7 @@ class Jobs(_Resource):
             if job["status"] in ("succeeded", "failed", "cancelled"):
                 return job
             time.sleep(poll_s)
-        raise TimeoutError(f"job {job_id} still {job['status']}")
+        raise TimeoutError(f"job {job_id} did not finish within {timeout_s} seconds")
 
 
 class Profiles(_Resource):
@@ -159,7 +159,9 @@ class Rehearsal:
         resp = self.http.request(method, path, **kwargs)
         if resp.status_code >= 400:
             try:
-                detail = resp.json().get("detail")
+                detail = resp.json()
+                if isinstance(detail, dict):
+                    detail = detail.get("detail")
             except ValueError:
                 detail = resp.text[:300]  # an HTML error page says nothing useful past this
             raise RehearsalError(resp.status_code, detail)
@@ -192,6 +194,6 @@ class Rehearsal:
                                 cursor = payload.get("event_id", cursor)
                                 yield payload
                             event, data = None, []
-                return
             except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError):
-                time.sleep(1)
+                pass
+            time.sleep(1)

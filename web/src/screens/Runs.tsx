@@ -27,7 +27,7 @@ function NewEvaluation({ world }: { world: string | null }) {
     e.preventDefault();
     try {
       const r = await post("/v1/evaluations", { world_version_id: selected, profile_ids: chosen, splits, repeats });
-      toast.success(`${r.episodes} episodes queued`);
+      toast.success(r.starts_at ? `${r.episodes} episodes queued; they start in quiet hours, at ${new Date(r.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : `${r.episodes} episodes queued`);
       go(routes.run(r.run_id));
     } catch (err) {
       toast.error((err as Error).message);

@@ -246,9 +246,10 @@ def _main(argv: list[str] | None = None) -> None:
     elif args.cmd == "mcp":
         try:
             from .mcp import main as mcp_main
+
+            mcp_main()
         except ModuleNotFoundError as exc:
             sys.exit(f"The MCP server needs the mcp extra:\n  pip install 'rehearsal-kit[mcp]'\n(missing module: {exc.name})")
-        mcp_main()
     elif args.cmd == "skill":
         from importlib.resources import files
 
