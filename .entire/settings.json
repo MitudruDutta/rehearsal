@@ -1,12 +1,19 @@
 {
   "enabled": true,
   "strategy_options": {
-    "push_sessions": false
+    "push_sessions": true
   },
   "telemetry": false,
   "checkpoints": {
     "primary": {
       "type": "git-refs"
+    }
+  },
+  "redaction": {
+    "custom_redactions": {
+      "rehearsal_api_key": "rh_[a-z0-9]{4,}_[A-Za-z0-9_-]{20,}",
+      "token_harbor_key": "thk_(live|test)_[A-Za-z0-9_-]{20,}",
+      "google_oauth_client_secret": "GOCSPX-[A-Za-z0-9_-]{20,}"
     }
   }
 }
