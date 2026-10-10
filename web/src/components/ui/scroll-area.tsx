@@ -15,9 +15,11 @@ function ScrollArea({
       className={cn("relative", className)}
       {...props}
     >
+      {/* Radix wraps the content in a display:table box, which grows to fit one long unbreakable word and pushes
+          every row past the edge, where it is clipped. This area only scrolls vertically, so the box is a block. */}
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 [&>div]:block!"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

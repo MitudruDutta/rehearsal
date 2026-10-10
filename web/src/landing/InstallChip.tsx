@@ -17,7 +17,7 @@ export function InstallChip({ command = "pip install rehearsal-kit" }: { command
           /* clipboard needs https or localhost; the command stays visible to copy by hand */
         }
       }}
-      className="group inline-flex items-center gap-3 rounded-lg border bg-card/80 px-3.5 py-2 font-mono text-sm text-muted-foreground transition-colors hover:text-foreground"
+      className="group inline-flex items-center gap-3 rounded-lg border bg-card/80 px-3.5 py-2 font-mono text-sm text-muted-foreground backdrop-blur-md transition-colors hover:text-foreground"
       aria-label={`Copy: ${command}`}
     >
       <span className="text-primary">$</span>

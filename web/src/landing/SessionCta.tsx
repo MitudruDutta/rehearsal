@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LayoutDashboard, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -21,17 +21,14 @@ function useSession(): Session {
   return state;
 }
 
-/** Header actions: Sign in and Start free for visitors; one Open console button for people already signed in. */
+/** The one white button in the black navigation tab: Start free for visitors, Open console for people already signed in. */
 export function NavActions() {
   const s = useSession();
-  if (s === "in" || s === "setup") {
-    return <Button asChild size="sm"><Link href="/app/">{s === "setup" ? "Finish setup" : "Open console"} <ArrowRight /></Link></Button>;
-  }
+  const Icon = s === "in" ? LayoutDashboard : s === "setup" ? ArrowRight : Play;
   return (
-    <span className={s === "unknown" ? "invisible flex gap-1" : "flex gap-1"}>
-      <Button asChild variant="ghost" size="sm"><Link href="/app/">Sign in</Link></Button>
-      <Button asChild size="sm"><Link href="/app/">Start free</Link></Button>
-    </span>
+    <Button asChild size="sm" className={`h-[38px] gap-2 rounded-[9px] bg-white px-4 text-sm font-semibold text-black hover:bg-white/85 has-[>svg]:px-3.5 ${s === "unknown" ? "invisible" : ""}`}>
+      <Link href="/app/"><Icon className="size-4" fill={Icon === Play ? "currentColor" : "none"} />{s === "in" ? "Open console" : s === "setup" ? "Finish setup" : "Start free"}</Link>
+    </Button>
   );
 }
 
