@@ -60,7 +60,7 @@ function NewEvaluation({ world }: { world: string | null }) {
               {["train", "dev", "holdout"].map((s) => <label key={s} className="flex items-center gap-2 text-sm"><Checkbox checked={splits.includes(s)} onCheckedChange={() => toggle(splits, setSplits, s)} /> {s}</label>)}
             </fieldset>
             <div className="grid gap-2"><Label htmlFor="rep">Repeats per scenario</Label><Input id="rep" type="number" min={1} max={20} value={repeats} onChange={(e) => setRepeats(Number(e.target.value))} className="w-28" /></div>
-            <p className="w-full text-xs text-muted-foreground">Every episode is stress-tested: on top of each job&apos;s own revisions and faults, the agent&apos;s first change is refused with &ldquo;too many requests&rdquo; and must be retried.</p>
+            <p className="w-full text-xs text-muted-foreground">Every episode is stress-tested: on top of each job&apos;s own revisions and faults, the agent&apos;s first change is refused with &ldquo;too many requests&rdquo; and must be retried, and once a change goes through the customer sends the same request again, which must not be done twice.</p>
             <Button type="submit" disabled={!chosen.length || !splits.length || !selected}>Start evaluation</Button>
           </form>
         )}

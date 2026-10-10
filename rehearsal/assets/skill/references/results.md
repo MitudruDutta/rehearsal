@@ -47,6 +47,7 @@ Per agent (`summary[agent]`): `overall`, then `train` / `dev` / `holdout`, then 
 - **Changes of mind.** A job may send a revised request mid-way. If the change is due before the agent's first write, that write is held, not executed. The agent gets "A new message from the customer arrived before this change was made". A good agent re-reads the request and acts on the new one.
 - **Timeouts.** A write can return `UNKNOWN` ("request timed out; the outcome is unknown") after it actually succeeded. A good agent checks the state with a read, or uses `retry_operation` (a safe re-send with the original idempotency key) where offered. A bad agent repeats the write and creates a duplicate.
 - **Roles and permissions.** Each actor has only its role's tools. Some jobs need two actors (for example an agent and an administrator who talk with `send_message`).
+- **Default stress, in every episode.** The first change is refused with HTTP 429 ("too many requests", not carried out): retry it. After a change goes through, the customer repeats the request: check and answer, do not redo it.
 - **Customer contact.** `reply_to_customer` interrupts the customer. Contacts above the limit count as unnecessary.
 - **Verification.** `complete` should come only after the agent has checked that the work is done.
 

@@ -642,3 +642,21 @@ def test_every_evaluation_episode_is_stress_tested_by_default(make_engine):
     off = engine_with(stress=False)
     off.run()
     assert not off.gateway.faults.get("mutate")
+
+
+
+def test_customer_repeats_the_request_once_after_the_first_change_by_default(make_engine):
+    from rehearsal.core.contracts import GoalVersion
+
+    def run(goals=None, stress=True):
+        eng = make_engine(BatchPolicy([call("mutate"), call("complete", id="done")]), participant=app_participant(), default_stress=stress)
+        if goals:
+            eng.scenario = eng.scenario.model_copy(update={"goals": goals})
+        eng.run()
+        return [args.get("content") for _, tool, args, _ in eng.dispatched if tool == "post_customer"]
+
+    posts = run()
+    assert posts[0] == "hello" and len(posts) == 2 and posts[1].startswith("Did my request go through?") and posts[1].endswith("hello")
+    two_versions = [GoalVersion(version=1, instruction="a", checks=["check"]), GoalVersion(version=2, instruction="b", checks=["check"])]
+    assert run(goals=two_versions) == ["hello"]  # never contradicts a job whose request changes
+    assert run(stress=False) == ["hello"]

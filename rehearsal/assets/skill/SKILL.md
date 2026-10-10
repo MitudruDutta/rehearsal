@@ -88,7 +88,7 @@ Rules:
 4. Choose the splits:
    - Exploring or debugging: `dev`.
    - Final score: `holdout` only, after you have stopped changing the agent.
-5. Choose repeats: 2 or more. Models are not deterministic, and one episode per job is noise. Without splits or repeats, a run uses every job twice; every episode also gets the default stress layer (the agent's first change is refused with "too many requests" and must be retried).
+5. Choose repeats: 2 or more. Models are not deterministic, and one episode per job is noise. Without splits or repeats, a run uses every job twice; every episode also gets the default stress layer: the agent's first change is refused with "too many requests" and must be retried, and after a change goes through the customer sends the same request again, which must not be done twice.
 6. State the episode count and cost, and ask. Then `run_evaluation(world_version_id, [agent_ids], splits, repeats)`.
 7. Give the user the `watch` link. Call `run_results(run_id)` every 30-60 seconds until `status` is `finished`. Runs use several sandboxes in parallel.
 8. Report as described in references/results.md:
