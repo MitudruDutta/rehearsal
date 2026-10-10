@@ -96,6 +96,31 @@ Model cost is never taken from a single hard-coded price. Every call is charged 
 
 Cost levers not yet used: prompt caching and shorter transcripts (an episode now sends about 100,000 tokens because the conversation is resent each turn; caching could roughly halve episode cost), and a cheaper model for the simulated customer.
 
+## planning tool plan (built with Ari, 10 October 2026)
+
+Ari built a 24-month model (October 2026 to September 2028) from the measured unit costs above, with six scenarios: each pricing option crossed with the conservative, base and upside customer cases. Ari checked the key figures twice: an independent script recomputed the forecast, and a spot check confirmed each case reaches its month-12 customer target.
+
+| Base case (30 self-serve + 3 enterprise at month 12) | Option A ($25 / $100) | Option B ($39 / $149) |
+|---|---|---|
+| Monthly revenue, month 24 | $34.2k | $40.9k |
+| Revenue over 24 months | $321k | $372k |
+| Gross profit over 24 months | $209k | $218k |
+| Gross margin | 65.1% | 58.5% |
+| First profitable month | month 4 | month 4 |
+| Lowest cash balance | $8.0k | $8.1k |
+
+| Other cases | Option A | Option B |
+|---|---|---|
+| Conservative: lowest cash balance | −$8.5k | −$8.1k |
+| Conservative: first profitable month | month 12 | month 12 |
+| Upside: cash in month 24 | $551k | $579k |
+
+**Ari's recommendation: Option B, with smaller episode allowances** (Pro 750 episodes, Team 3,000). Each self-serve customer brings about $64 a month after usage costs under B against $46 under A, so B stays ahead even if its higher prices lose up to about 28% of customers. B as written includes twice the episodes, and episodes drive extra runner machines (22 by month 24 against 14), which eats most of the gain; the smaller allowances add about $15.6k of gross profit over B as written and lift gross margin to about 63%.
+
+**The finding that matters more than price:** costs are small (about $2k a month), so the first $3,000 enterprise deal makes Rehearsal profitable almost on its own. It lands in month 4 in the base case and month 12 in the conservative case; in the conservative case cash runs out under either option with a $15k buffer. Landing enterprise pilots early moves break-even; pricing barely does.
+
+Estimates still to be corrected by the founders: pay of $700 a month each plus 10% overhead, tools $150 a month, hosting $100 a month plus $2 per paying customer, other admin $200 a month, starting cash $15,000, self-serve churn 3% a month, free-user drop-off 10% a month, and payment fees 3.5%.
+
 ## Go-to-market
 
 1. **Design-partner pilots (months 0 to 3).** Five teams shipping an agent into their own product. Four weeks each: we compile their application, rehearse their agent, and hand over the readiness report and the world bundle. Success = the pilot team changes something about their agent or their launch because of a Rehearsal finding.
