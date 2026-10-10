@@ -158,7 +158,9 @@ def run_worker(kinds: list[str] | None = None, once: bool = False) -> None:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    log.info("worker %s started (kinds=%s)", worker_id, kinds or "all")
+    from ..db.session import engine
+
+    log.info("worker %s started (kinds=%s, database %s)", worker_id, kinds or "all", engine().url.host or "local")
     telemetry.enabled()
     swept, backoff = 0.0, 0.0
     try:

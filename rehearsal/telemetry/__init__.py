@@ -82,12 +82,23 @@ def _llm_cost(attrs: dict[str, Any]) -> float | None:
     if not model or model not in providers:
         return None
     try:
-        quote = pricing.billing_quote(providers[model], model)
+        # memory only: neatlogs drops a span whose mask misses its deadline, so this must never wait on the network
+        quote = pricing.cached_quote(providers[model], model)
     except Exception:  # noqa: BLE001 - a missing price must never drop a span
         return None
     if quote is None:
         return None
     return round(quote.cost(int(attrs.get("neatlogs.llm.token_count.prompt") or 0), int(attrs.get("neatlogs.llm.token_count.completion") or 0)), 8)
+
+
+def _warm_prices() -> None:
+    """Loads the price lists of the configured providers in the background, so the first model call is priced."""
+    from .. import pricing
+    from ..agents.llm import parse_chain
+
+    cfg = settings()
+    chains = (cfg.model_compiler, cfg.model_agent, cfg.model_participant, cfg.model_improver)
+    pricing.warm({p for chain in chains if chain for p, _ in parse_chain(chain)})
 
 
 def enabled() -> bool:
@@ -105,6 +116,7 @@ def enabled() -> bool:
                                   # handler would close the exporter mid-job, and later model calls would land as orphan sessions.
                                   register_shutdown_handlers=False)
                     _enabled = True
+                    _warm_prices()
                 except Exception as exc:  # noqa: BLE001 - telemetry must never break execution
                     log.warning("neatlogs disabled: %s", exc)
         return _enabled

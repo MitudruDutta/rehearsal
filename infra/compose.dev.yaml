@@ -1,0 +1,17 @@
+# Local development: the API and console from a locally built image, with the settings in .env (the cloud database).
+# Run from the repository root, because the data directory is mounted at the same path inside and outside:
+#   docker build -t rehearsal:dev . && docker compose -f infra/compose.dev.yaml up -d --force-recreate
+# Workers run on the host (they start sandboxes with the host's Docker); see handbook/RUN_LOCALLY.md.
+name: rehearsal-dev
+services:
+  api:
+    image: rehearsal:dev
+    network_mode: host
+    user: "${REHEARSAL_UID:-1000}:${REHEARSAL_GID:-1000}"  # owns the files it writes under var/
+    env_file: [../.env]
+    environment:
+      REHEARSAL_DATA_DIR: ${PWD}/var
+      FORWARDED_ALLOW_IPS: "127.0.0.1"
+    volumes: ["${PWD}/var:${PWD}/var"]
+    command: ["serve", "--host", "127.0.0.1", "--port", "7800"]
+    restart: unless-stopped

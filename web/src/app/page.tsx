@@ -12,7 +12,7 @@ import { NavActions, StartCta } from "../landing/SessionCta";
 // Where pilot requests go (booking page, form, or mailto), set at deploy time.
 const CONTACT = process.env.NEXT_PUBLIC_CONTACT_URL;
 
-// Where "Docs" leads. Until the documentation site planned in docs/DOCS_SITE_PLAN.md exists, that is the API
+// Where "Docs" leads. Until the documentation site planned in handbook/DOCS_SITE_PLAN.md exists, that is the API
 // reference the server generates at /docs; set this at deploy time to point at the site instead.
 const DOCS = process.env.NEXT_PUBLIC_DOCS_URL || "/docs";
 

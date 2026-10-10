@@ -63,4 +63,4 @@ PyPI upload was not attempted. Registry ownership and version availability are s
 - Live PostgreSQL migration execution, locking/concurrency behavior, Docker networking and recovery, Dodo sandbox webhook/reconciliation flows, and Neatlogs dashboard delivery still need environment-level verification. Socket restrictions prevented live database checks; application launch was also excluded by instruction.
 - Only Python 3.12 runtime behavior was exercised. Server extras used existing dependencies for import verification; a clean client installation was verified separately.
 - Training models and standalone bundle replay remain outside this alpha's implemented features, as documented in the package README.
-- `docs/BUSINESS.md` contains reported cfo.ai results; a verifiable plan link is still absent.
+- `handbook/BUSINESS.md` contains reported cfo.ai results; a verifiable plan link is still absent.

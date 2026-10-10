@@ -15,7 +15,7 @@ Required evidence mapping:
 | Before/after run with numbers | Same evaluation suite, pinned world/scenario/oracle versions, agent profile v1 vs v2 (or compiler v1 vs v2 on the same applications) |
 | neatlogs traces | Compiler phases, episodes, tool calls, oracle checks as WORKFLOW/AGENT/TOOL/GUARDRAIL spans |
 | Entire checkpoints / entire-graph | Development sessions of this repository |
-| cfo.ai business plan | Pricing, cost, revenue, and runway plan; inputs recorded in `docs/BUSINESS.md` |
+| cfo.ai business plan | Pricing, cost, revenue, and runway plan; inputs recorded in `handbook/BUSINESS.md` |
 | Recovery from a failed action | Compiler build/validation repair, and in-episode `UNKNOWN` outcome reconciliation |
 | Public repository with event-dated commits | Repository history; any pre-kickoff work is disclosed in the README rather than re-dated |
 
@@ -436,7 +436,7 @@ Instrument world build, scenario validation, episode execution, and improvement 
 
 Rehearsal's own event store drives the UI and execution state. neatlogs supplies trace investigation and evidence links; it is not the episode database. A trace need not stay open for a multi-hour job: propagate trace context where supported and correlate bounded spans through stable run IDs.
 
-Use cfo.ai to produce the business plan required by the hackathon: pricing per world build and per evaluation episode, model and compute costs per unit, hosting costs, revenue scenarios, and runway. Record the inputs and the resulting plan link in `docs/BUSINESS.md`.
+Use cfo.ai to produce the business plan required by the hackathon: pricing per world build and per evaluation episode, model and compute costs per unit, hosting costs, revenue scenarios, and runway. Record the inputs and the resulting plan link in `handbook/BUSINESS.md`.
 
 Enable Entire for supported coding sessions during implementation. Link the failing run to the diagnosed defect, the code commit/checkpoint, and a comparable rerun. Entire captures development provenance, not application snapshots or episode reset. It can also capture the supported coding session used to implement a generated adapter, but arbitrary file writes are not automatically Entire checkpoints. [Entire checkpoints](https://entire.io/blog/the-entire-cli-how-it-works-and-where-its-headed).
 

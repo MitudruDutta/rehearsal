@@ -20,9 +20,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv/rehearsal
 COPY pyproject.toml ./
-COPY docs/PACKAGE.md docs/
+COPY handbook/PACKAGE.md handbook/
 COPY rehearsal/ rehearsal/
 COPY examples/ examples/
+# Supabase's public root CA, for REHEARSAL_DATABASE_URL=...?sslmode=verify-full&sslrootcert=/srv/rehearsal/infra/certs/...
+COPY infra/certs/ infra/certs/
 COPY --from=console /src/rehearsal/api/static rehearsal/api/static
 # the client wheel is served at /downloads so users can install the CLI straight from this server
 RUN pip install ".[server,telemetry]" && pip wheel --no-deps -w /srv/rehearsal/downloads . \
