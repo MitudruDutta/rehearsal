@@ -61,4 +61,4 @@ def test_evaluation_returns_a_console_link_to_watch():
     client = FakeClient()
     out = call(build_server(client), "run_evaluation", {"world_version_id": "wv_1", "agent_ids": ["prof_1"]})
     assert out["watch"] == "https://rehearsal.example/app/run/?id=run_1"
-    assert client.posts == [("/v1/evaluations", {"world_version_id": "wv_1", "profile_ids": ["prof_1"], "splits": ["dev"], "repeats": 1})]
+    assert client.posts == [("/v1/evaluations", {"world_version_id": "wv_1", "profile_ids": ["prof_1"]})]  # server defaults: every job, twice

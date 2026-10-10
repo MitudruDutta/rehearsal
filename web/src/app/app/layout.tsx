@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Boxes, GitCompareArrows, KeyRound, LayoutDashboard, LogOut, Moon, PlayCircle, Settings, Sun } from "lucide-react";
+import { Bot, Boxes, CreditCard, GitCompareArrows, KeyRound, LayoutDashboard, LogOut, Moon, PlayCircle, Settings, ShieldCheck, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -58,6 +58,8 @@ const NAV = [
   { href: routes.apiKeys, label: "API keys", icon: KeyRound, match: ["/app/api-keys/"] },
   { href: routes.settings, label: "Settings", icon: Settings, match: ["/app/settings/"] },
 ];
+const BILLING = { href: routes.billing, label: "Billing", icon: CreditCard, match: ["/app/billing/"] };
+const ADMIN = { href: routes.admin, label: "Admin", icon: ShieldCheck, match: ["/app/admin/"] };
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -74,7 +76,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const path = usePathname() || "/app/";
   const norm = path.endsWith("/") ? path : path + "/";
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [me, setMe] = useState<{ organization?: string; project?: string; needs_onboarding?: boolean; user?: { name: string; email: string; picture_url?: string } | null } | null>(null);
+  const [me, setMe] = useState<{ organization?: string; project?: string; needs_onboarding?: boolean; is_admin?: boolean; plan?: string | null; user?: { name: string; email: string; picture_url?: string } | null } | null>(null);
   useEffect(() => {
     if (authed === false) return;
     api<any>("/v1/me")
@@ -96,7 +98,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         }}
       />
     );
-  const current = NAV.find((n) => n.match.includes(norm)) ?? NAV[0];
+  const nav = [...NAV, ...(me?.plan ? [BILLING] : []), ...(me?.is_admin ? [ADMIN] : [])];
+  const current = nav.find((n) => n.match.includes(norm)) ?? NAV[0];
   const signOut = async () => {
     await api("/v1/session", { method: "DELETE" });
     location.reload();
@@ -115,7 +118,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
               <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary/15 text-sm font-semibold text-primary">{me.organization.slice(0, 1).toUpperCase()}</span>
               <span className="grid min-w-0 leading-tight">
                 <span className="truncate text-sm font-medium">{me.organization}</span>
-                <span className="truncate text-xs text-muted-foreground">Project: {me.project}</span>
+                <span className="truncate text-xs text-muted-foreground">Project: {me.project}{me.plan ? `, ${me.plan} plan` : ""}</span>
               </span>
             </div>
           )}
@@ -125,7 +128,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
             <SidebarGroupLabel>Rehearse</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {NAV.map((n) => (
+                {nav.map((n) => (
                   <SidebarMenuItem key={n.label}>
                     <SidebarMenuButton asChild isActive={n === current} tooltip={n.label}>
                       <Link href={n.href}>

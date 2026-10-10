@@ -44,11 +44,15 @@ def build_server(client: Rehearsal | None = None) -> Any:
 
     @mcp.tool()
     def workspace_status() -> dict[str, Any]:
-        """Model spend this month, the workspace's monthly allowance and what is left, and what exists in the workspace."""
+        """The workspace's plan and what it has left this month (applications, world builds, episodes, sandboxes), model
+        spend against the monthly allowance, and what exists in the workspace."""
         usage = c.get("/v1/usage")
+        b = c.get("/v1/billing")
+        plan = {"name": b["plan"]["title"], "limits": {k: b["plan"][k] for k in ("applications", "builds", "episodes", "sandboxes")},
+                "used": b["usage"], "renews": b["renews"], "quiet_hours_utc": b.get("quiet_hours_utc"), "more": link("/app/billing/")}
         worlds = c.get("/v1/worlds")
         published = [v for w in worlds for v in w["versions"] if v["status"] == "published"]
-        return {"usage": usage, "applications": len(c.get("/v1/applications")), "published_world_versions": len(published),
+        return {"plan": plan, "usage": usage, "applications": len(c.get("/v1/applications")), "published_world_versions": len(published),
                 "agents": len(c.get("/v1/agent-profiles")), "console": link("/app/")}
 
     @mcp.tool()
@@ -118,11 +122,12 @@ def build_server(client: Rehearsal | None = None) -> Any:
         return {"id": p["id"], "name": p["name"], "version": p["version"]}
 
     @mcp.tool()
-    def run_evaluation(world_version_id: str, agent_ids: list[str], splits: list[str] | None = None, repeats: int = 1, budget_usd: float | None = None) -> dict[str, Any]:
-        """Run agents through the jobs of a published world version. splits: any of train, dev, holdout (default dev).
+    def run_evaluation(world_version_id: str, agent_ids: list[str], splits: list[str] | None = None, repeats: int | None = None, budget_usd: float | None = None) -> dict[str, Any]:
+        """Run agents through the jobs of a published world version. By default every job (train, dev, holdout) is run
+        twice, with the default stress layer on. Narrow it with splits (any of train, dev, holdout) and repeats.
         Spends model money (about $0.02 per episode). Ask the user first."""
-        r = c.post("/v1/evaluations", {"world_version_id": world_version_id, "profile_ids": agent_ids, "splits": splits or ["dev"], "repeats": repeats,
-                                       **({"budget_usd": budget_usd} if budget_usd else {})})
+        r = c.post("/v1/evaluations", {"world_version_id": world_version_id, "profile_ids": agent_ids, **({"splits": splits} if splits else {}),
+                                       **({"repeats": repeats} if repeats else {}), **({"budget_usd": budget_usd} if budget_usd else {})})
         return {**r, "watch": link(f"/app/run/?id={r['run_id']}")}
 
     @mcp.tool()
