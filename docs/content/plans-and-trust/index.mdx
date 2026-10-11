@@ -1,0 +1,28 @@
+---
+title: Plans and trust
+description: What Rehearsal touches, where your keys and data are, what each plan allows, and what is not built yet.
+last_reviewed: 2026-10-11
+---
+
+These pages are for the person who must approve Rehearsal: a security reviewer, a buyer, or a team lead. They say
+what the product does and does not do, with nothing left for a sales call.
+
+<LinkCards>
+  <LinkCard href="/plans-and-trust/security-and-trust" title="Security and trust">What a world can reach, how checks stay read-only, and where keys are kept.</LinkCard>
+  <LinkCard href="/reference/plans-and-limits" title="Plans and limits">What each hosted plan allows, generated from the table the server enforces.</LinkCard>
+  <LinkCard href="/get-started/what-costs-money" title="What costs money">The four actions that spend model budget, and the limits.</LinkCard>
+  <LinkCard href="/plans-and-trust/not-built-yet" title="Not built yet">Features that are planned and not in this version.</LinkCard>
+</LinkCards>
+
+## The short answers
+
+| Question | Answer |
+|---|---|
+| Does Rehearsal touch our production systems? | No. It builds a world from your source and images, in a sandbox, with fictional data it creates. It does not connect to production |
+| Can a world reach the internet? | No. The application's containers are on a network with no way out |
+| Who decides whether an agent passed? | Read-only queries on the application's own database. No model grades the result |
+| Can a check change data? | No. A check is one statement in a read-only transaction |
+| Where is our API key? | The server stores only a hash. The key is shown once |
+| Where are the model provider keys? | On the server only. On the hosted service you need none. On your own server they are in its settings |
+| Can we run it ourselves? | Yes. The same package runs on your own machine: see [Self-hosting](/self-hosting) |
+| Can an AI assistant spend without asking? | The plugin tells it to ask first. The plan's limits are a hard stop either way |

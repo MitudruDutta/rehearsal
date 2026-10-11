@@ -1,0 +1,224 @@
+---
+title: Troubleshooting
+description: Each message you can meet when you install and run a Rehearsal server, why it appears, and the fix. Search this page for the exact message.
+audience: Operators, and anyone whose build or sign-in does not work
+label: self-hosted
+last_reviewed: 2026-10-11
+---
+
+Each entry starts with what you see, in the words on your screen. Then it gives the cause and the fix.
+
+Several entries come from one real installation on a new Windows 11 machine, on 10 October 2026. The rest come from
+the product's own messages.
+
+In the commands below, `compose` stands for:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env
+```
+
+## Starting the server
+
+### set REHEARSAL_DATABASE_URL to your cloud database (see deploy.env.example)
+
+**You see** this message from `docker compose`, and nothing starts.
+
+**Why:** the Compose file needs the address of a database, and it found none. Either `infra/deploy.env` does not
+set `REHEARSAL_DATABASE_URL`, or the command has no `--env-file infra/deploy.env`.
+
+**Fix:** create `infra/deploy.env` from `infra/deploy.env.example`, set `REHEARSAL_DATABASE_URL`, and pass the file
+with `--env-file`. To run the database on the same machine, see
+[Install with Docker Compose](/self-hosting/install-with-docker-compose#choose-the-database).
+
+### set a random session secret
+
+**You see** this message from `docker compose`, and nothing starts.
+
+**Why:** `REHEARSAL_SESSION_SECRET` is empty. The server signs browser sessions with it.
+
+**Fix:** make a value with `openssl rand -hex 32` and set it in `infra/deploy.env`.
+
+### A setting has the value "# ..."
+
+**You see** a setting that seems to be ignored, or an error that quotes a `#` and some words.
+
+**Why:** Compose reads `KEY=  # text` as the value `# text`.
+
+**Fix:** in `infra/deploy.env`, put each comment on a line of its own.
+
+### certificate verify failed
+
+**You see** this when the server connects to a managed database.
+
+**Why:** the database address does not name the certificate to check the server with, so another certificate on
+the machine is used.
+
+**Fix:** keep `sslrootcert=` in `REHEARSAL_DATABASE_URL`. For Supabase, the image has the certificate at
+`/srv/rehearsal/infra/certs/supabase-prod-ca-2021.crt`.
+
+### remaining connection slots are reserved
+
+**You see** this in the logs of the API or a worker.
+
+**Why:** the processes together opened more connections than the database allows. Each process can open up to
+`REHEARSAL_DB_POOL_SIZE` plus `REHEARSAL_DB_MAX_OVERFLOW` connections.
+
+**Fix:** lower those two settings, or run fewer workers.
+
+### Port 7800 is in use
+
+**Why:** another server is running on the machine.
+
+**Fix:** find it with `docker ps`, and stop it or use another port.
+
+### After a restart the API runs and the database does not
+
+**You see** the API container running and the `postgres` container stopped, after a restart of Docker or of the
+machine. Requests fail.
+
+**Why:** you use `--profile localdb`. The API and the workers have a restart rule. The local database container
+has none.
+
+**Fix:** run the start command again:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env --profile localdb up -d
+```
+
+## Signing in
+
+### A sign-in form, and no account
+
+**You see** the console's sign-in page. It has no link to create an account, and you have no account.
+
+**Why:** the console needs a person's account, and sign-up is closed by default. The admin key from
+`rehearsal bootstrap` is for programs. It does not sign in to the console.
+
+**Fix:** create your account on the server, in the project that `bootstrap` printed:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api \
+  rehearsal users add you@example.com --project <project_id>
+```
+
+To let visitors create their own account, set `REHEARSAL_SIGNUP=open` and start the server again.
+
+### Cannot reach Rehearsal at http://127.0.0.1:7800
+
+**You see** this from the `rehearsal` command.
+
+**Why:** the command talks to the default address, and no server is there. Or the address is right and the server
+is stopped.
+
+**Fix:** give the address once: `rehearsal login --url <address>`. Check the server with
+`curl <address>/v1/health`.
+
+### Only a workspace owner or admin can approve a terminal
+
+**You see** this on the page that `rehearsal login` opened.
+
+**Why:** approval creates a key, and only an owner or an admin of the workspace can create keys.
+
+**Fix:** ask an owner or admin to open the link, or ask for a key and use `rehearsal login --with-key`.
+
+## Builds and runs
+
+### A build stays "queued"
+
+**You see** a build, or a run, that does not leave the status `queued`.
+
+**Why:** no worker is taking the work. The worker is a service of its own. Either it is not running, or every
+worker is busy, or no worker takes this kind of work.
+
+**Fix:**
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env ps
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env logs --tail 50 worker
+```
+
+If no `worker` is listed, start the server again with `up -d`. If the workers are busy, start more with
+`up -d --scale worker=6`. If you run workers by hand with `rehearsal worker --kinds ...`, check that one of them
+takes this kind: `world_build`, `world_validate`, `evaluation`, `improvement`, `dataset_export` or `bundle_export`.
+
+### inspector: model unavailable
+
+**You see** a build that fails in its first phase with this error.
+
+**Why:** the server has no key for the model provider in its model chains, or the provider is not answering.
+
+**Fix:** set the provider's key in `infra/deploy.env`, for example `NEBIUS_API_KEY`, and start the server again with
+`up -d`. Then restart the build:
+
+```bash
+rehearsal jobs retry <job_id>
+```
+
+### The build failed for another reason
+
+The build's error says which phase failed and why. The table in
+[Build a practice world](/guides/build-a-practice-world#when-a-build-fails) says, for each kind of error, whether a
+restart helps. Do not restart a build twice for the same error.
+
+### exceeding its memory limit
+
+**You see** an application container in a sandbox that was killed, and an error that names a memory limit.
+
+**Why:** each container in a sandbox has a limit, 1 GB by default.
+
+**Fix:** raise `REHEARSAL_CONTAINER_MEMORY`, for example to `2g`, and start the workers again.
+
+### The console shows the old pages after an update
+
+**Why:** the console is built into the image. The container still runs the old image, or the browser kept the old
+files.
+
+**Fix:** build and replace the containers with `up -d --build`, then reload the page with Ctrl+Shift+R.
+
+## On Windows
+
+### Filename too long
+
+**You see** a build that fails while it fetches the application's source, on a server that runs on Windows itself.
+
+**Why:** Windows limits a path to 260 characters unless long paths are turned on. Each source is fetched into a
+folder with a 64-character name, and deep repositories pass the limit.
+
+**Fix:** run the workers in Linux: in WSL 2, or with the Compose file. If you must run on Windows itself, turn on
+long paths for git with `git config --global core.longpaths true`, and use a short data folder in
+`REHEARSAL_DATA_DIR`.
+
+### 'rm' is not recognized
+
+**You see** this when you build the console from source in PowerShell or the Windows command line.
+
+**Why:** the console's build script uses `rm` and `cp`.
+
+**Fix:** run the build from Git Bash, or build the image with Docker, which builds the console inside Linux.
+
+### The containers stop by themselves
+
+**You see** the server stop some time after you close your terminal, with Docker Engine in WSL 2.
+
+**Why:** WSL stops a Linux distribution when no Windows program is attached to it. The containers stop with it.
+
+**Fix:** keep one WSL process open while the server must run, for example a terminal window in the distribution.
+After a restart of Windows, start the distribution and run the `up -d` command again.
+
+## Plans and payments
+
+### Payment return links open the wrong address
+
+**You see** a browser that goes to `https://localhost` or to the example domain after a checkout, on a test server
+with plans turned on.
+
+**Why:** the Compose file sets the server's public address from `REHEARSAL_DOMAIN`. It does not read
+`REHEARSAL_PUBLIC_URL` from your settings file.
+
+**Fix:** set `REHEARSAL_DOMAIN` to the host name that browsers use. On a private server, leave plans off.
+
+## Still stuck
+
+- Read the API's log and a worker's log: `compose logs --tail 100 api` and `compose logs --tail 100 worker`.
+- [Errors](/reference/errors) lists each error status and message.
+- Open an issue in the repository, with the message, the phase and the version from `rehearsal --version`.

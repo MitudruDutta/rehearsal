@@ -1,0 +1,154 @@
+---
+title: What costs money
+description: Four actions spend model budget. This page says which, roughly how much, how to set a limit, and what happens when you reach it.
+audience: Everyone who can start a build or a run
+last_reviewed: 2026-10-11
+---
+
+Rehearsal uses language models to build a world, to play the simulated customer, and to run an agent that you
+describe with instructions. Those model calls cost money. Four actions make them. Everything else is free.
+
+## The four actions
+
+| Action | Typical cost | Typical time | Where |
+|---|---|---|---|
+| Build a world | $3 to $8 | 1 to 3 hours | **Build world**, `rehearsal build`, `build_world` |
+| Run an evaluation | about $0.02 for each episode | 2 to 10 minutes | **Start evaluation**, `rehearsal eval`, `run_evaluation` |
+| Improve an agent | under $0.10 | about 1 minute | `rehearsal improve`, `improve_agent` |
+| Re-check a world | about $0.03 for each job | 5 to 20 minutes | `rehearsal worlds validate`, `recheck_world` |
+
+These are the product's own figures at version 0.1.2. The measurements behind them, recorded in the product's
+code, are $1.70 to $8.84 for a build and $0.016 to $0.018 for an episode. Your application can cost more or less: a
+larger application takes longer to build.
+
+Reading results, listing worlds, creating agent profiles, comparing runs and exporting data are free.
+
+### How many episodes is a run
+
+```text
+episodes = jobs in the chosen splits x agents x repeats
+```
+
+A world with 6 `dev` jobs, 2 agents and 2 repeats needs 24 episodes, which is about $0.50. When you choose no split
+and no repeats, a run uses every approved job twice.
+
+## Who pays the model provider
+
+- **On the hosted service**, the model calls run on Rehearsal's model account. They count against your workspace's
+  monthly allowance, which is part of your plan. You do not need a model provider key.
+- **On a server you run**, the calls use the provider keys that the operator configured, and the provider bills the
+  operator. `rehearsal prices` on the server shows the price of each configured model.
+- **With a bring-your-own agent**, your agent's own model calls are yours, billed by your provider. The world and the
+  simulated customer still count against the allowance.
+
+## Set a limit
+
+You have three limits, from the smallest to the largest.
+
+### A budget for one job
+
+Give a build or a run a budget. The job stops itself when it has spent that much.
+
+<Ways items={["CLI", "Python", "MCP"]}>
+<Tab value="CLI">
+
+```bash
+rehearsal build <app_id> --budget 6
+rehearsal eval <wv_id> --profile <profile_id> --split dev --budget 1
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+rh.worlds.build(app_id, budget_usd=6)
+rh.evaluations.create(wv_id, [profile_id], splits=["dev"], budget_usd=1)
+```
+
+</Tab>
+<Tab value="MCP">
+
+```text
+build_world(application_id, budget_usd=6)
+run_evaluation(world_version_id, [agent_id], splits=["dev"], budget_usd=1)
+```
+
+</Tab>
+</Ways>
+
+On a plan with an allowance, a job that you start without a budget gets a default cap, so that one job cannot hold
+the whole month's allowance: $20 for a build, $3 for a re-check, $2 for an improvement, and $0.06 for each episode of
+a run. On the Free plan a build stops at $5. [Plans and limits](/reference/plans-and-limits#default-spend-caps) has
+the current numbers.
+
+### The monthly allowance
+
+Each plan has a model allowance for the calendar month. It is a safety net: work that would pass it does not
+start. The allowance covers all four actions.
+
+To see what is left:
+
+<Ways items={["Console", "MCP", "HTTP"]}>
+<Tab value="Console">
+
+Open **Billing**, or **API keys**: both show the spend of the month against the allowance.
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant for the workspace status. It calls `workspace_status`.
+
+</Tab>
+<Tab value="HTTP">
+
+```bash
+curl https://rehearsal.example.com/v1/usage -H "Authorization: Bearer <your_key>"
+```
+
+<Output>
+
+```json
+{"month": "2026-10", "spent_usd": 4.31, "by_kind": {"world_build": 4.02, "evaluation": 0.29}, "allowance_usd": 60, "left_usd": 55.69, "renews": "2026-11-01"}
+```
+
+</Output>
+
+The numbers in this output are an example.
+
+</Tab>
+</Ways>
+
+### The plan's counts
+
+A plan also limits how many applications you keep, how many builds you start, and how many episodes you run in a
+month. See [Plans and limits](/reference/plans-and-limits).
+
+On a server you run, there are no plans unless the operator turns them on. The operator can set one spend limit
+for the whole server with `REHEARSAL_MONTHLY_ALLOWANCE_USD`.
+
+## At a limit
+
+| What happens | What you see | What to do |
+|---|---|---|
+| A job reaches its own budget | The job stops. A build fails with "budget" in its error | Start again with a higher budget, if the result is worth it |
+| The allowance is used up | Status `402`: "This workspace has used its ... model allowance for this month" | Wait for the 1st of the month, or stop a job that is still running. On a paid plan, add a top-up |
+| The plan's episodes are used up | Status `402`: "This run needs ... episodes and the workspace has ... left this month" | Run fewer: one split, fewer jobs, or one repeat |
+| Every sandbox is in use | Status `429` | Wait for a run to finish, or stop one |
+
+Nothing is started and nothing is charged when a request is refused.
+
+## What you do not pay for twice
+
+- **A failed build can be restarted.** A restart continues from the last saved phase. Finished phases are not
+  repeated, and the build is not counted again.
+- **A build that cannot go on stops early.** A phase that meets the same problem several times stops, so a failed
+  build costs less than a full one.
+- **Episodes that never started are not counted.** If you stop a run, or it fails, the episodes it had not started
+  go back to your count.
+- **An episode that the environment broke is not scored.** It does not count against the agent.
+
+## Before an assistant spends
+
+An AI assistant that uses Rehearsal must tell you what it will start, how many builds or episodes, and the rough
+cost, and then wait for a clear yes. The skill that ships with the plugin gives it this rule. The plan's limits
+are a hard stop whatever the assistant decides.

@@ -1,0 +1,6 @@
+{
+  "title": "Plans and trust",
+  "description": "What the product touches and allows",
+  "icon": "ShieldCheck",
+  "pages": ["security-and-trust", "not-built-yet"]
+}

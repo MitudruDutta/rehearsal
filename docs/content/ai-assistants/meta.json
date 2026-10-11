@@ -1,0 +1,6 @@
+{
+  "title": "AI assistants",
+  "description": "Drive Rehearsal from an assistant",
+  "icon": "Bot",
+  "pages": ["---Your client---", "claude-code", "codex", "cursor", "---Reference---", "mcp-tools"]
+}

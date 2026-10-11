@@ -1,0 +1,136 @@
+---
+title: Sign in and keys
+description: The difference between your console account and an API key, which access a key needs, and how to revoke one.
+audience: Everyone who uses the CLI, Python, an AI assistant or the API
+last_reviewed: 2026-10-11
+---
+
+Rehearsal has two kinds of identity. **You** sign in to the console with an account. **Programs** (the CLI, a
+script, an AI assistant, a CI job) use an API key. A key belongs to one project and has one level of access.
+
+| | Console account | API key |
+|---|---|---|
+| Who uses it | A person, in a browser | A program |
+| How it signs in | Google, or an email address and password | The key, sent with each request |
+| How long it lasts | A browser session lasts 12 hours | Until you revoke it |
+| Where it is made | The sign-in page, or `rehearsal users add` on your own server | `rehearsal login`, or the console's **API keys** page |
+
+## Your console account
+
+On the hosted service, choose **Create an account** on the sign-in page, or sign in with Google.
+
+On a server that your team runs, sign-up is closed by default, so the sign-in page has no **Create an account**
+link. The operator creates your account on the server:
+
+```bash
+rehearsal users add you@example.com --project <project_id>
+```
+
+The command asks for a password of 10 characters or more. With `--no-password`, the person signs in with Google
+only. To let visitors create their own account and organisation, the operator sets `REHEARSAL_SIGNUP=open`.
+
+## Sign in a terminal
+
+```bash
+rehearsal login
+```
+
+The terminal shows a confirmation code and opens the console in your browser. The page shows the terminal's name,
+the address the request came from, and the workspace. Check that the code is the same in both places, then choose
+**Approve**.
+
+Approval creates a new key with **Build and evaluate** access, named after your terminal. The key goes straight to
+the terminal and is saved in `~/.config/rehearsal/config.json`, readable by your user only. The CLI, the Python
+client and the MCP server for AI assistants all read that file.
+
+- Only an owner or an admin of the workspace can approve a terminal. If you are a member, ask one of them, or ask
+  for a key.
+- A sign-in request expires after 10 minutes.
+- `--url <address>` chooses the server. Without it, the CLI uses `REHEARSAL_URL`, then the last server you signed in
+  to, then `http://127.0.0.1:7800`.
+- `--no-browser` prints the link and does not open a browser.
+
+`rehearsal whoami` shows which server, workspace and key the machine uses. `rehearsal logout` removes the saved key
+from the machine. It does not disable the key: to do that, revoke it.
+
+### Without a browser
+
+On a server or in CI, paste a key instead:
+
+```bash
+rehearsal login --with-key
+```
+
+The command asks for the key and hides what you paste. Or set two environment variables, which take precedence over
+a saved sign-in:
+
+```bash
+export REHEARSAL_URL=https://rehearsal.example.com
+export REHEARSAL_API_KEY=<your_key>
+```
+
+## Create a key in the console
+
+Open **API keys**. Give the key a name that says who or what uses it, and choose its access.
+
+| Access | What the key can do | Use it for |
+|---|---|---|
+| **Build and evaluate** | Add applications, build worlds, run evaluations, improve agents, and read results | The CLI, an AI assistant, a CI job |
+| **Read only** | List applications, worlds, agents and runs, and read the scores of a run. It cannot read jobs or single episodes | A dashboard, a report |
+| **Full access** | Everything, including creating and revoking keys | Administration. Do not give it to an assistant |
+
+The console shows a key once. Copy it then. Rehearsal stores only a hash of the key, so nobody can show it to you
+again.
+
+Give each person, pipeline and assistant its own key. Then you can revoke one without stopping the others.
+
+A key looks like `rh_1a2b3c4d_...`. The eight characters after `rh_` are its prefix: the console and
+`rehearsal whoami` show the prefix so that you can tell keys apart.
+
+## Send a key over HTTP
+
+Send the key in the `Authorization` header:
+
+```bash
+curl https://rehearsal.example.com/v1/me -H "Authorization: Bearer <your_key>"
+```
+
+<Output>
+
+```json
+{
+  "project_id": "prj_7f4a9532b99af3d2",
+  "key_id": "key_fce4d465bb875ab7",
+  "scopes": ["write", "evaluator"],
+  "project": "default",
+  "organization": "Acme"
+}
+```
+
+</Output>
+
+The output is shortened. The API calls the access levels **scopes**:
+
+| Scope | Allows | Console name |
+|---|---|---|
+| `read` | List applications, worlds, agents and runs, and read the scores of a run | Read only |
+| `write` | Change things: add, build, evaluate, improve. It includes `read` | Part of Build and evaluate |
+| `evaluator` | Read jobs, episodes, events and exported files, which include held-out jobs and their verdicts. It includes `read` | Part of Build and evaluate |
+| `admin` | Everything | Full access |
+| `agent` | Read the waiting turn of an episode and send its action, and nothing else. For a key that you give to agent code | None. Create it through the API |
+
+A request that needs a scope the key does not have gets status `403`.
+
+## Revoke a key
+
+Open **API keys** and revoke the key. It stops working at once, everywhere. Programs that used it get status `401`.
+
+Revoke a key when a person leaves, when a machine is lost, or when a key may have been seen by someone else. Then
+create a new one.
+
+## Keep keys safe
+
+- Do not paste a key into a chat with an AI assistant. Use `rehearsal login`.
+- Do not put a key on a command line: it stays in the shell history. Use `rehearsal login --with-key`, or an
+  environment variable from your secret store.
+- Do not commit a key. Keys start with `rh_`, so a secret scanner can find them.

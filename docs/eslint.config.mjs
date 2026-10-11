@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // written by fumadocs-mdx from content/ at every build
+    ".source/**",
   ]),
 ]);
 

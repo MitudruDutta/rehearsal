@@ -1,0 +1,118 @@
+---
+title: Security and trust
+description: What a practice world can and cannot reach, how checks stay read-only, where keys and passwords are kept, and what an operator must do.
+audience: Security reviewers and buyers
+last_reviewed: 2026-10-11
+---
+
+This page states what the product does, as the code of version 0.1.2 does it. Where something is not built or not
+decided, the page says so.
+
+## Your production systems
+
+Rehearsal does not connect to your production systems. It needs three things from you, and none of them is access:
+
+| You give | Rehearsal does |
+|---|---|
+| The address of a public git repository, and a commit | Fetches the source at that commit, to read it |
+| The names of container images, with digests | Pulls the images, to run them |
+| Policies, in plain words | Turns them into rules that jobs check |
+
+The data in a world is fictional. The World Compiler creates the customers, the records and the history. Do not
+put real customer data, real credentials or production addresses into an application or its policies: nothing
+needs them.
+
+## What a world can reach
+
+Each world runs in its own sandbox: a set of containers that a worker starts and removes.
+
+- **No internet.** The application's containers are on an internal network with no route out. They can reach each
+  other by name, and nothing else.
+- **One guarded entrance.** One container at the edge of the sandbox passes requests in. It accepts only requests
+  that carry the platform's own token.
+- **Outside services are emulated.** Payments, shipping and email do not leave the sandbox. The emulator records
+  each request, and checks can read that record.
+- **Limits on each container.** By default 1 GB of memory, 1 processor and 256 processes. The containers cannot
+  gain new privileges, and a set of kernel capabilities is removed, such as raw network access.
+- **A clean start for each episode.** A reset removes the containers and restores every data volume from a saved
+  snapshot. Nothing from one episode reaches the next.
+
+An agent never talks to the application directly. Each action goes through a gateway that checks the actor's role
+before the call, validates the arguments, and adds the role's own credential. An agent does not see another role's
+credential.
+
+## How checks stay safe
+
+A model writes the checks during a build, so the server treats every check as untrusted text.
+
+- A check is **one statement**. A second statement in the same query is refused, and so are client commands.
+- A check runs in a **read-only** transaction. On SQLite, an authorizer allows reading only.
+- Values are **bound as parameters** by the database client. They are not pasted into the query.
+
+[How scoring works](/get-started/how-scoring-works) explains how checks decide an outcome.
+
+## Keys, passwords and sessions
+
+| Secret | How it is kept |
+|---|---|
+| **API keys** | The server stores a SHA-256 hash and the 8-character prefix. The key is shown once, when it is created |
+| **Keys from `rehearsal login`** | Created at the moment the terminal collects them, and never stored in a readable form on the server. On your machine: one file that only your user can read |
+| **Passwords** | Hashed with scrypt and a salt for each account. At least 10 characters |
+| **Browser sessions** | A signed cookie that lasts 12 hours. The signing secret is the server's `REHEARSAL_SESSION_SECRET` |
+| **Model provider keys** | In the server's settings only. They are not sent to browsers, to agents or into worlds |
+
+Sign-in and sign-up requests are limited for each network address, to slow down guessing.
+
+### What a key can do
+
+A key belongs to one project and has an access level. A key with "Build and evaluate" access cannot create keys or
+change billing. A key with "Read only" access cannot start anything. See
+[Sign in and keys](/get-started/sign-in-and-keys#create-a-key-in-the-console).
+
+Revoking a key takes effect at once.
+
+### Secrets in records
+
+The server keeps a record of each build and episode: the events you see in the console. Before text is stored,
+the server removes the values of its own secrets from it: every setting whose name ends in `API_KEY`, `TOKEN`,
+`SECRET` or `PASSWORD`, and text that looks like a credential.
+
+## What leaves the server
+
+| Goes to | What | When |
+|---|---|---|
+| Your model provider | The prompts of the World Compiler, the simulated customer and the agents: parts of the application's source, the fictional data, and the conversation | During a build, a run, an improvement and a re-check |
+| A tracing service | Traces of the same calls | Only when the operator sets a tracing key. Off by default |
+| A payment provider | The workspace owner's email address, the organisation's name, and what you buy | Only on a server with plans turned on, when you buy a plan or a top-up |
+
+The source of your application is sent to the model provider in parts, because the World Compiler reads it to
+build the world. If your source must not go to a model provider, run your own server with a model that you host.
+
+## AI assistants
+
+An assistant that uses the Rehearsal plugin acts with your key and within its access.
+
+- It is told never to ask for a key in the chat, and never to print one.
+- It is told to state the cost and ask before each action that spends money.
+- The plan's limits and the monthly allowance stop a request whatever the assistant decides.
+
+## If you run the server
+
+On your own server, these are yours to do.
+
+| Do | Why |
+|---|---|
+| Give Rehearsal a machine of its own | A worker controls Docker on its host, and runs images that applications name |
+| Build only from sources and images you trust | A world runs their code. For source from people you do not know, isolate each job in its own virtual machine |
+| Set a long random `REHEARSAL_SESSION_SECRET` | It signs browser sessions |
+| Keep `REHEARSAL_SIGNUP=closed` | Otherwise any visitor can create an account and an organisation |
+| Serve it over HTTPS | The Compose file's `public` profile obtains a certificate |
+| Give the database its own role and schema | Some managed databases expose the `public` schema through an API of their own |
+| List operator admins in `REHEARSAL_ADMIN_EMAILS` only when you need them | An operator admin sees every workspace. Only a sign-in with Google counts for this list |
+
+## What this page cannot tell you yet
+
+- **How long the hosted service keeps data**, and how to ask for deletion. This is not defined in the product.
+- **Compliance reports.** None exist.
+- **A security contact.** To report a security problem, contact the maintainers privately. Do not open a public
+  issue with the details.

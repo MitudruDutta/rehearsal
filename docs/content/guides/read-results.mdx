@@ -1,0 +1,217 @@
+---
+title: Read results
+description: What each outcome, ending and number of a run means, and how to find the check that failed in one episode.
+audience: Agent developers, and product or QA leads
+last_reviewed: 2026-10-11
+time: 10 minutes
+needs: a finished run
+---
+
+A run gives you three levels of detail: a summary for each agent, one line for each episode, and the full record of
+one episode. Read them in that order.
+
+## The summary
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Open **Runs** and choose the run. The top of the run page shows the counts for each agent.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal runs show <run_id>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+summary = rh.runs.get(run_id)["summary"]
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant for the results of the run. It calls `run_results`.
+
+</Tab>
+</Ways>
+
+The summary has one entry for each agent under `profiles`, named `name@vN`. Each entry has `overall`, then each
+split that the run used (`train`, `dev`, `holdout`), then `per_scenario` with each job. For example, the verified
+share of version 2 on the held-out jobs is:
+
+```python
+summary["profiles"]["support-agent@v2"]["holdout"]["success_rate"]
+```
+
+[Use Rehearsal in CI](/guides/use-rehearsal-in-ci#the-summary-field-by-field) shows the whole shape.
+
+| The console shows | Field | Meaning |
+|---|---|---|
+| Verified | `successes`, `success_rate` | Verified episodes, as a count and as a share of the finished, scored episodes |
+| episodes with a rule violation | `hard_violation_episodes` | Episodes that broke a hard rule |
+| claimed done but was not | `false_completions` | The agent said it was done, and the checks failed |
+| duplicate side effects | `duplicate_effects` | Extra effects from a repeated write: a second payment, a second email |
+| recovered after a fault | `recovered` | `x/y`: of the episodes with a fault, `x` still reached the goal with no duplicate |
+| environment errors (not scored) | `environment_errors` | Episodes that the setup broke. They do not count against the agent |
+| | `unnecessary_interruptions` | Contacts with the customer above the job's limit |
+| | `rejected_attempts` | Tool calls that were refused: a tool the role does not have, or arguments that are not valid |
+| | `episodes`, `finished` | Episodes planned, and episodes that ran to an end |
+| Cost | `cost_usd`, `tokens` | Model spend and tokens |
+
+Read `holdout` first when the run has it. It is the score on jobs the agent was never tuned on.
+
+## One line for each episode
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+The **Episodes** table on the run page has one row for each episode: the job, the agent, the outcome and the cost.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal runs episodes <run_id>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+for e in rh.runs.episodes(run_id):
+    print(e["id"], e["scenario"], e["split"], e["reward"], e["termination"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+`run_results` returns the episodes too, each with `verified` and `ending`.
+
+</Tab>
+</Ways>
+
+### Outcomes
+
+| The console shows | `reward` | Meaning |
+|---|---|---|
+| <Verdict is="verified" /> | `1` | Every goal check of the final request passed, and no hard rule was broken |
+| <Verdict is="not-achieved" /> | `0` | The request was not done. No hard rule was broken |
+| <Verdict is="rule-violated" /> | `-1` | A hard rule was broken, whatever else happened |
+| <Verdict is="not-scored" /> | none | The environment failed. The episode is not counted |
+
+### Endings
+
+The ending says how the episode stopped. It is the `termination` field.
+
+| Ending | Meaning |
+|---|---|
+| `completed` | The agent said it was done. If the checks failed anyway, this is a false completion |
+| `stalled` | The agent stopped acting: it only waited, or it made no tool call twice |
+| `max_steps` | The episode reached its limit of steps. Often the agent was in a loop |
+| `budget` | The episode reached its spend limit |
+| `environment_error` | The environment failed. The episode is not scored |
+| `external_timeout` | Bring-your-own agent only: no action arrived within 10 minutes of a turn |
+
+## One episode in full
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Choose a row in the **Episodes** table. The page shows:
+
+- **Independent checks**: each check, what the database held and what was wanted. The verifier runs when the
+  episode ends.
+- A table of actions, with the **Actor**, the **Tool**, the **Outcome** and the **Request seen**: which version of
+  the customer's request the agent had when it acted.
+- **What the agent saw** at each step.
+- The room view, which replays the episode.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal runs episode <episode_id>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+episode = rh.runs.episode(episode_id)
+for check in episode["oracle"]["check_results"]:
+    if not check["passed"]:
+        print(check["description"], "wanted", check["op"], check["expected"], "observed", check["actual"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant why the episode failed. It calls `episode_details`, which returns `failed_checks`, each with
+`check`, `observed` and `wanted`.
+
+</Tab>
+</Ways>
+
+### Find the cause, in this order
+
+1. **Is there an environment error?** Then the setup failed, not the agent. Do not count the episode.
+2. **Which checks failed?** Compare what the database held with what was wanted. For example: the check "exactly
+   one maintainer comment" wanted `1` and observed `0`, so the agent never posted the comment.
+3. **Did the request change?** Look at the request version beside each write. An agent that writes for the first
+   request after the customer changed it fails the final checks.
+4. **Was there a fault?** After an action with the status `UNKNOWN`, did the agent read the state before it wrote
+   again? A blind repeat makes a duplicate.
+5. **How did it end?** `stalled` means it gave up. `max_steps` means it ran out. `completed` with failed checks
+   means it claimed work it did not do.
+
+### Action statuses
+
+| Status | Meaning |
+|---|---|
+| `SUCCEEDED` | The action was carried out |
+| `FAILED` | The application refused it or failed |
+| `REJECTED` | The tool, the role or the arguments were not valid. Nothing reached the application |
+| `UNKNOWN` | The request timed out. The outcome is unknown, and the write may have happened |
+
+## Report a run
+
+When you report a run to someone else:
+
+1. Start with one line for each agent: "support-agent v1, dev: 7 of 10 verified, 0 duplicates, 1 false completion,
+   recovered 3 of 3, $0.18."
+2. Give the splits separately when they differ. The `holdout` number is the one that matters.
+3. Explain each failed job in one line, in plain words, with the check.
+4. Group the causes. For example: "In 3 of 4 failures the agent acted on the first request after the customer
+   changed it."
+5. Say what is uncertain. With 1 or 2 repeats, one episode is a large share of the score.
+
+## When a result looks wrong
+
+| You see | Likely cause | Do this |
+|---|---|---|
+| Many episodes "not scored" | The environment, not the agent | Read the environment error in the episode. If the model provider was down, run again later |
+| Every agent fails the same job in the same way | The job may be unfair | Look for the evidence below |
+| Bring-your-own episodes end with `external_timeout` | Your agent did not answer within 10 minutes | Check that your agent's loop is running |
+
+A job is **unfair** when a careful agent cannot pass it. The evidence is in the episode:
+
+- A check rejects correct work. The agent did what the customer asked, and the check wanted one exact record.
+- A fact was not available. The agent needed an id or a name that no tool of its role returns and nobody stated.
+- Every action failed the same way, for example with "permission denied". That is the environment.
+
+If you find this, do not count the job when you judge the agent, and re-check the world: `rehearsal worlds validate
+<wv_id>`. The re-check tries each job with a live agent and withdraws the unfair ones. It spends about $0.03 for
+each job.
+
+If the agent made a mistake (it acted on the old request, gave up, or repeated a write), the job is fair.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/improve-an-agent" title="Improve an agent">Turn these failures into a better version.</LinkCard>
+  <LinkCard href="/get-started/how-scoring-works" title="How scoring works">The rules behind every outcome.</LinkCard>
+</LinkCards>

@@ -1,0 +1,127 @@
+---
+title: How scoring works
+description: An outcome is decided by read-only checks on the application's own database. This page says exactly how, and what each term means.
+audience: Everyone who has to trust a result
+last_reviewed: 2026-10-11
+---
+
+When an episode ends, Rehearsal asks the application's database what is true. The answers decide the outcome. No
+model reads the conversation and gives an opinion, so an agent cannot talk its way to a pass.
+
+<EpisodeDiagram />
+
+## What a check is
+
+A check is one SQL query and the answer that is wanted. The query must return exactly one value. Rehearsal compares
+the value with the wanted one, using one of six comparisons: equal, not equal, greater, greater or equal, less,
+less or equal.
+
+For example, a job asks the agent to post one comment on a pull request:
+
+| The check | Wanted | The database held | Result |
+|---|---|---|---|
+| "Exactly one maintainer comment on the pull request" | `1` | `0` | Failed |
+
+Checks are safe to run:
+
+- A check is a **single statement**. A query that holds a second statement is refused.
+- It runs in a **read-only** transaction. A check cannot change the application's data.
+- Values are passed to the database as parameters. They are never pasted into the query text.
+
+A check can also read the record of what the application sent to outside services, such as a payment provider or an
+email server. In a world those services are emulated, and every request to them is recorded.
+
+## From checks to an outcome
+
+Each job has two kinds of check.
+
+- **Goal checks** say that the customer's request was done.
+- **Hard rules** say that something must never happen.
+
+| Outcome | Rule | Reward |
+|---|---|---|
+| <Verdict is="rule-violated" /> | One or more hard rules failed. Nothing else matters. | `-1` |
+| <Verdict is="verified" /> | Every goal check passed, no hard rule failed, and the environment did not fail. | `1` |
+| <Verdict is="not-achieved" /> | A goal check failed, and no hard rule failed. | `0` |
+| <Verdict is="not-scored" /> | The environment failed: the setup, the model provider or the sandbox. The episode is not counted against the agent. | none |
+
+The reward numbers appear in the API and in exported data. The console shows the words.
+
+## The final request counts
+
+On some jobs the customer changes the request during the work. The goal checks that run at the end belong to the
+**last** version of the request.
+
+- Work done for the first request does not count.
+- Work that contradicts the change can break a hard rule.
+
+If the change arrives before the agent's first write, Rehearsal holds that write and does not carry it out. The
+agent gets the message "A new message from the customer arrived before this change was made". A careful agent reads
+the request again.
+
+## Other things the result records
+
+A run summary counts more than the outcome. Each number below can turn a "pass" into a result you would not ship.
+
+| Term | Meaning |
+|---|---|
+| **False completion** | The agent said it was done, and the goal checks failed. |
+| **Duplicate effect** | The agent sent the same request to an outside service more than once: a second payment, a second email. |
+| **Recovered** | A fault happened in the episode, and the agent still reached the goal, with no hard rule broken and no duplicate. |
+| **Unnecessary interruption** | The agent contacted the customer more often than the job allows. |
+| **Rejected attempt** | The agent called a tool that its role does not have, or with arguments that are not valid. |
+
+### Unknown outcomes
+
+A fault can make a write return "request timed out; the outcome is unknown" although the write succeeded. The
+action's status is `UNKNOWN`. A careful agent then reads the state, or re-sends the same operation safely with the
+`retry_operation` tool where the job offers it. A careless agent repeats the write and creates a duplicate.
+
+## Why a job can be trusted
+
+A model writes the jobs and their checks during a build, so a build must prove that each job is fair before it
+publishes it. For each job, the validate phase shows that:
+
+| The build shows | So that |
+|---|---|
+| The checks fail when nothing is done | A job cannot pass by itself |
+| A reference solution passes | The job can be done with the tools the agent has |
+| Each wrong solution fails | Careless work, such as doing the first request or repeating a write, is caught |
+| A replay gives the same result | The outcome does not depend on chance |
+| A live agent can attempt it | The agent can find every fact it needs |
+
+A job that cannot be made fair is repaired or kept out of the world. The world page shows these results for each
+job under **Validation**, and it lists the jobs that the compiler could not validate.
+
+The world page also records facts about the sandbox under **Reset and isolation**: that the world resets to an
+identical state, that the application's network has no internet access, and that the application's clock is
+controlled.
+
+### Withdrawn jobs
+
+You can re-check a published world at any time. The re-check replays every job and tries each one with a live
+agent. A job that is unfair to a live agent is **withdrawn**: it stays in the record, but runs no longer use it and
+it does not count for readiness.
+
+A job is unfair when a careful agent cannot pass it. For example, a check wants one exact record when the customer's
+request allowed another, or the agent needs an id that none of its tools returns.
+
+## Held-out jobs
+
+The improvement step reads failed episodes of `train` and `dev` jobs. It never reads `holdout` jobs. A key needs
+"Build and evaluate" access to read jobs and verdicts at all. Use `holdout` for the final score, after you have
+stopped changing the agent.
+
+## What scoring does not claim
+
+- A verified episode says that the checks passed. It does not say that the agent's wording was good.
+- A world is built from your application at one commit. It does not say how the agent behaves on a later release.
+  Build a new world version when the application changes.
+- With one or two repeats, one episode is a large share of the score. Run more repeats before a decision.
+
+## Where to go next
+
+<LinkCards>
+  <LinkCard href="/guides/read-results" title="Read results">Find the failed check in a real episode.</LinkCard>
+  <LinkCard href="/plans-and-trust/security-and-trust" title="Security and trust">What a world can and cannot reach.</LinkCard>
+</LinkCards>

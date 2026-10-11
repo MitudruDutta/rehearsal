@@ -10,6 +10,8 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 # public contact for the landing page ("Talk to us"), baked into the static console: --build-arg NEXT_PUBLIC_CONTACT_EMAIL=...
 ARG NEXT_PUBLIC_CONTACT_EMAIL="" NEXT_PUBLIC_CONTACT_URL=""
+# where the landing page's "Docs" link leads: the address of the documentation site (docs/). Empty: the API reference at /docs
+ARG NEXT_PUBLIC_DOCS_URL=""
 RUN mkdir -p ../rehearsal/api && pnpm build
 
 FROM python:3.12-slim-bookworm

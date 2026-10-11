@@ -1,0 +1,270 @@
+---
+title: Install with Docker Compose
+description: Start the API, the console and the workers on one machine, create the first admin key and your sign-in, and check that a build can start.
+audience: Operators
+label: self-hosted
+last_reviewed: 2026-10-11
+time: 30 minutes
+needs: a Linux machine with Docker, a PostgreSQL database or the local one, and a model provider key
+---
+
+At the end of this page the console opens, you are signed in, and a worker is running, so a build can start.
+
+The repository has one Compose file for a full server on one machine: `infra/compose.full.yaml`. It starts the API
+with the console, and the workers. By default it uses a database that you give it. With one option it starts a
+database too.
+
+## Before you start
+
+- Read the [Requirements](/self-hosting/requirements).
+- Install Docker Engine with the Compose plugin, and git.
+- Have a model provider key, for example a Nebius key.
+
+## Steps
+
+<Steps>
+<Step>
+
+### Get the code
+
+```bash
+git clone https://github.com/MitudruDutta/rehearsal
+cd rehearsal
+```
+
+Run every command on this page from this folder.
+
+</Step>
+<Step>
+
+### Create the settings file
+
+```bash
+cp infra/deploy.env.example infra/deploy.env
+```
+
+Open `infra/deploy.env` and set the values below. Never commit this file.
+
+| Setting | Value |
+|---|---|
+| `REHEARSAL_SESSION_SECRET` | A random value. Make one with `openssl rand -hex 32` |
+| `REHEARSAL_DATABASE_URL` | Your database: see the next step |
+| `NEBIUS_API_KEY`, or another provider's key | Your model provider key |
+| `REHEARSAL_DOMAIN` | Your server's host name. For a test on your own machine, leave the example value |
+
+<Caution title="Put comments on their own lines">
+
+Compose reads `KEY=  # text` as the value `# text`. In this file, a comment must be on a line of its own.
+
+</Caution>
+
+</Step>
+<Step>
+
+### Choose the database
+
+<Tabs items={["A managed database", "A database on this machine"]} groupId="database" persist>
+<Tab value="A managed database">
+
+Set `REHEARSAL_DATABASE_URL` to your database. Give Rehearsal its own role and its own schema, not `public`.
+
+```dotenv
+REHEARSAL_DATABASE_URL=postgresql+psycopg://rehearsal:<password>@<host>:5432/postgres?sslmode=verify-full&sslrootcert=/srv/rehearsal/infra/certs/supabase-prod-ca-2021.crt
+REHEARSAL_DB_POOL_SIZE=2
+REHEARSAL_DB_MAX_OVERFLOW=3
+```
+
+The address above is the form for Supabase. The image contains Supabase's public root certificate at that path, so
+`verify-full` checks the server. For another provider, use its own address and certificate settings.
+
+The pool settings keep the server under your database's connection limit. Each process, the API and every worker,
+can open up to pool size plus overflow connections.
+
+</Tab>
+<Tab value="A database on this machine">
+
+Set a password for the local database, and point the address at it:
+
+```dotenv
+POSTGRES_PASSWORD=<a_random_password>
+REHEARSAL_DATABASE_URL=postgresql+psycopg://rehearsal:<a_random_password>@postgres:5432/rehearsal
+```
+
+Make the password with `openssl rand -hex 24`. In the commands below, add `--profile localdb` after
+`--env-file infra/deploy.env`.
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step>
+
+### Start the server
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d
+```
+
+With the local database:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env --profile localdb up -d
+```
+
+The first start builds the image, which takes several minutes. Then Compose applies the database migrations, and
+starts the API and one worker.
+
+Check that the API answers:
+
+```bash
+curl http://127.0.0.1:7800/v1/health
+```
+
+<Output>
+
+```json
+{"status":"ok","signup":"closed","google_client_id":null,"client_wheel":null}
+```
+
+</Output>
+
+The API listens on this machine only, at `127.0.0.1:7800`.
+
+</Step>
+<Step>
+
+### Create the first project and admin key
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api rehearsal bootstrap --org Acme
+```
+
+<Output>
+
+```text
+project: prj_7f4a9532b99af3d2
+admin API key (shown once): rh_1a2b3c4d_...
+export REHEARSAL_API_KEY=rh_1a2b3c4d_...
+```
+
+</Output>
+
+Save the key now: it is shown once. Keep the project id for the next step.
+
+</Step>
+<Step>
+
+### Create your sign-in
+
+The console needs a person's account, and sign-up is closed by default. Create your account in the project:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api \
+  rehearsal users add you@example.com --project <project_id>
+```
+
+The command asks for a password of 10 characters or more, twice.
+
+<Output>
+
+```text
+you@example.com can sign in to the console as owner of project prj_7f4a9532b99af3d2.
+```
+
+</Output>
+
+</Step>
+<Step>
+
+### Sign in
+
+Open `http://localhost:7800` in a browser on the machine and sign in with the email address and password.
+
+To use the server from a terminal:
+
+```bash
+rehearsal login --url http://localhost:7800
+```
+
+</Step>
+<Step>
+
+### Check that a build can start
+
+In the console, open **Applications**, choose **Load sample applications**, then **Build world** beside one of
+them. The build view opens, and its first phase starts within a few seconds.
+
+<Cost amount="about $3 to $8 on your provider's account">
+
+Your model provider bills you for a build. Stop the build if you only wanted to see it start.
+
+</Cost>
+
+If the build stays "queued", no worker is running: see
+[Troubleshooting](/self-hosting/troubleshooting#a-build-stays-queued).
+
+</Step>
+</Steps>
+
+## More workers
+
+One worker does one piece of work at a time. An evaluation run is cut into parts, up to `REHEARSAL_RUN_PARALLEL`
+of them, and each part needs a free worker. To run more at once, start more workers:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d --scale worker=6
+```
+
+Each part of a run also needs a sandbox, which uses 0.3 to 1.5 GB of memory.
+
+## A public address with HTTPS
+
+Set `REHEARSAL_DOMAIN` to your host name, point its DNS record at the machine, and add the `public` profile:
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env --profile public up -d
+```
+
+A Caddy container then serves `https://<your_domain>` on ports 80 and 443, with a certificate that it obtains and
+renews itself.
+
+## Settings worth a decision
+
+| Setting | Default | Decide |
+|---|---|---|
+| `REHEARSAL_SIGNUP` | `closed` | `open` lets any visitor create an account and an organisation. Keep it closed on a private server |
+| `REHEARSAL_MAX_ACTIVE_BUILDS`, `REHEARSAL_MAX_ACTIVE_RUNS` | 2 each in the Compose file | How many builds and runs one workspace may have in progress |
+| `REHEARSAL_MONTHLY_ALLOWANCE_USD` | Off | A model spend limit for the whole server, for a calendar month |
+| `REHEARSAL_PLANS` | `off` | Leave it off on a private server |
+| `GOOGLE_CLIENT_ID` | Empty | Set it to offer "Sign in with Google" |
+
+## After a restart
+
+The API and the workers start again by themselves after a restart of Docker or the machine. The local database
+container does not: it has no restart rule. If you use `--profile localdb`, run the `up -d` command again after a
+restart.
+
+## Update the server
+
+```bash
+git pull
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d --build
+```
+
+Compose builds the new image, applies the new database migrations, and replaces the containers. Read the changelog
+in the repository before you update.
+
+## Stop the server
+
+```bash
+docker compose -f infra/compose.full.yaml --env-file infra/deploy.env down
+```
+
+Your data stays: in your database, and in `/var/lib/rehearsal` on the machine.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/self-hosting/troubleshooting" title="Troubleshooting">The messages you can meet during this page, and the fix for each.</LinkCard>
+  <LinkCard href="/get-started/quickstart-console" title="Quickstart: console">A first world and a first result.</LinkCard>
+</LinkCards>

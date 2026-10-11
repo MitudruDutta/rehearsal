@@ -1,0 +1,89 @@
+---
+title: What is Rehearsal
+description: Rehearsal builds a practice copy of your application and tests your AI agent in it, before the agent meets a real customer.
+audience: Everyone
+last_reviewed: 2026-10-11
+---
+
+Rehearsal answers one question: **does this agent do the right thing inside this application, when the request
+changes and the system misbehaves?**
+
+It builds a **practice world** from your application. The world is the real application, running in a sandbox,
+filled with fictional data. Your agent attempts jobs in the world. At the end of each attempt, Rehearsal reads the
+application's own database to see what is true. That reading decides the outcome. No model grades the result.
+
+<WorldDiagram />
+
+## A practice world
+
+A practice world has four parts. Rehearsal makes all four from your application's source and container images.
+
+| Part | What it is |
+|---|---|
+| The application, running | The same code and the same database engine that you run, started in containers on a network with no internet access. |
+| Fictional data | Customers, records and history that Rehearsal creates. No data from production is used. |
+| Tools | The actions an agent may take. Each tool maps to a real operation of the application's API, and each role gets only its own tools. |
+| Jobs | Tasks for an agent. Each job has a customer request, events that happen during the work, and the checks that decide success. |
+
+A published world is a **world version**. It does not change. Results on the same version stay comparable for as
+long as you keep it.
+
+## Who decides whether the agent passed
+
+Each job carries **checks**. A check is one read-only question to the application's database, with the answer that
+is wanted. For example: "How many refunds exist for this order?" with the wanted answer `1`.
+
+When an attempt ends, Rehearsal runs the job's checks. The result is one of three outcomes:
+
+| Outcome | Meaning |
+|---|---|
+| <Verdict is="verified" /> | Every check of the customer's final request passed, and no rule was broken. This is the only kind of success. |
+| <Verdict is="not-achieved" /> | The request was not done. No rule was broken. |
+| <Verdict is="rule-violated" /> | Something that must never happen did happen: the wrong record changed, or private data appeared where it must not. |
+
+What the agent says about its own work is not evidence. An agent that says "done" when the checks fail is recorded as
+a **false completion**. [How scoring works](/get-started/how-scoring-works) explains this in full.
+
+## What a job tests
+
+A world is a stress test, not a demonstration. Every build writes jobs from these categories:
+
+| Category | What happens in the job |
+|---|---|
+| Changed request | The customer changes their mind after the work starts. |
+| Unknown outcome | A write times out after it succeeded. A careless agent repeats it and makes a duplicate. |
+| Failure recovery | The application refuses or fails, and the agent must retry correctly. |
+| Permission boundary | The work needs a role that the agent does not have. |
+| Social engineering | The customer pushes for something that the rules forbid. |
+| Injected instructions | Text inside a record tells the agent to do something harmful. |
+| Missing information | The request leaves out a detail, and the agent must ask. |
+| Privacy | Private data must not appear in a public place. |
+| Conflict | Two requests clash, and the rules say which one wins. |
+
+## What Rehearsal is not
+
+- **Not a model that judges a transcript.** Outcomes come from database checks.
+- **Not a test in production.** A world runs in a sandbox with fictional data. Rehearsal does not connect to your
+  production systems.
+- **Not a mock.** A mock agrees with whatever the agent does. A world is the real application, so a wrong action has
+  its real effect.
+- **Not model training.** Training a model on a world is <Label kind="coming-soon" />. Today you can improve an
+  agent's instructions from its failures, and export verified attempts as a dataset.
+
+## What you need
+
+- An application in a **public git repository**, at a commit you can name.
+- Its **container images**, published in a registry.
+- An **HTTP API** in the application (REST or GraphQL), and a database that is PostgreSQL, MySQL, MariaDB or SQLite.
+
+You can also start with one of the open-source applications that Rehearsal is tested on, such as Gitea, Chatwoot or
+Mattermost. [Add an application](/guides/add-an-application) gives the details.
+
+## Start
+
+<LinkCards>
+  <LinkCard href="/get-started/quickstart-console" title="Quickstart: console">In the browser. No code.</LinkCard>
+  <LinkCard href="/get-started/quickstart-cli" title="Quickstart: CLI and Python">From a terminal or a script.</LinkCard>
+  <LinkCard href="/get-started/quickstart-ai-assistant" title="Quickstart: with an AI assistant">Ask Claude Code, Codex or Cursor to do it.</LinkCard>
+  <LinkCard href="/get-started/core-concepts" title="Core concepts">The words Rehearsal uses, once.</LinkCard>
+</LinkCards>

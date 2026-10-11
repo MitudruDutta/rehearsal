@@ -17,7 +17,7 @@ services:
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U rehearsal"], interval: 2s, retries: 30 }
 
   migrate:
-    build: { context: .., dockerfile: Dockerfile, args: { NEXT_PUBLIC_CONTACT_EMAIL: "${NEXT_PUBLIC_CONTACT_EMAIL:-}", NEXT_PUBLIC_CONTACT_URL: "${NEXT_PUBLIC_CONTACT_URL:-}" } }
+    build: { context: .., dockerfile: Dockerfile, args: { NEXT_PUBLIC_CONTACT_EMAIL: "${NEXT_PUBLIC_CONTACT_EMAIL:-}", NEXT_PUBLIC_CONTACT_URL: "${NEXT_PUBLIC_CONTACT_URL:-}", NEXT_PUBLIC_DOCS_URL: "${NEXT_PUBLIC_DOCS_URL:-}" } }
     entrypoint: ["sh", "-c"]
     command: ["mkdir -p /var/lib/rehearsal/artifacts && chown rehearsal:rehearsal /var/lib/rehearsal/artifacts && chmod 2775 /var/lib/rehearsal/artifacts && exec rehearsal migrate"]
     user: root
@@ -60,7 +60,7 @@ services:
     depends_on: { postgres: { condition: service_healthy, required: false } }  # waits only when --profile localdb runs it
 
   api:
-    build: { context: .., dockerfile: Dockerfile, args: { NEXT_PUBLIC_CONTACT_EMAIL: "${NEXT_PUBLIC_CONTACT_EMAIL:-}", NEXT_PUBLIC_CONTACT_URL: "${NEXT_PUBLIC_CONTACT_URL:-}" } }
+    build: { context: .., dockerfile: Dockerfile, args: { NEXT_PUBLIC_CONTACT_EMAIL: "${NEXT_PUBLIC_CONTACT_EMAIL:-}", NEXT_PUBLIC_CONTACT_URL: "${NEXT_PUBLIC_CONTACT_URL:-}", NEXT_PUBLIC_DOCS_URL: "${NEXT_PUBLIC_DOCS_URL:-}" } }
     environment: *env
     ports: ["127.0.0.1:7800:7800"]
     healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7800/v1/health')"], interval: 10s, retries: 6 }
@@ -70,7 +70,7 @@ services:
     depends_on: { migrate: { condition: service_completed_successfully } }
 
   worker:
-    build: { context: .., dockerfile: Dockerfile, args: { NEXT_PUBLIC_CONTACT_EMAIL: "${NEXT_PUBLIC_CONTACT_EMAIL:-}", NEXT_PUBLIC_CONTACT_URL: "${NEXT_PUBLIC_CONTACT_URL:-}" } }
+    build: { context: .., dockerfile: Dockerfile, args: { NEXT_PUBLIC_CONTACT_EMAIL: "${NEXT_PUBLIC_CONTACT_EMAIL:-}", NEXT_PUBLIC_CONTACT_URL: "${NEXT_PUBLIC_CONTACT_URL:-}", NEXT_PUBLIC_DOCS_URL: "${NEXT_PUBLIC_DOCS_URL:-}" } }
     entrypoint: ["sh", "-c"]
     # Compose escapes $$ so the container's own ID reaches the runner, including scaled workers.
     command: ["umask 0002; REHEARSAL_WORKER_CONTAINER=$$HOSTNAME exec rehearsal worker"]

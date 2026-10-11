@@ -1,0 +1,146 @@
+---
+title: "Quickstart: with an AI assistant"
+description: Install the Rehearsal plugin in Claude Code, Codex or Cursor, sign in once, and ask the assistant to evaluate an agent.
+audience: Agent developers who use an AI coding assistant
+last_reviewed: 2026-10-11
+time: 10 minutes when a world is published
+cost: The assistant asks before it spends model budget
+needs: uv, and an account on a Rehearsal server
+---
+
+At the end of this page, your assistant has run an evaluation for you, after it asked for your agreement, and it
+has explained the result.
+
+## What you install
+
+The Rehearsal plugin adds two things to your assistant:
+
+- **The Rehearsal skill.** It teaches the assistant how to build a world, run an evaluation, read why an episode
+  failed and improve an agent. It also tells the assistant to state the cost and ask before it spends money.
+- **The Rehearsal MCP server.** It gives the assistant 18 tools. The server runs on your machine, and your assistant
+  starts it with [uv](https://docs.astral.sh/uv/). Install uv first.
+
+## Steps
+
+<Steps>
+<Step>
+
+### Install the plugin
+
+<Tabs items={["Claude Code", "Codex", "Cursor"]} groupId="assistant" persist>
+<Tab value="Claude Code">
+
+```bash
+claude plugin marketplace add MitudruDutta/rehearsal
+claude plugin install rehearsal@rehearsal
+```
+
+</Tab>
+<Tab value="Codex">
+
+```bash
+codex plugin marketplace add MitudruDutta/rehearsal
+codex plugin add rehearsal@rehearsal
+```
+
+</Tab>
+<Tab value="Cursor">
+
+```bash
+git clone --depth 1 https://github.com/MitudruDutta/rehearsal ~/.rehearsal-src
+ln -s ~/.rehearsal-src/agent-plugin ~/.cursor/plugins/local/rehearsal
+```
+
+Then restart Cursor.
+
+</Tab>
+</Tabs>
+
+For another assistant, see [AI assistants](/ai-assistants).
+
+</Step>
+<Step>
+
+### Sign in once
+
+Run this in a terminal, not in the chat:
+
+```bash
+uvx --from rehearsal-kit rehearsal login
+```
+
+For a server other than the default, add `--url <address>`. Your browser opens the console. Check that the code
+matches your terminal, then choose **Approve**. The sign-in is saved for your user only, and the assistant's tools
+use it.
+
+<Caution title="Do not paste a key into the chat">
+
+The assistant never needs to see your key. If an assistant asks for one, run `rehearsal login` instead.
+
+</Caution>
+
+</Step>
+<Step>
+
+### Check the connection
+
+Ask the assistant:
+
+```text
+Use Rehearsal to show my workspace status.
+```
+
+The assistant calls the `workspace_status` tool and reports your plan, what is left this month, and how many
+applications, worlds and agents exist. If the tool answers that nobody is signed in, do step 2 again.
+
+</Step>
+<Step>
+
+### Ask for an evaluation
+
+```text
+Evaluate my support agent on the published Gitea world. Use the dev jobs with two repeats.
+Its instructions are in agent/instructions.txt.
+```
+
+Before it starts the run, the assistant tells you how many episodes the run needs and what it will cost, and it
+waits for your yes. Then it gives you a link to watch the run in the console, and it reports the result: verified
+episodes, duplicates, false completions, and one line for each job that failed.
+
+</Step>
+</Steps>
+
+## What the assistant asks before
+
+Four tools spend model budget. The skill tells the assistant to ask before each one.
+
+| The assistant wants to | Typical cost | Typical time |
+|---|---|---|
+| Build a world (`build_world`) | $3 to $8 | 1 to 3 hours |
+| Run an evaluation (`run_evaluation`) | about $0.02 for each episode | 2 to 10 minutes |
+| Improve an agent (`improve_agent`) | under $0.10 | about 1 minute |
+| Re-check a world (`recheck_world`) | about $0.03 for each job | 5 to 20 minutes |
+
+Everything else is free. Your plan's limits apply to every request, whatever the assistant decides: see
+[What costs money](/get-started/what-costs-money).
+
+## More to ask
+
+```text
+Why did the failed episodes in that run fail? Group the causes.
+```
+
+```text
+Improve the agent from those failures, then compare the old and new versions on the holdout jobs.
+```
+
+```text
+Add our application from https://github.com/acme/helpdesk at commit <full_sha> and build a world for it.
+```
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/ai-assistants" title="AI assistants">Every client, and what an assistant may do.</LinkCard>
+  <LinkCard href="/ai-assistants/mcp-tools" title="MCP tool reference">The 18 tools, with arguments and costs.</LinkCard>
+</LinkCards>

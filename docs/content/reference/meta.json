@@ -1,0 +1,6 @@
+{
+  "title": "Reference",
+  "description": "Generated from the code",
+  "icon": "Braces",
+  "pages": ["---Interfaces---", "cli", "api", "python-sdk", "---Look up---", "errors", "configuration", "plans-and-limits"]
+}

@@ -1,0 +1,199 @@
+---
+title: Build a practice world
+description: Turn one application into a world your agents can practise in. What happens in each phase, how long it takes, and what to do when a build fails.
+audience: Agent developers
+last_reviewed: 2026-10-11
+time: 1 to 3 hours, without your attention
+cost: About $3 to $8 of model budget
+needs: an application
+---
+
+A build makes one world version from one application. The World Compiler does the work on the server. You start
+it, and you come back when it is done.
+
+## Before you start
+
+- [Add the application](/guides/add-an-application), with its commit and images pinned.
+- Check that no build of this application is in progress. Do not start a second one.
+- Decide a budget. A build stops itself when it has spent its budget.
+
+## Start the build
+
+<Cost amount="about $3 to $8">
+
+A build spends model budget from the workspace's monthly allowance. On the Free plan a build stops at $5, and the
+plan's one build is for the life of the workspace.
+
+</Cost>
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Open **Applications** and choose **Build world** beside the application. For an application that has a world
+already, the button is **Build new version**.
+
+The console opens the build view.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal build <app_id> --budget 6 --watch
+```
+
+The command prints the ids, then each event until the build ends. Ctrl+C stops the watching, not the build.
+
+| Option | Meaning |
+|---|---|
+| `--budget <usd>` | The spend at which the build stops itself |
+| `--scenarios <n>` | How many jobs to write. The default is 8. Fewer is faster and costs less |
+| `--watch` | Stay attached and print each event |
+
+</Tab>
+<Tab value="Python">
+
+```python
+from rehearsal.sdk import Rehearsal
+
+rh = Rehearsal()
+build = rh.worlds.build(app_id, scenario_target=8, budget_usd=6)
+job = rh.jobs.wait(build["job_id"])  # returns when the build has ended
+print(job["status"], build["world_version_id"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to build a world for the application. It calls `build_world` after it has told you the cost and
+you have agreed. It gives you a link to the build view, and it checks `job_status` about every 10 minutes.
+
+</Tab>
+</Ways>
+
+The answer has four ids: `job_id` (the build), `world_id`, `world_version_id` and `version`.
+
+## What happens in each phase
+
+<PhaseStrip />
+
+| Phase | What happens | Typical time |
+|---|---|---|
+| `inspect` | Reads the repository: services, configuration, roles and workflows | 2 to 5 minutes |
+| `plan` | Writes how to run the application in the sandbox | 3 to 10 minutes |
+| `materialize` | Starts the application, and repairs the configuration until it is healthy | 1 to 25 minutes |
+| `discover` | Finds the description of the API | under 1 minute |
+| `seed` | Creates fictional data, and one account with a lasting API credential for each role | 7 to 80 minutes |
+| `adapt` | Turns API operations into agent tools, and tests each one live | 10 to 70 minutes |
+| `author` | Plans the jobs, then writes them: the customer, the changes, the faults, the checks, a reference solution and wrong solutions | 5 to 20 minutes |
+| `validate` | Proves each job is fair, and repairs or keeps out the ones that are not | 10 to 60 minutes |
+| `package` | Saves a snapshot of the world and publishes the version | under 5 minutes |
+
+The typical times are the product's own estimates. One recorded build of Gitea, on 9 October 2026, took 2 minutes
+to inspect, 5 to plan, 17 to materialize (the compiler repaired the configuration twice), 15 to seed and 12 to
+adapt.
+
+The build view in the console shows the compiler's roles as they move between the source, the sandbox, the API,
+the database and the jobs. The feed beside it lists each action.
+
+## Watch, pause and stop
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+The build view has **Pause**, **Resume** and **Stop**. When the build is done, **Open the world** appears.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal jobs watch <job_id>
+rehearsal jobs show <job_id>
+rehearsal jobs pause <job_id>
+rehearsal jobs resume <job_id>
+rehearsal jobs stop <job_id>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+rh.jobs.get(job_id)["status"]
+rh.jobs.command(job_id, "pause")  # or "resume", "stop", "retry"
+```
+
+</Tab>
+<Tab value="MCP">
+
+The assistant uses `job_status` to read the state and `control_job` to pause, resume, stop or retry.
+
+</Tab>
+</Ways>
+
+| Command | Effect |
+|---|---|
+| Pause | The build stops at the next safe point and keeps its sandbox |
+| Resume | A paused build continues |
+| Stop | The build is cancelled. Its sandbox is removed within a minute |
+| Retry, **Restart build** | A failed or stopped build starts again from its last saved phase. Finished phases are not repeated |
+
+A build's status is one of `queued`, `running`, `paused`, `succeeded`, `failed` or `cancelled`.
+
+## When a build fails
+
+<Caution title="A restart repeats the same work">
+
+A restart helps only when the cause has gone away. If the same phase fails twice for the same reason, do not
+restart again. Never restart a build more than once without a change in between.
+
+</Caution>
+
+Read the error first: the build view shows it, and so does `rehearsal jobs show <job_id>`. The first phase that is
+not completed is the one that failed.
+
+| The error says | Cause | Does a restart help? | Do this |
+|---|---|---|---|
+| worker stopped, lease lost, sandbox removed | The machine that ran the build stopped | Yes | Restart the build |
+| rate limit, model unavailable | The model provider is busy, or no provider key is configured on the server | Yes, after a few minutes, if a key is configured | Wait 5 minutes, then restart |
+| billing, spend limit | A problem with the provider account on the server | No | The server's operator must fix it |
+| budget | The build reached its budget | No | Start a new build with a higher budget |
+| "the same problem came back N times" | The compiler met the same wall several times | No | Read the phase and the reason. Usually the application needs a fix: an image, a missing setup step, a sign-in method that is not supported |
+| sign-in tokens stopped working, invalid token, expired, 401 | The world's saved sign-ins expired | No | A build normally goes back to its `seed` phase by itself. If it still failed, start a new build |
+| could not be started, exited during startup, OOM | The application does not start in the sandbox | Once at most | Check that every image is listed and pinned, and that the application needs no outside service |
+| no scenario passed validation | No job could be made fair and checkable | No | Often the tools cannot do the application's main tasks. Check that the API covers them |
+
+A build that stays `queued` is not a failure: no worker is free to take it. On your own server, see
+[Troubleshooting](/self-hosting/troubleshooting#a-build-stays-queued).
+
+## After the build
+
+When the status is `succeeded`, the world version is published.
+
+- The world page lists the jobs with their split and stress category. A world with 6 to 8 approved jobs over
+  `train`, `dev` and `holdout` is normal. Fewer is fine when some jobs were kept out as unfair.
+- The version is pinned: its content hash, its images and its data. Results on the same version stay comparable.
+- When your application has a new release, add the new commit and images, and build a new version. Old results stay
+  attached to the old version.
+
+To see the jobs from a terminal:
+
+```bash
+rehearsal worlds scenarios <wv_id>
+```
+
+## Plan limits
+
+| Limit | Message when you reach it |
+|---|---|
+| Builds in the plan | `402`: "This workspace has used its ... world build" |
+| One build in progress at a time | `429`: "The ... plan runs 1 world build at a time, and one is in progress" |
+| The monthly model allowance | `402`: "This workspace has used its ... model allowance for this month" |
+
+A failed build can be restarted from its page and is not counted again. See
+[Plans and limits](/reference/plans-and-limits).
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/evaluate-an-agent" title="Evaluate an agent">Run an agent through the jobs of the world.</LinkCard>
+  <LinkCard href="/get-started/how-scoring-works" title="How scoring works">What the validate phase proves about each job.</LinkCard>
+</LinkCards>
