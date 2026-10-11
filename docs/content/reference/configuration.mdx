@@ -38,7 +38,7 @@ A person who only uses a server needs the first section. The rest is for the per
 | Setting | Default | What it changes |
 |---|---|---|
 | `REHEARSAL_SESSION_SECRET` | a development value | Signs browser sessions. Set a long random value on any server that others can reach. |
-| `REHEARSAL_SIGNUP` | `closed` | `open` lets any visitor create an account and an organisation. |
+| `REHEARSAL_SIGNUP` | `open` | Any visitor can create an account and an organisation. `closed` turns that off. |
 | `GOOGLE_CLIENT_ID` |  | A Google OAuth web client id. With it, the console offers "Sign in with Google". |
 | `REHEARSAL_ADMIN_EMAILS` |  | Operator admins, separated by commas. They see every workspace and can set any plan. Only a sign-in with Google counts. |
 | `REHEARSAL_PUBLIC_URL` | `http://localhost:7800` | Where browsers reach the server. Payment pages return here. |

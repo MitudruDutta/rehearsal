@@ -156,7 +156,8 @@ Save the key now: it is shown once. Keep the project id for the next step.
 
 ### Create your sign-in
 
-The console needs a person's account, and sign-up is closed by default. Create your account in the project:
+The console needs a person's account. Create yours in the project, so the console shows what your key makes. An
+account made on the sign-in page would start a new organisation instead:
 
 ```bash
 docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api \
@@ -232,7 +233,7 @@ renews itself.
 
 | Setting | Default | Decide |
 |---|---|---|
-| `REHEARSAL_SIGNUP` | `closed` | `open` lets any visitor create an account and an organisation. Keep it closed on a private server |
+| `REHEARSAL_SIGNUP` | `open` | Any visitor can create an account and an organisation. Set `closed` on a private server |
 | `REHEARSAL_MAX_ACTIVE_BUILDS`, `REHEARSAL_MAX_ACTIVE_RUNS` | 2 each in the Compose file | How many builds and runs one workspace may have in progress |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | Off | A model spend limit for the whole server, for a calendar month |
 | `REHEARSAL_PLANS` | `off` | Leave it off on a private server |

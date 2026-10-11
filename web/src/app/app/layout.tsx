@@ -185,6 +185,13 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       .then((m) => {
         setMe(m);
         setAuthed(true);
+        // "Start free" on the landing page leads here with ?mode=signup, which chooses a visitor's first screen.
+        // Once someone is signed in it has done its work, and the console should not carry it around.
+        const query = new URLSearchParams(window.location.search);
+        if (query.has("mode")) {
+          query.delete("mode");
+          window.history.replaceState(null, "", window.location.pathname + (query.size ? `?${query}` : ""));
+        }
       })
       .catch((e) => setAuthed(e instanceof ApiError && e.status === 401 ? false : true));
   }, [authed]);
@@ -194,6 +201,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     return (
       <Onboarding
         firstName={(me.user?.name || "").split(" ")[0]}
+
         onDone={(to) => {
           setAuthed(null); // reload /v1/me: the session now points at the new project
           if (to) go(to);

@@ -20,7 +20,7 @@ const CONTACT = process.env.NEXT_PUBLIC_CONTACT_URL || (CONTACT_EMAIL ? `mailto:
 const DOCS = process.env.NEXT_PUBLIC_DOCS_URL || "/docs";
 
 const TIERS = [
-  { name: "Free", price: "$0", unit: "forever", points: ["1 application, built into a practice world once", "40 episodes a month, run in quiet hours", "1 sandbox at a time"], cta: "Start free", href: "/app/" },
+  { name: "Free", price: "$0", unit: "forever", points: ["1 application, built into a practice world once", "40 episodes a month, run in quiet hours", "1 sandbox at a time"], cta: "Start free", href: "/app/?mode=signup" },
   { name: "Pro", price: "$29", unit: "/ month", points: ["3 applications, 2 world builds a month", "750 episodes a month, run at once", "2 sandboxes at a time", "Top-ups when you need more"], cta: "Buy Pro", href: "/app/billing/?buy=pro_monthly", featured: true },
   { name: "Team", price: "$149", unit: "/ month", points: ["20 applications, 8 world builds a month", "3,000 episodes a month", "4 sandboxes at a time", "Top-ups when you need more"], cta: "Buy Team", href: "/app/billing/?buy=team_monthly" },
   { name: "Enterprise", price: "Custom", unit: "from $3,000 a month", points: ["Runner inside your own cloud account", "Single sign-on, audit export, retention controls", "Private held-out evaluation of vendor agents"], cta: "Talk to us", href: CONTACT || "#cta" },

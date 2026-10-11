@@ -89,10 +89,10 @@ docker compose -f infra/compose.full.yaml --env-file infra/deploy.env --profile 
 
 ### A sign-in form, and no account
 
-**You see** the console's sign-in page. It has no link to create an account, and you have no account.
+**You see** the console's sign-in page, and you have no account.
 
-**Why:** the console needs a person's account, and sign-up is closed by default. The admin key from
-`rehearsal bootstrap` is for programs. It does not sign in to the console.
+**Why:** the console needs a person's account. The admin key from `rehearsal bootstrap` is for programs. It does
+not sign in to the console.
 
 **Fix:** create your account on the server, in the project that `bootstrap` printed:
 
@@ -101,7 +101,8 @@ docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api \
   rehearsal users add you@example.com --project <project_id>
 ```
 
-To let visitors create their own account, set `REHEARSAL_SIGNUP=open` and start the server again.
+**Create an account** on the sign-in page also works, unless the server has `REHEARSAL_SIGNUP=closed`. It starts a
+new organisation, which does not hold what the admin key made.
 
 ### Cannot reach Rehearsal at http://127.0.0.1:7800
 
