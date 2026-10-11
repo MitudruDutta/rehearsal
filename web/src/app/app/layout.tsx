@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Boxes, ChevronsUpDown, GitCompareArrows, LayoutDashboard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings, Sun, Terminal, UserRound } from "lucide-react";
+import { ArrowUpRight, Bot, Boxes, ChevronsUpDown, GitCompareArrows, LayoutDashboard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings, Sun, Terminal, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -53,6 +53,10 @@ class Boundary extends Component<{ children: ReactNode; route: string }, { error
     );
   }
 }
+
+// Where "Docs" leads, as on the landing page: the documentation site the build names, else the server's /docs,
+// which sends the reader there.
+const DOCS = process.env.NEXT_PUBLIC_DOCS_URL || "/docs";
 
 const NAV = [
   { href: routes.overview, label: "Overview", icon: LayoutDashboard, match: ["/app/"] },
@@ -264,7 +268,10 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           <Separator orientation="vertical" className="mx-1 h-5 md:hidden" />
           <span className="text-sm font-medium text-muted-foreground">{title}</span>
           <div className="ml-auto">
-            <Button asChild variant="ghost" size="sm"><Link href="/">About Rehearsal</Link></Button>
+            {/* the documentation, in a new tab so the console stays where it was */}
+            <Button asChild variant="ghost" size="sm">
+              <a href={DOCS} target="_blank" rel="noreferrer">Docs <ArrowUpRight className="text-muted-foreground" /></a>
+            </Button>
           </div>
         </header>
         <div className="mx-auto w-full max-w-[1500px] p-4 md:p-6">

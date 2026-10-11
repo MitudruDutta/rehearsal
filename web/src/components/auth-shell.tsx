@@ -24,11 +24,7 @@ function ThemeToggle() {
   );
 }
 
-export function AuthShell({ children, foot }: {
-  children: ReactNode;
-  /** small print under the work */
-  foot?: ReactNode;
-}) {
+export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-svh bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <div className="flex min-w-0 flex-col px-6 py-5 sm:px-10 lg:px-12">
@@ -42,7 +38,6 @@ export function AuthShell({ children, foot }: {
         <main className="flex flex-1 items-center py-8">
           <div className="mx-auto w-full max-w-[25rem]">{children}</div>
         </main>
-        {foot && <footer className="mx-auto w-full max-w-[25rem] text-xs leading-5 text-muted-foreground">{foot}</footer>}
       </div>
 
       <aside className="hidden p-2.5 lg:block lg:pl-0" aria-hidden="true">
