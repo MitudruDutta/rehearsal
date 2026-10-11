@@ -1,8 +1,8 @@
 # Rehearsal documentation site
 
 The site that users read: quickstarts, guides, reference, self-hosting, and trust. It is a static site, built with
-[Fumadocs](https://fumadocs.dev) on Next.js. The requirements are in `handbook/DOCS_PRD.md` and the plan is in
-`handbook/DOCS_SITE_PLAN.md`.
+[Fumadocs](https://fumadocs.dev) on Next.js. The requirements and the plan are kept outside the
+repository.
 
 ## Run it
 

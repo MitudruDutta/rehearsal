@@ -2,7 +2,7 @@ import { defineConfig, defineDocs, frontmatterSchema, metaSchema } from "fumadoc
 import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
 import { z } from "zod";
 
-// Front matter every page may carry, on top of title and description. See handbook/DOCS_SITE_PLAN.md section 4.2.
+// Front matter every page may carry, on top of title and description. From the docs plan, section 4.2.
 const pageSchema = frontmatterSchema.extend({
   /** who the page is written for, one line */
   audience: z.string().optional(),

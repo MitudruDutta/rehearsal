@@ -41,7 +41,7 @@ services:
       REHEARSAL_RUN_PARALLEL: ${REHEARSAL_RUN_PARALLEL:-4}
       REHEARSAL_BUILD_PARALLEL: ${REHEARSAL_BUILD_PARALLEL:-4}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      # Plans and payments (see handbook/BUSINESS.md). Leave REHEARSAL_PLANS=off on a private server.
+      # Plans and payments. Leave REHEARSAL_PLANS=off on a private server.
       REHEARSAL_PLANS: ${REHEARSAL_PLANS:-off}
       REHEARSAL_ADMIN_EMAILS: ${REHEARSAL_ADMIN_EMAILS:-}
       REHEARSAL_PUBLIC_URL: https://${REHEARSAL_DOMAIN:-localhost}
