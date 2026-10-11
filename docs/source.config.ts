@@ -86,11 +86,32 @@ function placeholders(): Transformer {
   };
 }
 
+/** What the highlighter's themes (GitHub light and dark) use for the names of commands, functions and classes. */
+const THEME_VIOLET: [RegExp, string][] = [
+  [/#6f42c1/gi, "#11707e"],
+  [/#b392f0/gi, "#56d4dd"],
+];
+
+/**
+ * The site has no violet: its accent is the blue of the landing page. The highlighter's themes paint the name of a
+ * command or a function violet, so those names take a teal instead. Plain blue is taken: flags and constants use it.
+ */
+function noViolet(): Transformer {
+  return {
+    name: "rehearsal:no-violet",
+    span(node) {
+      const style = node.properties.style;
+      if (typeof style !== "string") return;
+      node.properties.style = THEME_VIOLET.reduce((text, [from, to]) => text.replace(from, to), style);
+    },
+  };
+}
+
 export default defineConfig({
   mdxOptions: {
     rehypeCodeOptions: {
       ...rehypeCodeDefaultOptions,
-      transformers: [...(rehypeCodeDefaultOptions.transformers ?? []), placeholders()],
+      transformers: [...(rehypeCodeDefaultOptions.transformers ?? []), noViolet(), placeholders()],
     },
   },
 });

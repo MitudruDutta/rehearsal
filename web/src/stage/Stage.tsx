@@ -16,8 +16,8 @@ import { DESK_Z, ROOM_D, ROOM_W, RoomModel, type Actor, type Desk, type Tone } f
 
 export type Selection = { kind: "actor" | "desk"; id: string };
 
-const TONE_HEX: Record<Tone, string> = { go: "#3ecf8e", stop: "#ff6363", cue: "#f5a524", plain: "#c4bcff" };
-const TAPE = ["#8b7dff", "#3ecf8e", "#4f7cf0", "#f5a524", "#d65a8f", "#2aa0c0"]; // spike tape
+const TONE_HEX: Record<Tone, string> = { go: "#3ecf8e", stop: "#ff6363", cue: "#f5a524", plain: "#bccdff" };
+const TAPE = ["#f2e7cf", "#3ecf8e", "#4f7cf0", "#f5a524", "#d65a8f", "#2aa0c0"]; // spike tape
 const hex = (n: number) => "#" + n.toString(16).padStart(6, "0");
 
 function useWoodTexture() {
@@ -72,15 +72,15 @@ function Room({ mode, doorRef }: { mode: "episode" | "compiler"; doorRef: React.
       </mesh>
       <mesh position={[0.03, 2.3, 4.4]}>
         <boxGeometry args={[0.04, 1.8, 3]} />
-        <Mat color="#e9e6ff" emissive="#c9c2ff" emissiveIntensity={0.8} />
+        <Mat color="#e6edff" emissive="#bfd0ff" emissiveIntensity={0.8} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[12, 0.01, 7.4]} receiveShadow>
         <planeGeometry args={[9.6, 4.8]} />
-        <Mat color="#1f1b3a" />
+        <Mat color="#17203c" />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position={[12, 0.014, 7.4]} receiveShadow>
         <planeGeometry args={[9.0, 4.2]} />
-        <Mat color="#2a2452" />
+        <Mat color="#212e58" />
       </mesh>
       <RoundedBox args={[6.2, 0.12, 1.6]} radius={0.05} position={[12, 0.78, 7.4]} castShadow receiveShadow>
         <Mat color="#a0703f" />
@@ -213,7 +213,7 @@ function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: Roo
             </RoundedBox>
           </group>
         )}
-        {desk.kind === "books" && ["#6a5af0", "#4f7cf0", "#f5a524", "#3ecf8e"].map((c, i) => (
+        {desk.kind === "books" && ["#3a66e8", "#2aa0c0", "#f5a524", "#3ecf8e"].map((c, i) => (
           <mesh key={c} position={[-0.7 + i * 0.12, 1.02, 0]} castShadow><boxGeometry args={[0.1, 0.34 - i * 0.03, 0.26]} /><Mat color={c} /></mesh>
         ))}
         {desk.kind === "images" && [0, 1, 2].map((i) => (
@@ -229,7 +229,7 @@ function DeskPiece({ desk, model, onSelect, selected }: { desk: Desk; model: Roo
       </group>
     );
   }
-  const plate = selected ? "bg-primary text-primary-foreground" : tone === "go" ? "bg-success text-white" : tone === "stop" ? "bg-destructive text-white" : tone === "cue" ? "bg-warning text-black" : tone === "plain" ? "bg-[#e4e0ff] text-slate-900" : "bg-white/90 text-slate-900 hover:bg-white";
+  const plate = selected ? "bg-primary text-primary-foreground" : tone === "go" ? "bg-success text-white" : tone === "stop" ? "bg-destructive text-white" : tone === "cue" ? "bg-warning text-black" : tone === "plain" ? "bg-[#dfe8ff] text-slate-900" : "bg-white/90 text-slate-900 hover:bg-white";
   return (
     <group position={[desk.x, 0, DESK_Z]} {...hot}>
       {body}
@@ -308,7 +308,7 @@ function Person({ actor, onSelect, selected }: { actor: Actor; onSelect?: (s: Se
       {(hover || selected) && (
         <mesh rotation-x={-Math.PI / 2} position={[0, 0.03, 0]}>
           <ringGeometry args={[0.5, 0.64, 40]} />
-          <meshBasicMaterial color={selected ? "#8b7dff" : "#ffffff"} transparent opacity={selected ? 0.95 : 0.5} />
+          <meshBasicMaterial color={selected ? "#6f95ff" : "#ffffff"} transparent opacity={selected ? 0.95 : 0.5} />
         </mesh>
       )}
       <group ref={chip} position={[0, 2.0, 0]}>
@@ -362,7 +362,7 @@ function Links({ model }: { model: RoomModel }) {
           start={[l.a.x, 1.15, l.a.z]}
           end={[l.b.x, 1.15, l.b.z]}
           mid={[(l.a.x + l.b.x) / 2, 2.4, (l.a.z + l.b.z) / 2]}
-          color="#8b7dff"
+          color="#6f95ff"
           lineWidth={3}
           dashed
           dashScale={6}
@@ -397,7 +397,7 @@ function Flights({ model }: { model: RoomModel }) {
           <RoundedBox args={[0.36, 0.06, 0.26]} radius={0.02} castShadow><Mat color="#fbf8ef" /></RoundedBox>
           {it.label && (
             <Html position={[0, 0.4, 0]} center zIndexRange={[40, 20]}>
-              <div className="pointer-events-none whitespace-nowrap rounded-md bg-[#e4e0ff] px-2 py-0.5 text-[12px] font-semibold text-slate-900 shadow-md">{it.label}</div>
+              <div className="pointer-events-none whitespace-nowrap rounded-md bg-[#dfe8ff] px-2 py-0.5 text-[12px] font-semibold text-slate-900 shadow-md">{it.label}</div>
             </Html>
           )}
         </group>

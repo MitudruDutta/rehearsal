@@ -54,7 +54,7 @@ export default function Landing() {
       <header className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center px-5 before:absolute before:inset-x-0 before:top-0 before:h-2.5 before:bg-black">
         <div className="pointer-events-auto relative flex h-14 items-center rounded-b-2xl bg-black px-3 text-white [filter:drop-shadow(0_1px_0_rgb(255_255_255/0.14))_drop-shadow(0_14px_30px_rgb(0_0_0/0.45))] before:absolute before:right-full before:top-2.5 before:size-3.5 before:bg-[radial-gradient(circle_at_0_100%,transparent_13.5px,#000_14.5px)] after:absolute after:left-full after:top-2.5 after:size-3.5 after:bg-[radial-gradient(circle_at_100%_100%,transparent_13.5px,#000_14.5px)]">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-[9px] bg-[linear-gradient(180deg,#b9b1ff_0%,#8f83ff_24%,#6a5af0_25%,#4b3dd2_100%)] shadow-[inset_0_1px_0_rgb(255_255_255/0.5)]" aria-hidden="true"><span className="size-2.5 rotate-45 rounded-[2px] bg-white" /></span>
+            <span className="grid size-8 place-items-center rounded-[9px] bg-[linear-gradient(180deg,#b7cbff_0%,#86a6ff_24%,#3a66e8_25%,#2446b8_100%)] shadow-[inset_0_1px_0_rgb(255_255_255/0.5)]" aria-hidden="true"><span className="size-2.5 rotate-45 rounded-[2px] bg-white" /></span>
             <span className="font-heading text-[19px] font-bold tracking-tight">Rehearsal</span>
           </Link>
           <nav className="ml-11 hidden items-center gap-[22px] text-[15px] text-white/60 md:flex">
