@@ -21,6 +21,7 @@ Description=$what (timer)
 [Timer]
 OnBootSec=2min
 OnUnitActiveSec=$every
+AccuracySec=5s
 [Install]
 WantedBy=timers.target
 UNIT
