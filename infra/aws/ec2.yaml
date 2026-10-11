@@ -5,8 +5,11 @@ Description: >-
   larger machine (m7i-flex.large, 8 GB) that the small one starts when a job is due and that stops itself after
   15 idle minutes (infra/aws/wake-worker.sh, infra/aws/stop-when-idle.sh). Both share the data folder on EFS.
   Every type here is allowed on the AWS Free plan, so it runs on credits and never on a card.
-  Deploy: aws cloudformation deploy --template-file infra/aws/ec2.yaml --stack-name rehearsal-prod
-          --region ap-south-1 --parameter-overrides KeyPairName=rehearsal AdminCidr=203.0.113.7/32
+  Deploy: aws cloudformation deploy --template-file infra/aws/ec2.yaml --stack-name rehearsal-prod --region ap-south-1
+          --capabilities CAPABILITY_IAM --parameter-overrides KeyPairName=rehearsal AdminCidr=203.0.113.7/32
+          Subnets=subnet-a,subnet-b,subnet-c (the default VPC's three)
+  Then on the web machine: compose --profile public up -d migrate api caddy; sudo infra/aws/install-timer.sh wake
+  and on the worker machine: compose up -d --scale worker=3 worker; sudo infra/aws/install-timer.sh idle
 
 Parameters:
   InstanceType:
