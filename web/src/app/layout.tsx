@@ -5,7 +5,7 @@ import "./globals.css";
 import "./fonts/fonts.css";
 
 export const metadata: Metadata = {
-  title: "Rehearsal: a dress rehearsal for your AI agent",
+  title: "Rehearsal: prove your AI agent works before it ships",
   description:
     "Rehearsal builds a working copy of your application with fictional data, runs your AI agent through real jobs, and verifies every outcome in the app's own database before you deploy.",
 };

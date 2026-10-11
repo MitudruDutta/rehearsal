@@ -202,7 +202,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 font-mono text-xs text-foreground/75">
-              <span className="flex items-center gap-2"><Mark className="size-4 text-primary" /> Rehearsal, a dress rehearsal for your AI agent</span>
+              <span className="flex items-center gap-2"><Mark className="size-4 text-primary" /> Rehearsal. Prove your AI agent works before it ships.</span>
               <span className="flex gap-6"><a href="#features" className="hover:text-foreground">Product</a><a href="#pricing" className="hover:text-foreground">Pricing</a><Link href="/app/" className="hover:text-foreground">Console</Link></span>
             </div>
           </footer>
