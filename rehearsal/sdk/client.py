@@ -16,7 +16,7 @@ from typing import Any, Iterator
 
 import httpx
 
-DEFAULT_URL = "http://127.0.0.1:7800"
+DEFAULT_URL = "https://rehearsalkit.xyz"  # the hosted service; a server of your own: `rehearsal login --url ...` or REHEARSAL_URL
 
 
 def config_path() -> Path:

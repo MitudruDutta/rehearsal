@@ -20,13 +20,13 @@ pip install "rehearsal-kit[server]"          # add [telemetry] for Neatlogs trac
 
 Python 3.11 or newer. Running a server needs Linux with Docker; the client runs anywhere.
 
-## Use a Rehearsal server
+## Use Rehearsal
 
-Create a project and an API key in the console, then:
+Sign in to the hosted service at https://rehearsalkit.xyz, or to a server of your own with `--url`:
 
 ```bash
-export REHEARSAL_URL=https://your-rehearsal-server
-export REHEARSAL_API_KEY=rh_...
+rehearsal login                               # opens the console in your browser; approve the code shown
+# rehearsal login --url https://your-rehearsal-server
 
 rehearsal apps add my-app --git https://github.com/you/app --commit <sha> \
   --image web=registry.example.com/app@sha256:<digest>
@@ -40,7 +40,7 @@ From Python:
 ```python
 from rehearsal.sdk import Rehearsal
 
-rh = Rehearsal()  # reads REHEARSAL_URL and REHEARSAL_API_KEY
+rh = Rehearsal()  # your sign-in, or REHEARSAL_URL and REHEARSAL_API_KEY (in CI)
 app = rh.applications.create("my-app", {"kind": "git", "url": "https://github.com/you/app", "commit": "<sha>"},
                              images={"web": "registry.example.com/app@sha256:<digest>"})
 build = rh.worlds.build(app["id"])
@@ -54,6 +54,7 @@ Bring your own agent, in any language, through the episode API: read `rh.externa
 ```bash
 rehearsal up          # local PostgreSQL in Docker, then migrations
 rehearsal bootstrap   # organisation, project, and the first admin key
+export REHEARSAL_URL=http://127.0.0.1:7800   # point the CLI at this server
 rehearsal serve       # API and console on http://127.0.0.1:7800
 rehearsal worker      # builds and evaluations; needs Docker access
 ```

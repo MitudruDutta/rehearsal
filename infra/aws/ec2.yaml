@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Rehearsal production server on EC2: one instance running the Docker Compose stack in infra/compose.full.yaml
+  (API, console, workers and their sandboxes, Caddy for HTTPS), with a fixed public IP. m7i-flex.large (2 vCPU,
+  8 GB, x86) is allowed on the AWS Free plan, so it runs on credits and never on a card.
+  Deploy: aws cloudformation deploy --template-file infra/aws/ec2.yaml --stack-name rehearsal-prod
+          --region ap-south-1 --parameter-overrides KeyPairName=rehearsal AdminCidr=203.0.113.7/32
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m7i-flex.large
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+  AdminCidr:
+    Type: String
+    Description: The only address allowed to SSH in, e.g. 203.0.113.7/32
+  DiskGb:
+    Type: Number
+    Default: 40
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+
+Resources:
+  ServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Rehearsal server - SSH from the admin address, HTTP and HTTPS from anywhere
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AdminCidr }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIpv6: "::/0" }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIpv6: "::/0" }
+      Tags: [{ Key: project, Value: rehearsal }]
+
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmiId
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds: [!GetAtt ServerSecurityGroup.GroupId]
+      MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: { VolumeSize: !Ref DiskGb, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      # First boot: Docker, a swap file for world builds, the data folder, and the code. Secrets are copied in
+      # over SSH afterwards (infra/deploy.env), never put in user data.
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y docker.io docker-compose-v2 git rsync
+          systemctl enable --now docker
+          usermod -aG docker ubuntu
+          if [ ! -f /swapfile ]; then fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
+          mkdir -p /var/lib/rehearsal && chown ubuntu:ubuntu /var/lib/rehearsal
+          if [ ! -d /srv/rehearsal ]; then git clone https://github.com/MitudruDutta/rehearsal.git /srv/rehearsal && chown -R ubuntu:ubuntu /srv/rehearsal; fi
+          touch /var/lib/rehearsal/.bootstrapped
+      Tags:
+        - { Key: Name, Value: rehearsal-prod }
+        - { Key: project, Value: rehearsal }
+
+  ServerIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Server
+      Tags: [{ Key: project, Value: rehearsal }]
+
+Outputs:
+  PublicIp:
+    Description: Point the domain's A record here
+    Value: !Ref ServerIp
+  InstanceId:
+    Value: !Ref Server

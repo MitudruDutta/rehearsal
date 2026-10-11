@@ -72,7 +72,7 @@ export function Profile() {
 export function CodingAgents() {
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(location.origin), []);
-  const login = `uvx --from rehearsal-kit rehearsal login${origin && origin !== "http://127.0.0.1:7800" ? ` --url ${origin}` : ""}`;
+  const login = `uvx --from rehearsal-kit rehearsal login${origin && origin !== "https://rehearsalkit.xyz" ? ` --url ${origin}` : ""}`;
   const mcp = JSON.stringify({ mcpServers: { rehearsal: { command: "uvx", args: ["--from", "rehearsal-kit[mcp]>=0.1.1", "rehearsal", "mcp"] } } }, null, 2);
   const step = (title: string, description: ReactNode, commands: string[]) => (
     <Card>

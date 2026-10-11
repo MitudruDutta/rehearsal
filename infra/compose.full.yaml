@@ -28,6 +28,10 @@ services:
       REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
       REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
       REHEARSAL_MODEL_PARTICIPANT: ${REHEARSAL_MODEL_PARTICIPANT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
+      REHEARSAL_MODEL_IMPROVER: ${REHEARSAL_MODEL_IMPROVER:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
       NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       NEATLOGS_API_KEY: ${NEATLOGS_API_KEY:-}
@@ -54,6 +58,7 @@ services:
       DODO_PRODUCT_PRO_YEARLY: ${DODO_PRODUCT_PRO_YEARLY:-}
       DODO_PRODUCT_TEAM_MONTHLY: ${DODO_PRODUCT_TEAM_MONTHLY:-}
       DODO_PRODUCT_TEAM_YEARLY: ${DODO_PRODUCT_TEAM_YEARLY:-}
+      REHEARSAL_MONTHLY_ALLOWANCE_USD: ${REHEARSAL_MONTHLY_ALLOWANCE_USD:-0}
       DODO_PRODUCT_EPISODES_1000: ${DODO_PRODUCT_EPISODES_1000:-}
       DODO_PRODUCT_BUILD_1: ${DODO_PRODUCT_BUILD_1:-}
       # only Caddy (same compose network) reaches the API, so trust its X-Forwarded-Proto for Secure cookies
@@ -90,9 +95,10 @@ services:
   caddy:
     profiles: ["public"]
     image: caddy:2.10-alpine
-    command: ["caddy", "reverse-proxy", "--from", "${REHEARSAL_DOMAIN:-localhost}", "--to", "api:7800"]
+    # infra/Caddyfile: the domain serves Rehearsal, www redirects to it
+    environment: { REHEARSAL_DOMAIN: "${REHEARSAL_DOMAIN:-localhost}" }
     ports: ["80:80", "443:443"]
-    volumes: [caddy-data:/data]
+    volumes: [caddy-data:/data, ./Caddyfile:/etc/caddy/Caddyfile:ro]
     restart: unless-stopped
     depends_on: { api: { condition: service_healthy } }
 
