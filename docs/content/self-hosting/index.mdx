@@ -42,7 +42,7 @@ Two things follow from this design:
 | | Hosted | Your server |
 |---|---|---|
 | Plans and limits | Every workspace is on a plan | Off, unless you set `REHEARSAL_PLANS=on` |
-| Sign-up | Open | Closed, unless you set `REHEARSAL_SIGNUP=open`. You create accounts with `rehearsal users add` |
+| Sign-up | Open | Open, unless you set `REHEARSAL_SIGNUP=closed`. `rehearsal users add` puts a person in a project that exists |
 | Model calls | On Rehearsal's model account, within the plan's allowance | On your provider keys. Your provider bills you |
 | A spend limit | The plan's monthly allowance | `REHEARSAL_MONTHLY_ALLOWANCE_USD` for the whole server. Off by default |
 | Application source from a folder | No | Yes, for folders inside `REHEARSAL_SOURCE_ROOTS` |

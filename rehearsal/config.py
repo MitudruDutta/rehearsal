@@ -34,7 +34,7 @@ class Settings:
     neatlogs_api_key: str | None
     kaggle_api_token: str | None
     google_client_id: str | None = None  # enables "Sign in with Google" in the console
-    signup: str = "closed"  # "open" lets anyone create an organisation and get an admin key from the console
+    signup: str = "open"  # anyone can create an organisation and get an admin key from the console; "closed" turns that off
     lease_seconds: int = 60
     db_pool_size: int = 10  # connections each process keeps; managed databases cap the total (Supabase free: 60)
     db_max_overflow: int = 20
@@ -106,7 +106,7 @@ def settings() -> Settings:
         neatlogs_api_key=env("NEATLOGS_API_KEY") or None,
         kaggle_api_token=env("KAGGLE_API_TOKEN") or None,
         google_client_id=env("GOOGLE_CLIENT_ID") or None,
-        signup=env("REHEARSAL_SIGNUP", "closed"),
+        signup=env("REHEARSAL_SIGNUP", "open"),
         lease_seconds=int(env("REHEARSAL_LEASE_SECONDS", "60")),
         db_pool_size=int(env("REHEARSAL_DB_POOL_SIZE", "10")),
         db_max_overflow=int(env("REHEARSAL_DB_MAX_OVERFLOW", "20")),

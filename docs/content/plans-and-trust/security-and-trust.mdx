@@ -105,7 +105,7 @@ On your own server, these are yours to do.
 | Give Rehearsal a machine of its own | A worker controls Docker on its host, and runs images that applications name |
 | Build only from sources and images you trust | A world runs their code. For source from people you do not know, isolate each job in its own virtual machine |
 | Set a long random `REHEARSAL_SESSION_SECRET` | It signs browser sessions |
-| Keep `REHEARSAL_SIGNUP=closed` | Otherwise any visitor can create an account and an organisation |
+| Set `REHEARSAL_SIGNUP=closed` on a server that strangers can reach | Sign-up is open by default, so any visitor can create an account and an organisation |
 | Serve it over HTTPS | The Compose file's `public` profile obtains a certificate |
 | Give the database its own role and schema | Some managed databases expose the `public` schema through an API of their own |
 | List operator admins in `REHEARSAL_ADMIN_EMAILS` only when you need them | An operator admin sees every workspace. Only a sign-in with Google counts for this list |

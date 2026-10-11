@@ -157,7 +157,7 @@ NOTES: dict[str, str] = {
     "run-bundle": "Not built yet. The command prints a message that says so and exits.",
     "up": "On a server whose `REHEARSAL_DATABASE_URL` points at another machine, this only applies migrations.",
     "bootstrap": "Run it once on a new server. The key is shown once: save it.",
-    "users": "The console needs a person's account, and sign-up is closed by default. This command creates the account.",
+    "users": "The console needs a person's account. This command creates one in the project you name.",
     "worker": "Builds and evaluations run only while a worker is running. See [Install with Docker Compose](/self-hosting/install-with-docker-compose).",
     "mcp": "AI assistants start this command themselves. See [AI assistants](/ai-assistants).",
 }
@@ -1476,7 +1476,7 @@ CONFIG: list[tuple[str, str, str, str]] = [
     ("Database and files", "REHEARSAL_DOWNLOADS_DIR", "`downloads` in the data folder", "A folder that the server offers at `/downloads`, for the client package."),
     ("Database and files", "REHEARSAL_ENV_FILE", "`.env`", "A file of settings to read at start. A value in the real environment wins over the file."),
     ("Sign-in", "REHEARSAL_SESSION_SECRET", "a development value", "Signs browser sessions. Set a long random value on any server that others can reach."),
-    ("Sign-in", "REHEARSAL_SIGNUP", "`closed`", "`open` lets any visitor create an account and an organisation."),
+    ("Sign-in", "REHEARSAL_SIGNUP", "`open`", "Any visitor can create an account and an organisation. `closed` turns that off."),
     ("Sign-in", "GOOGLE_CLIENT_ID", "", "A Google OAuth web client id. With it, the console offers \"Sign in with Google\"."),
     ("Sign-in", "REHEARSAL_ADMIN_EMAILS", "", "Operator admins, separated by commas. They see every workspace and can set any plan. Only a sign-in with Google counts."),
     ("Sign-in", "REHEARSAL_PUBLIC_URL", "`http://localhost:7800`", "Where browsers reach the server. Payment pages return here."),

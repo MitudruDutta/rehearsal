@@ -44,7 +44,7 @@ rehearsal serve                                          # API and console on ht
 rehearsal worker                                         # builds and evaluations; needs Docker
 ```
 
-Open http://127.0.0.1:7800 and sign in with the account from step 4. The console needs a person's account; an API key does not sign in to it. Sign-up is closed unless `REHEARSAL_SIGNUP=open`, so `rehearsal users add` creates the first login. It attaches the person to the bootstrap project, so the console and the CLI see the same data.
+Open http://127.0.0.1:7800 and sign in with the account from step 4. The console needs a person's account; an API key does not sign in to it. `rehearsal users add` creates that login and attaches the person to the bootstrap project, so the console and the CLI see the same data. Sign-up is open by default: an account made on the sign-in page starts a new organisation of its own. Set `REHEARSAL_SIGNUP=closed` to turn that off.
 
 Keep API keys in `.env`, which is ignored by git. Do not leave `REHEARSAL_SESSION_SECRET` at the example value: it signs the console's session cookies.
 
@@ -106,7 +106,7 @@ A Python client is in `rehearsal.sdk`; see [handbook/PACKAGE.md](handbook/PACKAG
 | `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | see `.env.example` | Model fallback chains, written `provider:model[,provider:model...]` |
 | `NEBIUS_API_KEY` and other provider keys | none | One key for each provider the chains name |
 | `NEATLOGS_API_KEY` | none | Enables tracing; everything runs without it |
-| `REHEARSAL_SIGNUP` | `closed` | `open` lets anyone create a workspace from the console |
+| `REHEARSAL_SIGNUP` | `open` | Anyone can create a workspace from the console. `closed` turns that off |
 | `REHEARSAL_MAX_ACTIVE_BUILDS`, `REHEARSAL_MAX_ACTIVE_RUNS` | `0` (no limit) | Jobs one workspace may run at once |
 | `REHEARSAL_RUN_PARALLEL`, `REHEARSAL_BUILD_PARALLEL` | `4` | Evaluation shards per run; scenarios validated at once in a build |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |

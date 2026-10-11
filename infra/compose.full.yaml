@@ -32,7 +32,7 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       NEATLOGS_API_KEY: ${NEATLOGS_API_KEY:-}
       LITELLM_API_KEY: ${LITELLM_API_KEY:-}
-      REHEARSAL_SIGNUP: ${REHEARSAL_SIGNUP:-closed}
+      REHEARSAL_SIGNUP: ${REHEARSAL_SIGNUP:-open}
       # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.
       REHEARSAL_MAX_ACTIVE_BUILDS: ${REHEARSAL_MAX_ACTIVE_BUILDS:-2}
       REHEARSAL_MAX_ACTIVE_RUNS: ${REHEARSAL_MAX_ACTIVE_RUNS:-2}

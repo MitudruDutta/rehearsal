@@ -31,6 +31,13 @@ export async function api<T = Json>(path: string, init: RequestInit & { body?: a
   return res.json() as Promise<T>;
 }
 
+/** The API writes its reasons in lower case, for logs. A person reads a sentence. */
+export function sentence(message: string) {
+  const text = message.trim();
+  if (!text) return "Something went wrong. Try again.";
+  return text.charAt(0).toUpperCase() + text.slice(1) + (/[.!?]$/.test(text) ? "" : ".");
+}
+
 export const post = <T = Json>(path: string, body: any = {}) => api<T>(path, { method: "POST", body });
 export const del = <T = Json>(path: string) => api<T>(path, { method: "DELETE" });
 

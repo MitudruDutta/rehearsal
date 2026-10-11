@@ -19,15 +19,17 @@ script, an AI assistant, a CI job) use an API key. A key belongs to one project 
 
 On the hosted service, choose **Create an account** on the sign-in page, or sign in with Google.
 
-On a server that your team runs, sign-up is closed by default, so the sign-in page has no **Create an account**
-link. The operator creates your account on the server:
+On a server that your team runs, **Create an account** is there by default too. An account made that way starts
+a new organisation of its own. To work in a project that already exists, ask the operator to add you to it on
+the server:
 
 ```bash
 rehearsal users add you@example.com --project <project_id>
 ```
 
 The command asks for a password of 10 characters or more. With `--no-password`, the person signs in with Google
-only. To let visitors create their own account and organisation, the operator sets `REHEARSAL_SIGNUP=open`.
+only. An operator who does not want visitors to create accounts sets `REHEARSAL_SIGNUP=closed`. The sign-in page
+then has no **Create an account** link.
 
 ## Sign in a terminal
 
