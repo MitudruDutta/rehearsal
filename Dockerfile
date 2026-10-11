@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv/rehearsal
 COPY pyproject.toml ./
-COPY handbook/PACKAGE.md handbook/
+COPY PACKAGE.md ./
 COPY rehearsal/ rehearsal/
 COPY examples/ examples/
 # Supabase's public root CA, for REHEARSAL_DATABASE_URL=...?sslmode=verify-full&sslrootcert=/srv/rehearsal/infra/certs/...

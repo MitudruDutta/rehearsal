@@ -19,3 +19,5 @@ web/*.tsbuildinfo
 .claude/settings.local.json
 .codex/
 infra/deploy.env
+# internal notes, plans and runbooks: kept locally, not published
+handbook/
