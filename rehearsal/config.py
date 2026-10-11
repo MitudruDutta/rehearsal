@@ -47,6 +47,7 @@ class Settings:
     admin_emails: frozenset[str] = frozenset()  # operator admins (Google sign-in only): see every workspace, set any plan
     quiet_hours_utc: str = "18:00-02:00"  # when free-plan evaluations may start (HH:MM-HH:MM, UTC; may cross midnight)
     public_url: str = "http://localhost:7800"  # where browsers reach this server (checkout return links)
+    docs_url: str = ""  # the documentation site; /docs redirects there (else to the API reference at /api/docs)
     dodo_api_key: str | None = None
     dodo_webhook_key: str | None = None
     dodo_environment: str = "test_mode"  # test_mode | live_mode
@@ -118,6 +119,7 @@ def settings() -> Settings:
         admin_emails=frozenset(e.strip().lower() for e in env("REHEARSAL_ADMIN_EMAILS", "").split(",") if e.strip()),
         quiet_hours_utc=quiet,
         public_url=env("REHEARSAL_PUBLIC_URL", "http://localhost:7800").rstrip("/"),
+        docs_url=env("REHEARSAL_DOCS_URL", "").rstrip("/"),
         dodo_api_key=env("DODO_PAYMENTS_API_KEY") or None,
         dodo_webhook_key=env("DODO_PAYMENTS_WEBHOOK_KEY") or None,
         dodo_environment=env("DODO_PAYMENTS_ENVIRONMENT", "test_mode"),

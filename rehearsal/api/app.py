@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 
 import yaml
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 from sqlalchemy import func, select, text
@@ -74,7 +74,8 @@ from .auth import (
 )
 from .limits import RequestBodyLimit
 
-app = FastAPI(title="Rehearsal API", version="1.0.0")
+# The API reference lives under /api/; /docs is the documentation site's address on this host (see docs_redirect).
+app = FastAPI(title="Rehearsal API", version="1.0.0", docs_url="/api/docs", redoc_url="/api/redoc")
 app.add_middleware(RequestBodyLimit)
 Money = Annotated[FiniteFloat, Field(ge=0)]
 
@@ -237,6 +238,14 @@ def me(p: Principal = Depends(principal)) -> dict[str, Any]:
             "user": {"name": user.name, "email": user.email, "picture_url": user.picture_url} if user else None,
             "needs_onboarding": bool(p.user_id) and not p.project_id,
         }
+
+
+@app.get("/docs", include_in_schema=False)
+@app.get("/docs/", include_in_schema=False)
+def docs_redirect() -> RedirectResponse:
+    """The documentation site is deployed on its own (REHEARSAL_DOCS_URL), so it stays up when this server is down.
+    Without one, /docs is this server's API reference."""
+    return RedirectResponse(settings().docs_url or "/api/docs", status_code=307)
 
 
 @app.get("/v1/health")
