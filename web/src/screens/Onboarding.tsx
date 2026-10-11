@@ -1,6 +1,5 @@
 "use client";
 
-import { Mark } from "@/components/mark";
 import { ArrowRight, Boxes, CircleAlert, GitBranch, LoaderCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";

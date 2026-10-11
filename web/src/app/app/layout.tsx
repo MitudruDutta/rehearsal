@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Mark } from "@/components/mark";
 import {
   Sidebar,
   SidebarContent,
@@ -113,7 +114,7 @@ function SidebarBrand() {
   if (state === "collapsed" && !isMobile)
     return (
       <button type="button" onClick={toggleSidebar} aria-label="Expand sidebar" title="Expand sidebar (Ctrl+B)" className="group/brand grid size-8 place-items-center rounded-md outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-        <span className="size-3.5 rotate-45 rounded-[3px] bg-primary group-hover/brand:hidden group-focus-visible/brand:hidden" aria-hidden="true" />
+        <Mark className="size-5 text-primary group-hover/brand:hidden group-focus-visible/brand:hidden" />
         <PanelLeftOpen className="hidden size-4 group-hover/brand:block group-focus-visible/brand:block" />
       </button>
     );
@@ -121,7 +122,7 @@ function SidebarBrand() {
   return (
     <div className="flex items-center gap-1">
       <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5">
-        <span className="size-3.5 shrink-0 rotate-45 rounded-[3px] bg-primary" aria-hidden="true" />
+        <Mark className="size-5 shrink-0 text-primary" />
         <span className="font-heading text-lg font-bold">Rehearsal</span>
       </Link>
       <Button variant="ghost" size="icon-sm" onClick={toggleSidebar} aria-label={label} title={label} className="text-muted-foreground">

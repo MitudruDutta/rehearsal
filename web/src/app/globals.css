@@ -166,3 +166,8 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* the "Powered by" strip: its track holds the logos twice, so moving it half its width loops seamlessly */
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}

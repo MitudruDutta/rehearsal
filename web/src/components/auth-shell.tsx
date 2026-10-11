@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/components/mark";
 import { Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
@@ -33,7 +34,7 @@ export function AuthShell({ children, foot }: {
       <div className="flex min-w-0 flex-col px-6 py-5 sm:px-10 lg:px-12">
         <header className="flex min-h-9 items-center justify-between gap-3">
           <Link href="/" className="-ml-1 flex items-center gap-2.5 rounded-md px-1 py-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50" aria-label="Rehearsal home">
-            <span className="size-3.5 rotate-45 rounded-[3px] bg-primary" aria-hidden="true" />
+            <Mark className="size-5 text-primary" />
             <span className="font-heading text-lg font-bold">Rehearsal</span>
           </Link>
           <ThemeToggle />
