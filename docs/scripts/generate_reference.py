@@ -1282,7 +1282,7 @@ def api_page() -> tuple[str, int]:
         "## The schema",
         "",
         "The server publishes the OpenAPI document of this API at `/openapi.json`, and a page to try each operation at",
-        "`/docs`. `rehearsal openapi` prints the same document on a machine that has the server installed.",
+        "`/api/docs`. `rehearsal openapi` prints the same document on a machine that has the server installed.",
     ]
     return "\n".join(out).rstrip("\n") + "\n", len(operations)
 
@@ -1480,6 +1480,7 @@ CONFIG: list[tuple[str, str, str, str]] = [
     ("Sign-in", "GOOGLE_CLIENT_ID", "", "A Google OAuth web client id. With it, the console offers \"Sign in with Google\"."),
     ("Sign-in", "REHEARSAL_ADMIN_EMAILS", "", "Operator admins, separated by commas. They see every workspace and can set any plan. Only a sign-in with Google counts."),
     ("Sign-in", "REHEARSAL_PUBLIC_URL", "`http://localhost:7800`", "Where browsers reach the server. Payment pages return here."),
+    ("Sign-in", "REHEARSAL_DOCS_URL", "", "The documentation site. `/docs` on the server redirects there; without it, `/docs` opens the API reference at `/api/docs`."),
     ("Models", "REHEARSAL_MODEL_COMPILER", "a chain of three hosted models", "The model chain that builds worlds."),
     ("Models", "REHEARSAL_MODEL_AGENT", "the same chain", "The model chain for agents that have no model of their own."),
     ("Models", "REHEARSAL_MODEL_PARTICIPANT", "a chain of two smaller models", "The model chain that plays the simulated customer."),
