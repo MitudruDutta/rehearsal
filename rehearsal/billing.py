@@ -243,6 +243,13 @@ def _more(plan: Plan) -> str:
     return ""
 
 
+def application_room(s: Session, project_id: str) -> int | None:
+    """How many more applications the workspace's plan allows; None when it has no limit. Locks the workspace."""
+    org = lock(s, project_id)
+    plan = plan_of(s, org)
+    return None if plan.applications is None else plan.applications - usage(s, org, plan)["applications"]
+
+
 def check_application(s: Session, project_id: str, adding: int = 1) -> None:
     org = lock(s, project_id)
     plan = plan_of(s, org)

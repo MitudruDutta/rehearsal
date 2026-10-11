@@ -321,16 +321,24 @@ def create_application(body: ApplicationIn, p: Principal = Depends(principal)) -
 
 @app.post("/v1/applications/import-catalog", status_code=201)
 def import_catalog(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
-    """Registers the pinned third-party applications from the packaged catalog (rehearsal/assets/catalog.yaml)."""
+    """Registers the pinned third-party applications from the packaged catalog (rehearsal/assets/catalog.yaml). A plan
+    with an application limit gets as many as it has room for, in catalog order (the free plan: the first, Gitea), so
+    a new free workspace can start from a sample instead of being refused."""
     catalog = yaml.safe_load(files("rehearsal").joinpath("assets/catalog.yaml").read_text())
     out = []
     with session() as s:
         have = set(s.scalars(select(Application.name).where(Application.project_id == p.project_id)))
-        billing.check_application(s, p.project_id, adding=len([e for e in catalog["applications"] if e["name"] not in have]))
+        new = [e["name"] for e in catalog["applications"] if e["name"] not in have]
+        room = billing.application_room(s, p.project_id)
+        if room is not None and new and room < 1:
+            billing.check_application(s, p.project_id, adding=1)  # no room at all: refused with the plan's own message
+        take = set(new if room is None else new[:room])
         for entry in catalog["applications"]:
             existing = s.scalars(select(Application).where(Application.project_id == p.project_id, Application.name == entry["name"])).first()
             if existing:
                 out.append(_cols(existing))
+                continue
+            if entry["name"] not in take:
                 continue
             a = Application(
                 project_id=p.project_id, name=entry["name"], source=entry["source"], images=entry.get("images", {}),
