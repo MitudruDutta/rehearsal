@@ -50,6 +50,15 @@ def _app(client, auth, name="a") -> str:
     return r.json()["id"]
 
 
+def test_a_new_free_workspace_starts_with_one_sample_application(plans):
+    _, auth, _ = _workspace(f"free-{uuid.uuid4().hex[:6]}")
+    client = TestClient(app)
+    first = client.post("/v1/applications/import-catalog", headers=auth)
+    assert first.status_code == 201 and [a["name"] for a in first.json()] == ["gitea"]  # as many as the plan allows
+    assert client.get("/v1/billing", headers=auth).json()["usage"]["applications"] == 1
+    assert client.post("/v1/applications/import-catalog", headers=auth).status_code == 402  # full: no more samples
+
+
 def test_free_plan_limits_are_enforced(plans):
     from tests.integration.test_api_queue import _published_world
 
@@ -194,7 +203,7 @@ def test_dodo_webhook_and_sync_apply_subscription_and_top_ups(plans, monkeypatch
         assert billing.plan_of(s, s.get(Organization, org_id)).name == "free"
 
 
-def test_one_free_workspace_per_account_and_browser(plans, monkeypatch):
+def test_one_free_workspace_per_account_but_a_browser_can_hold_several(plans, monkeypatch):
     from rehearsal.api import auth
     from rehearsal.api.auth import COOKIE, DEVICE_COOKIE, user_cookie
 
@@ -209,9 +218,9 @@ def test_one_free_workspace_per_account_and_browser(plans, monkeypatch):
     first = TestClient(app, cookies={COOKIE: user_cookie(ids[0], None), DEVICE_COOKIE: device})
     assert first.post("/v1/onboarding/workspace", json={"organization": "A co"}).status_code == 201
     assert first.post("/v1/onboarding/workspace", json={"organization": "A again"}).status_code == 409  # one owned workspace per account
+    # a second person signing up on the same computer gets a workspace too: the browser does not limit sign-ups
     other = TestClient(app, cookies={COOKIE: user_cookie(ids[1], None), DEVICE_COOKIE: device})
-    r = other.post("/v1/onboarding/workspace", json={"organization": "B co"})
-    assert r.status_code == 409 and "browser" in r.json()["detail"]
+    assert other.post("/v1/onboarding/workspace", json={"organization": "B co"}).status_code == 201
 
 
 def test_google_sign_in_takes_over_an_unverified_password_account(db):

@@ -131,8 +131,8 @@ export function Onboarding({ firstName, onDone }: { firstName: string; onDone: (
             <CircleAlert />
             <AlertDescription>
               {sentence(error)}
-              {/* A workspace is refused for reasons that belong to the account (it owns one already, or this browser
-                  made one with another account). The way on is the other account, so the way to it is offered here. */}
+              {/* A workspace is refused for a reason that belongs to the account (it owns one already). The way on is
+                  the account that owns it, so the way to it is offered here. */}
               {step === 0 && (
                 <Button type="button" variant="outline" size="sm" className="mt-2 text-foreground" onClick={signOut}>
                   Sign in with another account
@@ -164,7 +164,7 @@ export function Onboarding({ firstName, onDone }: { firstName: string; onDone: (
         {step === 1 && (
           <div className="grid gap-3">
             <div role="radiogroup" aria-label="Where the first application comes from" className="grid gap-3">
-              <Choice icon={Sparkles} title="Start with the sample applications" body="Open-source applications pinned to exact versions, Gitea, Chatwoot and Saleor among them, ready to build." selected={source === "samples"} onSelect={() => setSource("samples")} />
+              <Choice icon={Sparkles} title="Start with the sample applications" body="Open-source applications pinned to exact versions, Gitea, Chatwoot and Saleor among them, ready to build. The free plan starts with Gitea." selected={source === "samples"} onSelect={() => setSource("samples")} />
               <Choice icon={GitBranch} title="Connect your own application" body="A Git repository at a pinned commit, plus the container images you already publish." selected={source === "own"} onSelect={() => setSource("own")} />
             </div>
             {source === "own" && (

@@ -185,14 +185,14 @@ def default_project(s: Session, user_id: str) -> str | None:
     return row[0] if row else None
 
 
-FREE_PER_DEVICE_DAYS = 90
 FREE_PER_IP = (3, 30)  # workspaces, days: offices and campuses share one address
 
 
 def create_workspace(user_id: str, org_name: str, project_name: str, *, device: str | None = None, ip: str | None = None) -> str:
     """Onboarding: an organisation owned by this user, with its first project. With plans on, every new workspace
-    starts on the free plan, so one person cannot collect free plans: one owned workspace per account, one per
-    browser, and a few per network address (operator admins are exempt)."""
+    starts on the free plan, so one person cannot collect free plans: one owned workspace per account and a few per
+    network address (operator admins are exempt). The browser is recorded with the workspace but does not limit it:
+    at launch, a second person on a shared computer must be able to sign up."""
     from .. import billing
 
     with session() as s:
@@ -205,8 +205,6 @@ def create_workspace(user_id: str, org_name: str, project_name: str, *, device: 
             if owned:
                 raise HTTPException(409, "This account already owns a workspace. Sign in to it, or ask us if you need a second one.")
             since = lambda days: now() - timedelta(days=days)  # noqa: E731
-            if device and s.scalar(select(func.count()).select_from(Organization).where(Organization.created_device == device, Organization.created_at >= since(FREE_PER_DEVICE_DAYS))):
-                raise HTTPException(409, "This browser already created a free workspace. Sign in with the account that owns it, or upgrade that workspace.")
             if ip and (s.scalar(select(func.count()).select_from(Organization).where(Organization.created_ip == ip, Organization.created_at >= since(FREE_PER_IP[1]))) or 0) >= FREE_PER_IP[0]:
                 raise HTTPException(429, "Too many free workspaces were created from this network recently. Try again later, or contact us.")
         org = Organization(name=org_name.strip(), owner_name=user.name, created_device=device, created_ip=ip)
@@ -241,7 +239,7 @@ def user_cookie(user_id: str, project_id: str | None) -> str:
 
 ROLE_SCOPES = {"owner": ["admin"], "admin": ["admin"], "member": ["read", "write", "evaluator"]}
 BEFORE_ONBOARDING = {"/v1/me", "/v1/onboarding/workspace"}
-DEVICE_COOKIE = "rh_device"  # random per browser, set at sign-in; limits free workspaces per browser  # all a signed-in user without a project may call
+DEVICE_COOKIE = "rh_device"  # random per browser, set at sign-in; recorded on new workspaces, never used to refuse one  # all a signed-in user without a project may call
 
 
 def _user_principal(request: Request, data: dict[str, object]) -> Principal:

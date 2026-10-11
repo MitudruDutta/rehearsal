@@ -190,7 +190,7 @@ Fields of `source`:
 
 <Operation method="POST" path="/v1/applications/import-catalog" access="write" />
 
-Registers the pinned third-party applications from the packaged catalog (rehearsal/assets/catalog.yaml).
+Registers the pinned third-party applications from the packaged catalog (rehearsal/assets/catalog.yaml). A plan with an application limit gets as many as it has room for, in catalog order (the free plan: the first, Gitea), so a new free workspace can start from a sample instead of being refused.
 
 **Answers** `201`.
 
