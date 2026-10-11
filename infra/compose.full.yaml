@@ -92,6 +92,27 @@ services:
     restart: unless-stopped
     depends_on: { migrate: { condition: service_completed_successfully } }
 
+  # "Ask AI" on the docs site: answers from the pages in docs/content, through Caddy at /assistant. It gets the model
+  # settings and keys only, nothing else from this file, and answers only pages on DOCS_ASSISTANT_ORIGINS.
+  assistant:
+    profiles: ["public"]
+    image: node:22-bookworm-slim
+    working_dir: /docs
+    command: ["node", "scripts/assistant.mjs"]
+    user: "1000:1000"
+    volumes: ["../docs:/docs:ro"]
+    environment:
+      DOCS_ASSISTANT_HOST: 0.0.0.0
+      DOCS_ASSISTANT_BEHIND_PROXY: "1"
+      DOCS_ASSISTANT_ORIGINS: ${DOCS_ASSISTANT_ORIGINS:-https://docs.rehearsalkit.xyz}
+      DOCS_ASSISTANT_MODEL: ${DOCS_ASSISTANT_MODEL:-}
+      REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-}
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
+    restart: unless-stopped
+
   caddy:
     profiles: ["public"]
     image: caddy:2.10-alpine
