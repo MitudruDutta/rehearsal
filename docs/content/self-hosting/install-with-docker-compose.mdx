@@ -18,7 +18,7 @@ database too.
 
 - Read the [Requirements](/self-hosting/requirements).
 - Install Docker Engine with the Compose plugin, and git.
-- Have a model provider key, for example a Nebius key.
+- Have a model provider key, for example from OpenAI, Anthropic, Google or Groq. See [Requirements](/self-hosting/requirements#a-model-provider-key) for the full list.
 
 ## Steps
 
@@ -49,7 +49,7 @@ Open `infra/deploy.env` and set the values below. Never commit this file.
 |---|---|
 | `REHEARSAL_SESSION_SECRET` | A random value. Make one with `openssl rand -hex 32` |
 | `REHEARSAL_DATABASE_URL` | Your database: see the next step |
-| `NEBIUS_API_KEY`, or another provider's key | Your model provider key |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or another provider's key | Your model provider key |
 | `REHEARSAL_DOMAIN` | Your server's host name. For a test on your own machine, leave the example value |
 
 <Caution title="Put comments on their own lines">
