@@ -338,7 +338,7 @@ The docs use the console's theme, defined in `web/src/app/globals.css`. They do 
 | Border | `#e6e7ea` | `#212226` | Rules, card and code edges |
 | Text | `#0f1012` | `#f7f8f8` | Body and headings |
 | Secondary text | `#6b6f76` | `#8a8f98` | Captions, metadata, inactive navigation |
-| Primary (violet) | `#5b4ee6` | `#6a5af0` | Links, the current navigation item, focus, primary button |
+| Primary (blue) | `#2b59d9` | `#3a66e8` | Links, the current navigation item, focus, primary button |
 | Success | `#12875a` | `#3ecf8e` | "Verified", a passed check, a tip |
 | Warning | `#a35c00` | `#f5a524` | "Costs money", a caution |
 | Danger | `#d93036` | `#ff6363` | "Rule violated", an action that cannot be undone |
@@ -348,7 +348,7 @@ The docs use the console's theme, defined in `web/src/app/globals.css`. They do 
 Colour rules:
 
 - The four status colours carry meaning and nothing else. They are never used for decoration.
-- Violet is for things the reader can act on. Body text is never violet.
+- The accent blue is for things the reader can act on. Body text is never that blue.
 - Every text and background pair meets WCAG 2.2 AA contrast in both themes.
 
 Fonts:

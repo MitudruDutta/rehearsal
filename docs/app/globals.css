@@ -3,9 +3,9 @@
 @import "fumadocs-ui/css/preset.css";
 
 /* The console's "Studio" theme, copied from web/src/app/globals.css so the docs and the console look like one
-   product: near-black canvas, graphite surfaces, one violet accent for things the reader can act on, and four
+   product: near-black canvas, graphite surfaces, one blue accent for things the reader can act on (the ink blue of the wave on the landing page), and four
    status colours that carry meaning and nothing else (green = verified or a tip, amber = costs money or a caution,
-   red = rule violated or cannot be undone, blue = a note). */
+   red = rule violated or cannot be undone, a lighter azure = a note). */
 :root {
   --radius: 0.6rem;
   --background: #ffffff;
@@ -14,13 +14,13 @@
   --card-foreground: #0f1012;
   --popover: #ffffff;
   --popover-foreground: #0f1012;
-  --primary: #5b4ee6;
+  --primary: #2b59d9;
   --primary-foreground: #ffffff;
   --secondary: #f4f4f6;
   --secondary-foreground: #1d1e22;
   --muted: #f6f6f7;
   --muted-foreground: #6b6f76;
-  --accent: #f0eefe;
+  --accent: #edf2fe;
   --accent-foreground: #1d1e22;
   --destructive: #d93036;
   --success: #12875a;
@@ -28,15 +28,15 @@
   --info: #2f66d8;
   --border: #e6e7ea;
   --input: #dcdde1;
-  --ring: #5b4ee6;
+  --ring: #2b59d9;
   --sidebar: #ffffff;
   --sidebar-foreground: #1d1e22;
-  --sidebar-primary: #5b4ee6;
+  --sidebar-primary: #2b59d9;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0eefe;
+  --sidebar-accent: #edf2fe;
   --sidebar-accent-foreground: #0f1012;
   --sidebar-border: #e6e7ea;
-  --sidebar-ring: #5b4ee6;
+  --sidebar-ring: #2b59d9;
   /* body text that is quieter than headings but still passes AA on the page colour */
   --prose: #33363c;
   --code-surface: #fafafb;
@@ -49,13 +49,13 @@
   --card-foreground: #f7f8f8;
   --popover: #121316;
   --popover-foreground: #f7f8f8;
-  --primary: #6a5af0;
+  --primary: #3a66e8;
   --primary-foreground: #ffffff;
   --secondary: #16171a;
   --secondary-foreground: #f7f8f8;
   --muted: #141518;
   --muted-foreground: #8a8f98;
-  --accent: #1c1b2b;
+  --accent: #151c2e;
   --accent-foreground: #f7f8f8;
   --destructive: #ff6363;
   --success: #3ecf8e;
@@ -63,26 +63,26 @@
   --info: #4c9aff;
   --border: #212226;
   --input: #2a2c31;
-  --ring: #8b7dff;
+  --ring: #6f95ff;
   --sidebar: #08090a;
   --sidebar-foreground: #c9ccd2;
-  --sidebar-primary: #6a5af0;
+  --sidebar-primary: #3a66e8;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #17171f;
+  --sidebar-accent: #141a26;
   --sidebar-accent-foreground: #f7f8f8;
   --sidebar-border: #212226;
-  --sidebar-ring: #8b7dff;
+  --sidebar-ring: #6f95ff;
   --prose: #c9ccd2;
   --code-surface: #0f1012;
 }
 
-/* Violet as text: links and the current navigation item. The button violet is too dark to read on the dark
+/* The accent as text: links and the current navigation item. The button blue is too dark to read on the dark
    canvas, so text uses the lighter step there. */
 :root {
-  --link: #5b4ee6;
+  --link: #2b59d9;
 }
 .dark {
-  --link: #9d91ff;
+  --link: #8aabff;
 }
 
 /* Fumadocs reads these; point its status colours at ours so callouts match the console. */
@@ -177,7 +177,7 @@
   }
 }
 
-/* Sidebar: every section in one list. Quiet until needed; the current page is the only violet item. */
+/* Sidebar: every section in one list. Quiet until needed; the current page is the only item in the accent blue. */
 #nd-sidebar {
   width: var(--fd-sidebar-width);
   background: var(--background);
@@ -269,7 +269,7 @@
   color: var(--foreground);
   font-weight: 600;
 }
-/* Links are the only violet text in the body. */
+/* Links are the only text in the accent blue in the body. */
 .rh-prose :where(a):not([data-card], .not-prose *) {
   color: var(--link);
   text-decoration-line: underline;

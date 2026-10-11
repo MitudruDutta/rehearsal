@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* "Studio": developer-tool neutrals (near-black canvas, graphite surfaces, off-white text) after Linear and
-   Raycast, one violet accent for action and focus, and status colours reserved for meaning: green = verified
-   (Supabase-style), red = violated (Raycast-style), amber = standby/unknown. Chart colours pass the colour-blind,
+   Raycast, one blue accent for action and focus (the ink blue of the wave on the landing page), and status colours reserved for meaning: green = verified
+   (Supabase-style), red = violated (Raycast-style), amber = standby/unknown. Chart colours (blue, teal, pink, green, slate) pass the colour-blind,
    lightness, and contrast checks in both modes. */
 :root {
   --radius: 0.6rem;
@@ -15,13 +15,13 @@
   --card-foreground: #0f1012;
   --popover: #ffffff;
   --popover-foreground: #0f1012;
-  --primary: #5b4ee6;
+  --primary: #2b59d9;
   --primary-foreground: #ffffff;
   --secondary: #f4f4f6;
   --secondary-foreground: #1d1e22;
   --muted: #f6f6f7;
   --muted-foreground: #6b6f76;
-  --accent: #f0eefe;
+  --accent: #edf2fe;
   --accent-foreground: #1d1e22;
   --destructive: #d93036;
   --success: #12875a;
@@ -29,20 +29,20 @@
   --info: #2f66d8;
   --border: #e6e7ea;
   --input: #dcdde1;
-  --ring: #5b4ee6;
-  --chart-1: #5b4ee6;
+  --ring: #2b59d9;
+  --chart-1: #2b59d9;
   --chart-2: #0e8fb3;
   --chart-3: #c23b78;
   --chart-4: #4f7d17;
-  --chart-5: #2f66d8;
+  --chart-5: #3f4a5a;
   --sidebar: #fbfbfc;
   --sidebar-foreground: #1d1e22;
-  --sidebar-primary: #5b4ee6;
+  --sidebar-primary: #2b59d9;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0eefe;
+  --sidebar-accent: #edf2fe;
   --sidebar-accent-foreground: #0f1012;
   --sidebar-border: #ececef;
-  --sidebar-ring: #5b4ee6;
+  --sidebar-ring: #2b59d9;
 }
 
 .dark {
@@ -52,13 +52,13 @@
   --card-foreground: #f7f8f8;
   --popover: #121316;
   --popover-foreground: #f7f8f8;
-  --primary: #6a5af0;
+  --primary: #3a66e8;
   --primary-foreground: #ffffff;
   --secondary: #16171a;
   --secondary-foreground: #f7f8f8;
   --muted: #141518;
   --muted-foreground: #8a8f98;
-  --accent: #1c1b2b;
+  --accent: #151c2e;
   --accent-foreground: #f7f8f8;
   --destructive: #ff6363;
   --success: #3ecf8e;
@@ -66,20 +66,20 @@
   --info: #4c9aff;
   --border: #212226;
   --input: #2a2c31;
-  --ring: #8b7dff;
-  --chart-1: #8b7dff;
+  --ring: #6f95ff;
+  --chart-1: #8aabff;
   --chart-2: #2aa0c0;
   --chart-3: #d65a8f;
   --chart-4: #6f9a32;
-  --chart-5: #4f7cf0;
+  --chart-5: #c2c9d6;
   --sidebar: #0b0c0e;
   --sidebar-foreground: #c9ccd2;
-  --sidebar-primary: #6a5af0;
+  --sidebar-primary: #3a66e8;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #17171f;
+  --sidebar-accent: #141a26;
   --sidebar-accent-foreground: #f7f8f8;
   --sidebar-border: #1a1b1f;
-  --sidebar-ring: #8b7dff;
+  --sidebar-ring: #6f95ff;
 }
 
 /* "Wave": the landing hero, which sits on Hokusai's Great Wave. Its colours come from the print: the night-sea

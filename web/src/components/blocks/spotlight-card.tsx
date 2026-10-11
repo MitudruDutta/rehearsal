@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 /* Adapted from React Bits' SpotlightCard (reactbits.dev): a radial light that follows the pointer, in the accent colour. */
 
-export function SpotlightCard({ children, className, color = "rgba(139, 125, 255, 0.18)" }: PropsWithChildren<{ className?: string; color?: string }>) {
+export function SpotlightCard({ children, className, color = "rgba(111, 149, 255, 0.18)" }: PropsWithChildren<{ className?: string; color?: string }>) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [on, setOn] = useState(false);
