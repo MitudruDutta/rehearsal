@@ -16,7 +16,7 @@ A person who only uses a server needs the first section. The rest is for the per
 
 | Setting | Default | What it changes |
 |---|---|---|
-| `REHEARSAL_URL` | `http://127.0.0.1:7800` | The server that the CLI, the Python client and the MCP server talk to. It takes precedence over a saved sign-in. |
+| `REHEARSAL_URL` | `https://rehearsalkit.xyz` | The server that the CLI, the Python client and the MCP server talk to. It takes precedence over a saved sign-in. |
 | `REHEARSAL_API_KEY` |  | The key they use. It takes precedence over a saved sign-in. |
 | `REHEARSAL_CONFIG` | `~/.config/rehearsal/config.json` | Where `rehearsal login` saves the sign-in. |
 | `REHEARSAL_DEBUG` |  | Set it to anything to make the CLI log each HTTP request. |
@@ -48,9 +48,9 @@ A person who only uses a server needs the first section. The rest is for the per
 
 | Setting | Default | What it changes |
 |---|---|---|
-| `REHEARSAL_MODEL_COMPILER` | a chain of three hosted models | The model chain that builds worlds. |
+| `REHEARSAL_MODEL_COMPILER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | The model chain that builds worlds. |
 | `REHEARSAL_MODEL_AGENT` | the same chain | The model chain for agents that have no model of their own. |
-| `REHEARSAL_MODEL_PARTICIPANT` | a chain of two smaller models | The model chain that plays the simulated customer. |
+| `REHEARSAL_MODEL_PARTICIPANT` | smaller models from Groq, OpenAI, then Google | The model chain that plays the simulated customer. |
 | `REHEARSAL_MODEL_IMPROVER` | the compiler's chain | The model chain that proposes a better agent. |
 | `REHEARSAL_PRICES` | `{}` | Prices for models whose provider reports none: JSON of `provider:model` to `[input, output]` in US dollars for a million tokens. |
 | `REHEARSAL_PRICING_FILE` | `pricing.yaml` | A file of the same prices, each with its source and date. |
@@ -58,31 +58,40 @@ A person who only uses a server needs the first section. The rest is for the per
 ### Model chains
 
 A chain is a list of `provider:model`, separated by commas. The server tries them in order, and moves to the
-next when a provider fails or is not configured.
+next when a provider fails or has no key. An empty setting means the default.
 
 ```dotenv
-REHEARSAL_MODEL_COMPILER=nebius:deepseek-ai/DeepSeek-V4.1-Flash,google:gemini-3.5-flash
+REHEARSAL_MODEL_COMPILER=anthropic:claude-sonnet-4-5,openai:gpt-5-mini,google:gemini-2.5-flash
 ```
 
 ### Providers
 
-A provider works when its key is set. Every provider is reached through an OpenAI-compatible API.
+A provider works when its key is set. Every provider is reached through an OpenAI-compatible API. A job
+starts only when the server knows the price of its models, so that spending limits hold.
 
-| Provider | Key | Address |
-|---|---|---|
-| `nebius` | `NEBIUS_API_KEY` | `https://api.tokenfactory.nebius.com/v1` |
-| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
-| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` |
-| `google` | `GOOGLE_API_KEY` | `https://generativelanguage.googleapis.com/v1beta/openai/` |
-| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
-| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com/v1/` |
-| `litellm` | `LITELLM_API_KEY` | `LITELLM_BASE_URL` |
-| `modal` | `MODAL_PROXY_TOKEN_ID` and `MODAL_PROXY_TOKEN_SECRET` | `MODAL_BASE_URL` |
-| `local` | `REHEARSAL_LOCAL_API_KEY` | `REHEARSAL_LOCAL_BASE_URL` |
-| `custom` | `REHEARSAL_CUSTOM_API_KEY` | `REHEARSAL_CUSTOM_BASE_URL` |
+| Provider | Key | Address | Prices |
+|---|---|---|---|
+| `nebius` | `NEBIUS_API_KEY` | `https://api.tokenfactory.nebius.com/v1` | its own price list |
+| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | its own price list |
+| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | this host's price, from OpenRouter's host listing |
+| `google` | `GOOGLE_API_KEY` | `https://generativelanguage.googleapis.com/v1beta/openai/` | the vendor's price, as OpenRouter lists it |
+| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | the vendor's price, as OpenRouter lists it |
+| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com/v1/` | the vendor's price, as OpenRouter lists it |
+| `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` | the vendor's price, as OpenRouter lists it |
+| `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` | the vendor's price, as OpenRouter lists it |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | the vendor's price, as OpenRouter lists it |
+| `together` | `TOGETHER_API_KEY` | `https://api.together.xyz/v1` | this host's price, from OpenRouter's host listing |
+| `fireworks` | `FIREWORKS_API_KEY` | `https://api.fireworks.ai/inference/v1` | this host's price, from OpenRouter's host listing |
+| `cerebras` | `CEREBRAS_API_KEY` | `https://api.cerebras.ai/v1` | this host's price, from OpenRouter's host listing |
+| `nvidia` | `NVIDIA_API_KEY` | `https://integrate.api.nvidia.com/v1` | `pricing.yaml` or `REHEARSAL_PRICES` |
+| `litellm` | `LITELLM_API_KEY` | `LITELLM_BASE_URL` | its own price list |
+| `modal` | `MODAL_PROXY_TOKEN_ID` and `MODAL_PROXY_TOKEN_SECRET` | `MODAL_BASE_URL` | `pricing.yaml` or `REHEARSAL_PRICES` |
+| `local` | `REHEARSAL_LOCAL_API_KEY` | `REHEARSAL_LOCAL_BASE_URL` | `pricing.yaml` or `REHEARSAL_PRICES` |
+| `custom` | `REHEARSAL_CUSTOM_API_KEY` | `REHEARSAL_CUSTOM_BASE_URL` | `pricing.yaml` or `REHEARSAL_PRICES` |
 
 `local` is for a model server on your own machine, such as vLLM. `custom` is for any other
-OpenAI-compatible address. `rehearsal prices` shows the price the server uses for each configured model.
+OpenAI-compatible address. When a provider's source has no price for a model, add one to `pricing.yaml` or
+`REHEARSAL_PRICES`. `rehearsal prices` shows the price the server uses for each configured model.
 
 ## Workers and sandboxes
 

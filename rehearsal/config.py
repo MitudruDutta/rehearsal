@@ -91,7 +91,7 @@ def settings() -> Settings:
     quiet = env("REHEARSAL_QUIET_HOURS_UTC", "18:00-02:00")
     if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d", quiet):
         raise ValueError(f"REHEARSAL_QUIET_HOURS_UTC must look like 18:00-02:00, not {quiet!r}")
-    default_chain = "groq:openai/gpt-oss-120b,openrouter:openai/gpt-oss-120b,google:gemini-2.5-flash"
+    default_chain = "groq:openai/gpt-oss-120b,openai:gpt-5-mini,anthropic:claude-haiku-4-5,google:gemini-2.5-flash,openrouter:openai/gpt-oss-120b"
     return Settings(
         database_url=env(
             "REHEARSAL_DATABASE_URL", "postgresql+psycopg://rehearsal:rehearsal@127.0.0.1:5433/rehearsal"
@@ -99,10 +99,10 @@ def settings() -> Settings:
         data_dir=data_dir,
         session_secret=env("REHEARSAL_SESSION_SECRET", "dev-only-session-secret"),
         source_roots=roots,
-        model_compiler=env("REHEARSAL_MODEL_COMPILER", default_chain),
-        model_agent=env("REHEARSAL_MODEL_AGENT", default_chain),
-        model_participant=env("REHEARSAL_MODEL_PARTICIPANT", "groq:openai/gpt-oss-20b,google:gemini-2.5-flash"),
-        model_improver=env("REHEARSAL_MODEL_IMPROVER", env("REHEARSAL_MODEL_COMPILER", default_chain)),
+        model_compiler=env("REHEARSAL_MODEL_COMPILER") or default_chain,
+        model_agent=env("REHEARSAL_MODEL_AGENT") or default_chain,
+        model_participant=env("REHEARSAL_MODEL_PARTICIPANT") or "groq:openai/gpt-oss-20b,openai:gpt-5-nano,google:gemini-2.5-flash",
+        model_improver=env("REHEARSAL_MODEL_IMPROVER") or env("REHEARSAL_MODEL_COMPILER") or default_chain,
         neatlogs_api_key=env("NEATLOGS_API_KEY") or None,
         kaggle_api_token=env("KAGGLE_API_TOKEN") or None,
         google_client_id=env("GOOGLE_CLIENT_ID") or None,

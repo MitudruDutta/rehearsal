@@ -18,7 +18,9 @@
       "webhook_signing_secret": "whsec_[A-Za-z0-9+/=_-]{20,}",
       "openai_style_key": "\\bsk-[A-Za-z0-9_-]{20,}",
       "supabase_access_token": "sbp_[a-f0-9]{40}",
-      "postgres_url_password": "(?<=://)[^:/@\\s]+:[^@/\\s]{8,}(?=@)"
+      "postgres_url_password": "(?<=://)[^:/@\\s]+:[^@/\\s]{8,}(?=@)",
+      "cloudflare_api_token": "cfat_[A-Za-z0-9_-]{20,}",
+      "hex_secret_64": "\\b[a-f0-9]{64}\\b"
     }
   },
   "checkpoints": {
