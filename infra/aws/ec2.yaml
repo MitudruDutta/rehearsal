@@ -1,0 +1,204 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Rehearsal production on EC2, sized to spend as little as possible. A small machine (t3.small) is always on and
+  serves the site, console and API with HTTPS (Caddy) on the fixed IP. The workers and their sandboxes run on a
+  larger machine (m7i-flex.large, 8 GB) that the small one starts when a job is due and that stops itself after
+  15 idle minutes (infra/aws/wake-worker.sh, infra/aws/stop-when-idle.sh). Both share the data folder on EFS.
+  Every type here is allowed on the AWS Free plan, so it runs on credits and never on a card.
+  Deploy: aws cloudformation deploy --template-file infra/aws/ec2.yaml --stack-name rehearsal-prod --region ap-south-1
+          --capabilities CAPABILITY_IAM --parameter-overrides KeyPairName=rehearsal AdminCidr=203.0.113.7/32
+          Subnets=subnet-a,subnet-b,subnet-c (the default VPC's three)
+  Then on the web machine: compose --profile public up -d migrate api caddy; sudo infra/aws/install-timer.sh wake
+  and on the worker machine: compose up -d --scale worker=3 worker; sudo infra/aws/install-timer.sh idle
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m7i-flex.large # the worker machine
+  WebInstanceType:
+    Type: String
+    Default: t3.small # the always-on machine: site, console, API
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The default VPC's three subnets, one per Availability Zone, for the EFS mount targets
+  IpOn:
+    Type: String
+    Default: web
+    AllowedValues: [web, worker]
+    Description: Which machine holds the fixed IP (worker only while the web machine is being set up)
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+  AdminCidr:
+    Type: String
+    Description: The only address allowed to SSH in, e.g. 203.0.113.7/32
+  DiskGb:
+    Type: Number
+    Default: 40
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+
+Conditions:
+  IpOnWeb: !Equals [!Ref IpOn, web]
+
+Resources:
+  ServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Rehearsal server - SSH from the admin address, HTTP and HTTPS from anywhere
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AdminCidr }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIpv6: "::/0" }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIpv6: "::/0" }
+      Tags: [{ Key: project, Value: rehearsal }]
+
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmiId
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds: [!GetAtt ServerSecurityGroup.GroupId]
+      MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: { VolumeSize: !Ref DiskGb, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      # First boot: Docker, a swap file for world builds, the data folder, and the code. Secrets are copied in
+      # over SSH afterwards (infra/deploy.env), never put in user data.
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y docker.io docker-compose-v2 git rsync
+          systemctl enable --now docker
+          usermod -aG docker ubuntu
+          if [ ! -f /swapfile ]; then fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
+          mkdir -p /var/lib/rehearsal && chown ubuntu:ubuntu /var/lib/rehearsal
+          if [ ! -d /srv/rehearsal ]; then git clone https://github.com/MitudruDutta/rehearsal.git /srv/rehearsal && chown -R ubuntu:ubuntu /srv/rehearsal; fi
+          touch /var/lib/rehearsal/.bootstrapped
+      Tags:
+        - { Key: Name, Value: rehearsal-prod }
+        - { Key: project, Value: rehearsal }
+
+  ServerIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !If [IpOnWeb, !Ref WebServer, !Ref Server]
+      Tags: [{ Key: project, Value: rehearsal }]
+
+  # ---- the always-on machine
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Rehearsal web machine - SSH from the admin address, HTTP and HTTPS from anywhere
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AdminCidr }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIpv6: "::/0" }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIpv6: "::/0" }
+      Tags: [{ Key: project, Value: rehearsal }]
+
+  # The web machine may start the worker machine and read its state, nothing else.
+  WebRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }
+      Policies:
+        - PolicyName: start-worker
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ec2:StartInstances
+                Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${Server}"
+              - { Effect: Allow, Action: ec2:DescribeInstances, Resource: "*" }
+      Tags: [{ Key: project, Value: rehearsal }]
+
+  WebInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref WebRole]
+
+  WebServer:
+    Type: AWS::EC2::Instance
+    DependsOn: [MountTargetA, MountTargetB, MountTargetC]
+    Properties:
+      InstanceType: !Ref WebInstanceType
+      ImageId: !Ref AmiId
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref WebInstanceProfile
+      SecurityGroupIds: [!GetAtt WebSecurityGroup.GroupId]
+      MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: { VolumeSize: 20, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y docker.io docker-compose-v2 git nfs-common
+          snap install aws-cli --classic
+          systemctl enable --now docker
+          usermod -aG docker ubuntu
+          if [ ! -f /swapfile ]; then fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
+          mkdir -p /var/lib/rehearsal
+          echo '${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/lib/rehearsal nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev 0 0' >> /etc/fstab
+          mount /var/lib/rehearsal
+          printf 'WORKER_ID=%s\nAWS_REGION=%s\n' '${Server}' '${AWS::Region}' > /etc/rehearsal-worker.env
+          if [ ! -d /srv/rehearsal ]; then git clone https://github.com/MitudruDutta/rehearsal.git /srv/rehearsal && chown -R ubuntu:ubuntu /srv/rehearsal; fi
+          touch /var/lib/rehearsal/.web-bootstrapped
+      Tags:
+        - { Key: Name, Value: rehearsal-web }
+        - { Key: project, Value: rehearsal }
+
+  # ---- the shared data folder
+
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Rehearsal data folder - NFS from the web and worker machines only
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 2049, ToPort: 2049, SourceSecurityGroupId: !GetAtt WebSecurityGroup.GroupId }
+        - { IpProtocol: tcp, FromPort: 2049, ToPort: 2049, SourceSecurityGroupId: !GetAtt ServerSecurityGroup.GroupId }
+      Tags: [{ Key: project, Value: rehearsal }]
+
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      ThroughputMode: elastic # paid per GB moved, always fast; nothing to pay while idle
+      FileSystemTags: [{ Key: Name, Value: rehearsal-data }, { Key: project, Value: rehearsal }]
+
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties: { FileSystemId: !Ref FileSystem, SubnetId: !Select [0, !Ref Subnets], SecurityGroups: [!GetAtt EfsSecurityGroup.GroupId] }
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties: { FileSystemId: !Ref FileSystem, SubnetId: !Select [1, !Ref Subnets], SecurityGroups: [!GetAtt EfsSecurityGroup.GroupId] }
+  MountTargetC:
+    Type: AWS::EFS::MountTarget
+    Properties: { FileSystemId: !Ref FileSystem, SubnetId: !Select [2, !Ref Subnets], SecurityGroups: [!GetAtt EfsSecurityGroup.GroupId] }
+
+Outputs:
+  PublicIp:
+    Description: Point the domain's A record here
+    Value: !Ref ServerIp
+  InstanceId:
+    Description: The worker machine
+    Value: !Ref Server
+  WebInstanceId:
+    Value: !Ref WebServer
+  FileSystemId:
+    Value: !Ref FileSystem

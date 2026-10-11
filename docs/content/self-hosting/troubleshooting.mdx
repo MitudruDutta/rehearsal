@@ -148,7 +148,7 @@ takes this kind: `world_build`, `world_validate`, `evaluation`, `improvement`, `
 
 **Why:** the server has no key for the model provider in its model chains, or the provider is not answering.
 
-**Fix:** set the provider's key in `infra/deploy.env`, for example `NEBIUS_API_KEY`, and start the server again with
+**Fix:** set the provider's key in `infra/deploy.env`, for example `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, and start the server again with
 `up -d`. Then restart the build:
 
 ```bash

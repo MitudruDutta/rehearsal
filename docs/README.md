@@ -98,8 +98,8 @@ Set these when you build for publishing. They are read at build time.
 
 | Variable | For | Default |
 |---|---|---|
-| `NEXT_PUBLIC_DOCS_SITE_URL` | The address the site is published at. Used in `llms.txt` and in link previews | `http://localhost:3000` |
-| `NEXT_PUBLIC_CONSOLE_URL` | Where "Open console" goes | `http://localhost:7800` |
+| `NEXT_PUBLIC_DOCS_SITE_URL` | The address the site is published at. Used in `llms.txt` and in link previews | `https://docs.rehearsalkit.xyz` |
+| `NEXT_PUBLIC_CONSOLE_URL` | The server: "Open console" goes to its `/app/`, and the setup prompt signs in to it. For a local server, set `http://localhost:7800` in `docs/.env.local` | `https://rehearsalkit.xyz` |
 | `NEXT_PUBLIC_ASSISTANT_URL` | The address of the Ask AI service. `pnpm dev` sets it for you | Empty: no answers in the page |
 
 The landing page's "Docs" link is set in the console's build, not here: build `web/` with `NEXT_PUBLIC_DOCS_URL`
@@ -131,7 +131,7 @@ It needs Node.js and no packages. Start it with the site (`pnpm dev`) or alone (
 | `DOCS_ASSISTANT_PER_DAY` | Questions answered in a day, for all readers together | `500` |
 
 It reads these from the environment, then from `docs/.env.local`, then from the server's `.env` in the repository
-root. A provider's key has the name the server uses (`NEBIUS_API_KEY`, `OPENROUTER_API_KEY`, and so on), so a
+root. A provider's key has the name the server uses (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, and so on), so a
 machine that can run the server can answer questions with no more setup. Keys stay in the service: the browser
 never receives one.
 

@@ -13,6 +13,9 @@ from typing import Any
 
 from .client import DEFAULT_URL
 
+NOT_SIGNED_IN = (f"Not signed in. Run `rehearsal login`: it signs in to Rehearsal at {DEFAULT_URL} through your browser "
+                 "(add `--url <address>` for a server of your own). In CI, set REHEARSAL_API_KEY.")
+
 
 def _client() -> Any:
     from .client import Rehearsal
@@ -65,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
     except ValueError as exc:
         if "REHEARSAL_API_KEY" not in str(exc):
             raise
-        sys.exit("Not signed in. Run `rehearsal login` with an API key from the console's API keys page (or set REHEARSAL_API_KEY and REHEARSAL_URL).")
+        sys.exit(NOT_SIGNED_IN)
     except ModuleNotFoundError as exc:
         if (exc.name or "").split(".")[0] not in SERVER_MODULES:
             raise
@@ -167,7 +170,7 @@ def _whoami() -> None:
 
     source = "environment (REHEARSAL_API_KEY)" if _env("REHEARSAL_API_KEY") else (f"saved sign-in ({config_path()})" if saved_login() else None)
     if source is None:
-        sys.exit("Not signed in. Run rehearsal login.")
+        sys.exit(NOT_SIGNED_IN)
     c = Rehearsal()
     me = c.get("/v1/me")
     print(f"Server:     {c.base_url}")
@@ -374,8 +377,10 @@ def _main(argv: list[str] | None = None) -> None:
     elif args.cmd == "bootstrap":
         from ..api.auth import bootstrap
 
+        from ..config import settings
+
         project_id, key = bootstrap(args.org, args.project)
-        print(f"project: {project_id}\nadmin API key (shown once): {key}\nexport REHEARSAL_API_KEY={key}")
+        print(f"project: {project_id}\nadmin API key (shown once): {key}\nexport REHEARSAL_URL={settings().public_url}\nexport REHEARSAL_API_KEY={key}")
     elif args.cmd == "users":
         import getpass
 

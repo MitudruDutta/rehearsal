@@ -105,9 +105,9 @@ These come from the `rehearsal` command, before or without an answer from the se
 
 | Message | What to do |
 |---|---|
-| Cannot reach Rehearsal at http://127.0.0.1:7800 (ConnectError). Check the URL (`rehearsal login --url ...`) and that the server is running. | The address is wrong, or the server is not running. `rehearsal whoami` shows the address in use. |
+| Cannot reach Rehearsal at https://rehearsalkit.xyz (ConnectError). Check the URL (`rehearsal login --url ...`) and that the server is running. | The address is wrong, or the server is not running. `rehearsal whoami` shows the address in use. |
 | Rehearsal did not answer in time. Try again; long work runs as jobs, so check 'rehearsal jobs show JOB_ID'. | Try again. Work that takes long continues on the server. |
-| Not signed in. Run `rehearsal login` with an API key from the console's API keys page (or set REHEARSAL_API_KEY and REHEARSAL_URL). | Run `rehearsal login`. |
+| Not signed in. Run `rehearsal login`: it signs in to Rehearsal at https://rehearsalkit.xyz through your browser (add `--url \<address>` for a server of your own). In CI, set REHEARSAL_API_KEY. | Run `rehearsal login`. |
 | This command runs a Rehearsal server, which needs the server extra | Run `pip install 'rehearsal-kit[server]'`. Only the commands that run a server need it. |
 | The MCP server needs the mcp extra | Run `pip install 'rehearsal-kit[mcp]'`, or start it with `uvx --from "rehearsal-kit[mcp]" rehearsal mcp`. |
 | rehearsal: unknown command 'evaal'. Did you mean 'eval'? Run 'rehearsal --help' to see every command. | Use the suggested command. |

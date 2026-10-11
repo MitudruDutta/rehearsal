@@ -25,9 +25,22 @@ services:
     environment: &env
       REHEARSAL_DATABASE_URL: ${REHEARSAL_DATABASE_URL:?set REHEARSAL_DATABASE_URL to your cloud database (see deploy.env.example)}
       REHEARSAL_SESSION_SECRET: ${REHEARSAL_SESSION_SECRET:?set a random session secret}
-      REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
-      REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
-      REHEARSAL_MODEL_PARTICIPANT: ${REHEARSAL_MODEL_PARTICIPANT:-nebius:deepseek-ai/DeepSeek-V4.1-Flash}
+      REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-}
+      REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-}
+      REHEARSAL_MODEL_PARTICIPANT: ${REHEARSAL_MODEL_PARTICIPANT:-}
+      REHEARSAL_MODEL_IMPROVER: ${REHEARSAL_MODEL_IMPROVER:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      FIREWORKS_API_KEY: ${FIREWORKS_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
       NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       TRACING_API_KEY: ${TRACING_API_KEY:-}
@@ -54,6 +67,7 @@ services:
       DODO_PRODUCT_PRO_YEARLY: ${DODO_PRODUCT_PRO_YEARLY:-}
       DODO_PRODUCT_TEAM_MONTHLY: ${DODO_PRODUCT_TEAM_MONTHLY:-}
       DODO_PRODUCT_TEAM_YEARLY: ${DODO_PRODUCT_TEAM_YEARLY:-}
+      REHEARSAL_MONTHLY_ALLOWANCE_USD: ${REHEARSAL_MONTHLY_ALLOWANCE_USD:-0}
       DODO_PRODUCT_EPISODES_1000: ${DODO_PRODUCT_EPISODES_1000:-}
       DODO_PRODUCT_BUILD_1: ${DODO_PRODUCT_BUILD_1:-}
       # only Caddy (same compose network) reaches the API, so trust its X-Forwarded-Proto for Secure cookies
@@ -87,12 +101,45 @@ services:
     restart: unless-stopped
     depends_on: { migrate: { condition: service_completed_successfully } }
 
+  # "Ask AI" on the docs site: answers from the pages in docs/content, through Caddy at /assistant. It gets the model
+  # settings and keys only, nothing else from this file, and answers only pages on DOCS_ASSISTANT_ORIGINS.
+  assistant:
+    profiles: ["public"]
+    image: node:22-bookworm-slim
+    working_dir: /docs
+    command: ["node", "scripts/assistant.mjs"]
+    user: "1000:1000"
+    volumes: ["../docs:/docs:ro"]
+    environment:
+      DOCS_ASSISTANT_HOST: 0.0.0.0
+      DOCS_ASSISTANT_BEHIND_PROXY: "1"
+      DOCS_ASSISTANT_ORIGINS: ${DOCS_ASSISTANT_ORIGINS:-https://docs.rehearsalkit.xyz}
+      DOCS_ASSISTANT_MODEL: ${DOCS_ASSISTANT_MODEL:-}
+      REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-}
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      FIREWORKS_API_KEY: ${FIREWORKS_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
+    restart: unless-stopped
+
   caddy:
     profiles: ["public"]
     image: caddy:2.10-alpine
-    command: ["caddy", "reverse-proxy", "--from", "${REHEARSAL_DOMAIN:-localhost}", "--to", "api:7800"]
+    # infra/Caddyfile: the domain serves Rehearsal, www redirects to it
+    environment: { REHEARSAL_DOMAIN: "${REHEARSAL_DOMAIN:-localhost}" }
     ports: ["80:80", "443:443"]
-    volumes: [caddy-data:/data]
+    volumes: [caddy-data:/data, ./Caddyfile:/etc/caddy/Caddyfile:ro]
     restart: unless-stopped
     depends_on: { api: { condition: service_healthy } }
 
