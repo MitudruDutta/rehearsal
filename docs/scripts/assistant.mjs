@@ -17,6 +17,7 @@
 //   DOCS_ASSISTANT_ORIGINS      the sites whose pages may ask, separated by commas. Default: the local addresses
 //   DOCS_ASSISTANT_PER_MINUTE   questions one address may ask in a minute (10)
 //   DOCS_ASSISTANT_PER_DAY      questions answered in a day, for everyone together (500)
+//   DOCS_ASSISTANT_BEHIND_PROXY 1 behind a reverse proxy: limit by the visitor address it forwards (X-Forwarded-For)
 //
 // A provider's key is read under the name the server uses (NEBIUS_API_KEY, OPENROUTER_API_KEY, ...). Keys are
 // never printed, and never sent anywhere but to their own provider.
@@ -86,6 +87,9 @@ export function settings(env = process.env) {
       .filter(Boolean),
     perMinute: number("DOCS_ASSISTANT_PER_MINUTE", 10),
     perDay: number("DOCS_ASSISTANT_PER_DAY", 500),
+    // behind a reverse proxy (Caddy) every request comes from the proxy; it adds the visitor's address last to
+    // X-Forwarded-For, so the per-address limit uses that. Set only when nothing but the proxy can reach this service.
+    behindProxy: get("DOCS_ASSISTANT_BEHIND_PROXY") === "1",
   };
 }
 
@@ -483,7 +487,8 @@ export function createAssistant(config = settings()) {
     if (!question || question.role !== "user") return json(res, 400, { error: "There is no question to answer." }, cors);
     if (question.content.length > LIMITS.question) return json(res, 400, { error: `Ask in ${LIMITS.question} characters or fewer.` }, cors);
     if (!config.usable.length) return json(res, 503, { error: health().reason }, cors);
-    const refusal = allowed(req.socket.remoteAddress ?? "unknown");
+    const forwarded = config.behindProxy ? String(req.headers["x-forwarded-for"] ?? "").split(",").pop().trim() : "";
+    const refusal = allowed(forwarded || req.socket.remoteAddress || "unknown");
     if (refusal) return json(res, 429, { error: refusal }, cors);
 
     const pageUrl = typeof body.page === "string" ? body.page.replace(/\/$/, "") || "/" : "";
