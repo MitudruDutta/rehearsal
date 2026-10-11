@@ -31,6 +31,13 @@ PROVIDERS: dict[str, tuple[str, str]] = {
     "google": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GOOGLE_API_KEY"),
     "openai": ("https://api.openai.com/v1", "OPENAI_API_KEY"),
     "anthropic": ("https://api.anthropic.com/v1/", "ANTHROPIC_API_KEY"),
+    "mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
+    "xai": ("https://api.x.ai/v1", "XAI_API_KEY"),
+    "deepseek": ("https://api.deepseek.com/v1", "DEEPSEEK_API_KEY"),
+    "together": ("https://api.together.xyz/v1", "TOGETHER_API_KEY"),
+    "fireworks": ("https://api.fireworks.ai/inference/v1", "FIREWORKS_API_KEY"),
+    "cerebras": ("https://api.cerebras.ai/v1", "CEREBRAS_API_KEY"),
+    "nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY"),  # NVIDIA's hosted models (build.nvidia.com)
     "litellm": ("https://litellm.vision.aivar.app/v1", "LITELLM_API_KEY"),  # a LiteLLM proxy (Claude, Amazon Nova); LITELLM_BASE_URL overrides
     "modal": ("", "MODAL_PROXY_TOKEN_ID"),  # base from MODAL_BASE_URL; key is "<token id>.<token secret>"
     "local": ("", "REHEARSAL_LOCAL_API_KEY"),  # base from REHEARSAL_LOCAL_BASE_URL (vLLM etc.)

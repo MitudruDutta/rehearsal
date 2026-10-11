@@ -1481,9 +1481,9 @@ CONFIG: list[tuple[str, str, str, str]] = [
     ("Sign-in", "REHEARSAL_ADMIN_EMAILS", "", "Operator admins, separated by commas. They see every workspace and can set any plan. Only a sign-in with Google counts."),
     ("Sign-in", "REHEARSAL_PUBLIC_URL", "`http://localhost:7800`", "Where browsers reach the server. Payment pages return here."),
     ("Sign-in", "REHEARSAL_DOCS_URL", "", "The documentation site. `/docs` on the server redirects there; without it, `/docs` opens the API reference at `/api/docs`."),
-    ("Models", "REHEARSAL_MODEL_COMPILER", "a chain of three hosted models", "The model chain that builds worlds."),
+    ("Models", "REHEARSAL_MODEL_COMPILER", "Groq, OpenAI, Anthropic, Google, then OpenRouter", "The model chain that builds worlds."),
     ("Models", "REHEARSAL_MODEL_AGENT", "the same chain", "The model chain for agents that have no model of their own."),
-    ("Models", "REHEARSAL_MODEL_PARTICIPANT", "a chain of two smaller models", "The model chain that plays the simulated customer."),
+    ("Models", "REHEARSAL_MODEL_PARTICIPANT", "smaller models from Groq, OpenAI, then Google", "The model chain that plays the simulated customer."),
     ("Models", "REHEARSAL_MODEL_IMPROVER", "the compiler's chain", "The model chain that proposes a better agent."),
     ("Models", "REHEARSAL_PRICES", "`{}`", "Prices for models whose provider reports none: JSON of `provider:model` to `[input, output]` in US dollars for a million tokens."),
     ("Models", "REHEARSAL_PRICING_FILE", "`pricing.yaml`", "A file of the same prices, each with its source and date."),
@@ -1513,6 +1513,7 @@ CONFIG_INTERNAL = {"RH_ADMIN_TOKEN", "RH_HOST", "RH_PORT", "RH_PROVIDER_DATA", "
 
 def config_page() -> str:
     from rehearsal.agents.llm import PROVIDERS
+    from rehearsal.pricing import price_source
 
     read: set[str] = set()
     for path in (ROOT / "rehearsal").rglob("*.py"):
@@ -1556,18 +1557,19 @@ def config_page() -> str:
                 "### Model chains",
                 "",
                 "A chain is a list of `provider:model`, separated by commas. The server tries them in order, and moves to the",
-                "next when a provider fails or is not configured.",
+                "next when a provider fails or has no key. An empty setting means the default.",
                 "",
                 "```dotenv",
-                "REHEARSAL_MODEL_COMPILER=nebius:deepseek-ai/DeepSeek-V4.1-Flash,google:gemini-3.5-flash",
+                "REHEARSAL_MODEL_COMPILER=anthropic:claude-sonnet-4-5,openai:gpt-5-mini,google:gemini-2.5-flash",
                 "```",
                 "",
                 "### Providers",
                 "",
-                "A provider works when its key is set. Every provider is reached through an OpenAI-compatible API.",
+                "A provider works when its key is set. Every provider is reached through an OpenAI-compatible API. A job",
+                "starts only when the server knows the price of its models, so that spending limits hold.",
                 "",
-                "| Provider | Key | Address |",
-                "|---|---|---|",
+                "| Provider | Key | Address | Prices |",
+                "|---|---|---|---|",
             ]
             for name, (base, key) in PROVIDERS.items():
                 if name == "modal":
@@ -1578,11 +1580,12 @@ def config_page() -> str:
                     address, key_shown = "`LITELLM_BASE_URL`", f"`{key}`"
                 else:
                     address, key_shown = f"`{base}`", f"`{key}`"
-                out.append(f"| `{name}` | {key_shown} | {address} |")
+                out.append(f"| `{name}` | {key_shown} | {address} | {price_source(name)} |")
             out += [
                 "",
                 "`local` is for a model server on your own machine, such as vLLM. `custom` is for any other",
-                "OpenAI-compatible address. `rehearsal prices` shows the price the server uses for each configured model.",
+                "OpenAI-compatible address. When a provider's source has no price for a model, add one to `pricing.yaml` or",
+                "`REHEARSAL_PRICES`. `rehearsal prices` shows the price the server uses for each configured model.",
                 "",
             ]
     return "\n".join(out).rstrip("\n") + "\n"

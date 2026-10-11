@@ -5,8 +5,13 @@ A call is charged at, in order of preference:
 1. the cost the provider returned for that request (OpenRouter ``usage.cost``);
 2. the serving provider's own published price list (Nebius, OpenRouter and
    LiteLLM proxies expose per-token prices on their model endpoints);
-3. a price from ``pricing.yaml`` (or ``REHEARSAL_PRICES``) for providers that
-   publish no machine-readable prices; each entry names its source and date.
+3. a price from ``pricing.yaml`` (or ``REHEARSAL_PRICES``); each entry names its
+   source and date;
+4. for vendors called on their own API (OpenAI, Anthropic, Google, Mistral, xAI,
+   DeepSeek), the vendor's price as OpenRouter's catalogue lists it; for hosts of
+   open models (Groq, Together, Fireworks, Cerebras), that host's own price from
+   OpenRouter's listing of each model's hosts. Neither publishes a
+   machine-readable price list of its own.
 
 Separately, ``market()`` reports what *other* hosts charge for the same open
 model (from OpenRouter's per-model endpoint listing). It is for planning and
@@ -148,6 +153,61 @@ def _overrides() -> dict[str, Quote]:
 
 
 LISTS = {"nebius": _nebius_list, "openrouter": _openrouter_list, "litellm": _litellm_list}
+# Vendors called on their own API, and their prefix in OpenRouter model ids (which lists them at the vendor's price).
+VENDORS = {"openai": "openai", "anthropic": "anthropic", "google": "google", "mistral": "mistralai", "xai": "x-ai", "deepseek": "deepseek"}
+# Hosts of open models, and their name in OpenRouter's listing of a model's hosts (which shows each host's price).
+HOSTS = {"groq": "Groq", "together": "Together", "fireworks": "Fireworks", "cerebras": "Cerebras"}
+
+
+def price_source(provider: str) -> str:
+    """Where this provider's prices come from, in words (the configuration reference prints it)."""
+    if provider in LISTS:
+        return "its own price list"
+    if provider in VENDORS:
+        return "the vendor's price, as OpenRouter lists it"
+    if provider in HOSTS:
+        return "this host's price, from OpenRouter's host listing"
+    return "`pricing.yaml` or `REHEARSAL_PRICES`"
+
+
+def _openrouter_match(model: str, vendor: str | None = None, listing: dict[str, Quote] | None = None) -> str | None:
+    """A model's OpenRouter id: claude-haiku-4-5, or a dated snapshot of it, is anthropic/claude-haiku-4.5."""
+    if listing is None:
+        listing = _cached("openrouter", _openrouter_list) or {}
+    target = _norm(re.sub(r"-\d{8}$", "", model))
+    return next((mid for mid in listing if (vendor is None or mid.split("/")[0] == vendor) and _norm(mid) == target), None)
+
+
+def _endpoint_rows(match: str) -> list[dict[str, Any]]:
+    """What each host on OpenRouter charges for one model."""
+
+    def load() -> list[dict[str, Any]]:
+        data = httpx.get(f"https://openrouter.ai/api/v1/models/{match}/endpoints", timeout=20).json().get("data", {})
+        rows = []
+        for e in data.get("endpoints", []):
+            p = e.get("pricing") or {}
+            try:
+                rows.append({"host": e.get("provider_name"), "input_per_m": float(p["prompt"]) * 1e6, "output_per_m": float(p["completion"]) * 1e6})
+            except (KeyError, TypeError, ValueError):
+                continue
+        return rows
+
+    return _cached(f"endpoints:{match}", load) or []
+
+
+def _derived(provider: str, model: str, listing: dict[str, Quote], rows_for: Any) -> Quote | None:
+    """The price of a vendor's or a host's model from OpenRouter's listings (see the module docstring, item 4)."""
+    if provider in VENDORS:
+        match = _openrouter_match(model, VENDORS[provider], listing)
+        q = listing.get(match) if match else None
+        return Quote(provider, model, q.input_per_m, q.output_per_m, f"{provider} price, as listed by openrouter", f"https://openrouter.ai/{match}", q.as_of) if q else None
+    if provider in HOSTS:
+        match = _openrouter_match(model, None, listing)
+        host = HOSTS[provider].lower()
+        row = next((r for r in (rows_for(match) if match else []) if (r.get("host") or "").lower().startswith(host)), None)
+        if row:
+            return Quote(provider, model, row["input_per_m"], row["output_per_m"], f"{HOSTS[provider]} price, from openrouter's host listing", f"https://openrouter.ai/{match}", _today())
+    return None
 
 
 # --------------------------------------------------------------------------- lookups
@@ -159,7 +219,10 @@ def billing_quote(provider: str, model: str) -> Quote | None:
         quote = (_cached(provider, LISTS[provider]) or {}).get(model)
         if quote is not None:
             return quote
-    return (_cached("overrides", _overrides) or {}).get(f"{provider}:{model}")
+    override = (_cached("overrides", _overrides) or {}).get(f"{provider}:{model}")
+    if override is not None or (provider not in VENDORS and provider not in HOSTS):
+        return override
+    return _derived(provider, model, _cached("openrouter", _openrouter_list) or {}, _endpoint_rows)
 
 
 _refreshing: set[str] = set()
@@ -187,41 +250,40 @@ def _refresh_later(keys: list[str]) -> None:
 def cached_quote(provider: str, model: str) -> Quote | None:
     """The billing price from memory only: never waits on the network, so it is safe inside telemetry callbacks that
     have a deadline. A source that is missing or stale is reloaded in the background for the next call."""
-    keys = ([provider] if provider in LISTS else []) + ["overrides"]
+    derived = provider in VENDORS or provider in HOSTS
+    keys = ([provider] if provider in LISTS else []) + (["openrouter"] if derived else []) + ["overrides"]
     with _lock:
         hits = {k: _cache.get(k) for k in keys}
     stale = [k for k, hit in hits.items() if hit is None or time.time() - hit[0] >= TTL_S]
     if stale:
         _refresh_later(stale)
-    listing = (hits.get(provider) or (0.0, None))[1] or {}
-    return listing.get(model) or ((hits["overrides"] or (0.0, None))[1] or {}).get(f"{provider}:{model}")
+    value = lambda k: (hits.get(k) or (0.0, None))[1] or {}  # noqa: E731
+    quote = (value(provider).get(model) if provider in LISTS else None) or value("overrides").get(f"{provider}:{model}")
+    if quote or not derived:
+        return quote
+
+    def rows_cached(match: str) -> list[dict[str, Any]]:
+        with _lock:
+            hit = _cache.get(f"endpoints:{match}")
+        if hit is None:
+            threading.Thread(target=_endpoint_rows, args=(match,), name="price-refresh", daemon=True).start()
+        return (hit or (0.0, None))[1] or []
+
+    return _derived(provider, model, value("openrouter"), rows_cached)
 
 
 def warm(providers: set[str]) -> None:
     """Starts loading the price lists of these providers in the background (called when telemetry starts)."""
-    _refresh_later([p for p in sorted(providers) if p in LISTS] + ["overrides"])
+    derived = any(p in VENDORS or p in HOSTS for p in providers)
+    _refresh_later([p for p in sorted(providers) if p in LISTS] + (["openrouter"] if derived and "openrouter" not in providers else []) + ["overrides"])
 
 
 def market(model: str) -> dict[str, Any] | None:
     """What hosts on OpenRouter charge for the same model (planning reference only)."""
-    listing = _cached("openrouter", _openrouter_list) or {}
-    target = _norm(model)
-    match = next((mid for mid in listing if _norm(mid) == target), None)
+    match = _openrouter_match(model)
     if match is None:
         return None
-
-    def load() -> list[dict[str, Any]]:
-        data = httpx.get(f"https://openrouter.ai/api/v1/models/{match}/endpoints", timeout=20).json().get("data", {})
-        rows = []
-        for e in data.get("endpoints", []):
-            p = e.get("pricing") or {}
-            try:
-                rows.append({"host": e.get("provider_name"), "input_per_m": float(p["prompt"]) * 1e6, "output_per_m": float(p["completion"]) * 1e6})
-            except (KeyError, TypeError, ValueError):
-                continue
-        return rows
-
-    rows = _cached(f"endpoints:{match}", load) or []
+    rows = _endpoint_rows(match)
     if not rows:
         return None
     blended = sorted(r["input_per_m"] * 0.75 + r["output_per_m"] * 0.25 for r in rows)  # assumes 3:1 input:output tokens

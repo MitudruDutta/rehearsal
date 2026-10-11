@@ -11,7 +11,7 @@ The Python package contains a FastAPI control plane, PostgreSQL job queue, Docke
 - Python 3.11–3.13
 - Docker with Compose, with the daemon running
 - Node 22 or newer and pnpm 10, only to build the console from source
-- A key for a model provider. `.env.example` uses Nebius; Groq, OpenRouter, Google, OpenAI, Anthropic, and local or custom OpenAI-compatible endpoints are also supported.
+- A key for a model provider: OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, Nebius, NVIDIA or OpenRouter. A LiteLLM proxy and local or custom OpenAI-compatible endpoints also work.
 
 The server and worker are supported on Linux. The CLI and SDK client run anywhere. See [Windows](#windows) for what differs there.
 
@@ -28,7 +28,7 @@ python -m pip install -e '.[server,telemetry,dev]'
 # 2. Configure
 cp .env.example .env
 python -c "import secrets; print(secrets.token_hex(32))"    # use the output as REHEARSAL_SESSION_SECRET
-# Edit .env: set REHEARSAL_SESSION_SECRET and the key for your model provider (NEBIUS_API_KEY).
+# Edit .env: set REHEARSAL_SESSION_SECRET and the key for your model provider (for example OPENAI_API_KEY).
 
 # 3. Build the console (once, and again after changes under web/)
 cd web && pnpm install --frozen-lockfile && pnpm build && cd ..
@@ -104,8 +104,8 @@ A Python client is in `rehearsal.sdk`; see [PACKAGE.md](PACKAGE.md). To drive ep
 | `REHEARSAL_DATABASE_URL` | local PostgreSQL on port 5433 | Control-plane database; the default matches `rehearsal up` |
 | `REHEARSAL_DATA_DIR` | `./var` | Source checkouts, snapshots, artifacts |
 | `REHEARSAL_SOURCE_ROOTS` | `./examples` | Directories the worker may read local sources from |
-| `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | see `.env.example` | Model fallback chains, written `provider:model[,provider:model...]` |
-| `NEBIUS_API_KEY` and other provider keys | none | One key for each provider the chains name |
+| `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | Model fallback chains, written `provider:model[,provider:model...]` |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and other provider keys | none | One key for each provider the chains name |
 | `TRACING_API_KEY` | none | Enables tracing; everything runs without it |
 | `REHEARSAL_SIGNUP` | `open` | Anyone can create a workspace from the console. `closed` turns that off |
 | `REHEARSAL_MAX_ACTIVE_BUILDS`, `REHEARSAL_MAX_ACTIVE_RUNS` | `0` (no limit) | Jobs one workspace may run at once |
