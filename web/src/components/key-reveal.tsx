@@ -99,7 +99,7 @@ export function Connect({ apiKey }: { apiKey?: string | null }) {
         />
       </TabsContent>
       <TabsContent value="http">
-        <Snippet code={`curl -H "Authorization: Bearer ${key}" ${origin}/v1/worlds`} note={`Every endpoint is described at ${origin}/docs.`} />
+        <Snippet code={`curl -H "Authorization: Bearer ${key}" ${origin}/v1/worlds`} note={`Every endpoint is described at ${origin}/api/docs.`} />
       </TabsContent>
     </Tabs>
   );
