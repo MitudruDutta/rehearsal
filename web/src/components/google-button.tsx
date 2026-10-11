@@ -58,5 +58,8 @@ export function GoogleButton({ clientId, onCredential, onError }: { clientId: st
       live = false;
     };
   }, [clientId, resolvedTheme, onError]);
-  return <div ref={box} className="flex min-h-10 w-full justify-center" aria-busy={!ready} />;
+  // Google draws the button in its own frame, as a light page. On our dark page the browser would paint an opaque
+  // white backing behind a frame that does not match, which shows as a white edge around the button. Telling the
+  // frame it sits in a light scheme keeps it see-through, so only Google's button shows.
+  return <div ref={box} className="flex min-h-10 w-full justify-center [color-scheme:light]" aria-busy={!ready} />;
 }

@@ -96,7 +96,6 @@ export default function Landing() {
             </div>
             <div id="live" className="relative mx-auto mt-14 max-w-6xl scroll-mt-24 pb-20">
               <HeroWindow />
-              <p className="mt-4 text-center text-sm text-foreground/75">Recorded, not simulated: the World Compiler turning Gitea into a practice world.</p>
             </div>
           </div>
 

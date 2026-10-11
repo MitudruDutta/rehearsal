@@ -166,7 +166,7 @@ export function Login({ onDone }: { onDone: () => void }) {
   const canSignUp = health?.signup === "open";
   const signup = mode === "signup" && canSignUp;
   return (
-    <AuthShell foot="Rehearsal keeps your name and email address to identify you in your workspace. API keys for the CLI and CI are created inside the console.">
+    <AuthShell>
       {!health ? (
         <div className="grid gap-4" aria-busy="true" aria-label="Loading">
           <Skeleton className="h-8 w-48" />
