@@ -1,6 +1,5 @@
 "use client";
 
-import { Mark } from "@/components/mark";
 import { ArrowRight, Check, CircleAlert, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";

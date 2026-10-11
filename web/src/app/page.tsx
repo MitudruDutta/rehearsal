@@ -4,10 +4,12 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Button } from "@/components/ui/button";
 import { BentoCard, BentoGrid } from "@/components/blocks/bento-grid";
 import { SpotlightCard } from "@/components/blocks/spotlight-card";
+import { Mark } from "@/components/mark";
 import { HeroWindow } from "../landing/HeroWindow";
 import { InstallChip } from "../landing/InstallChip";
 import { PixelBackdrop } from "../landing/PixelBackdrop";
 import { PixelTrail } from "../landing/PixelTrail";
+import { PoweredBy } from "../landing/PoweredBy";
 import { CompilerScene, CustomerScene, FaultScene, ImproveScene, TraceScene, VerdictReport, VerifyScene } from "../landing/Showcase";
 import { NavActions, StartCta } from "../landing/SessionCta";
 
@@ -54,7 +56,7 @@ export default function Landing() {
       <header className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center px-5 before:absolute before:inset-x-0 before:top-0 before:h-2.5 before:bg-black">
         <div className="pointer-events-auto relative flex h-14 items-center rounded-b-2xl bg-black px-3 text-white [filter:drop-shadow(0_1px_0_rgb(255_255_255/0.14))_drop-shadow(0_14px_30px_rgb(0_0_0/0.45))] before:absolute before:right-full before:top-2.5 before:size-3.5 before:bg-[radial-gradient(circle_at_0_100%,transparent_13.5px,#000_14.5px)] after:absolute after:left-full after:top-2.5 after:size-3.5 after:bg-[radial-gradient(circle_at_100%_100%,transparent_13.5px,#000_14.5px)]">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-[9px] bg-[linear-gradient(180deg,#b7cbff_0%,#86a6ff_24%,#3a66e8_25%,#2446b8_100%)] shadow-[inset_0_1px_0_rgb(255_255_255/0.5)]" aria-hidden="true"><span className="size-2.5 rotate-45 rounded-[2px] bg-white" /></span>
+            <span className="grid size-8 place-items-center rounded-[9px] bg-[linear-gradient(180deg,#b7cbff_0%,#86a6ff_24%,#3a66e8_25%,#2446b8_100%)] shadow-[inset_0_1px_0_rgb(255_255_255/0.5)]" aria-hidden="true"><Mark className="size-[22px] text-white" /></span>
             <span className="font-heading text-[19px] font-bold tracking-tight">Rehearsal</span>
           </Link>
           <nav className="ml-11 hidden items-center gap-[22px] text-[15px] text-white/60 md:flex">
@@ -103,6 +105,7 @@ export default function Landing() {
 
       {/* Between the two pictures the page is black, like their frames, in both themes; the mouse leaves blue pixels on it */}
       <PixelTrail className="dark bg-black text-foreground">
+      <PoweredBy />
       {/* Features: bento grid */}
       <section id="features">
         <div className="mx-auto max-w-[1760px] px-4 py-24 md:px-8 xl:px-12">
@@ -195,12 +198,12 @@ export default function Landing() {
             </svg>
             <div className="@container" aria-hidden="true">
               <div className="flex items-center justify-center gap-[0.16em] whitespace-nowrap font-heading text-[length:16.5cqw] font-bold leading-[0.9] tracking-[-0.035em] text-[rgb(246_239_223/0.72)] transition-colors duration-500 [filter:url(#outline-only)] hover:text-[rgb(246_239_223)]">
-                <span className="size-[0.5em] shrink-0 rotate-45 rounded-[0.09em] bg-current" />
+                <Mark className="size-[0.72em] shrink-0" />
                 Rehearsal
               </div>
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 font-mono text-xs text-foreground/75">
-              <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-primary" /> Rehearsal, a dress rehearsal for your AI agent</span>
+              <span className="flex items-center gap-2"><Mark className="size-4 text-primary" /> Rehearsal, a dress rehearsal for your AI agent</span>
               <span className="flex gap-6"><a href="#features" className="hover:text-foreground">Product</a><a href="#pricing" className="hover:text-foreground">Pricing</a><Link href="/app/" className="hover:text-foreground">Console</Link></span>
             </div>
           </footer>

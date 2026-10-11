@@ -1,0 +1,54 @@
+/* "Powered by": the services Rehearsal runs on, as a strip of logos that slides slowly and pauses under the pointer.
+   Logos are the companies' own files (public/landing/partners/), grey until hovered; each opens the company's site.
+   dodo-payments.svg is Dodo's logo with its lettering recoloured white, for this dark band.
+   The list is drawn twice so the strip can loop without a gap; the second copy is hidden from screen readers. */
+
+const PARTNERS = [
+  { name: "Dodo Payments", href: "https://dodopayments.com/", src: "/landing/partners/dodo-payments.svg", height: 30 },
+  { name: "AWS", href: "https://aws.amazon.com/", src: "/landing/partners/aws.svg", height: 40 },
+  { name: "Neatlogs", href: "https://neatlogs.com/", src: "/landing/partners/neatlogs.webp", height: 32 },
+  { name: "cfo.ai", href: "https://cfo.ai/", src: "/landing/partners/cfo.svg", height: 36 },
+  { name: "Entire", href: "https://entire.io/", src: "/landing/partners/entire.svg", height: 32 },
+];
+
+function Logos({ copy }: { copy?: boolean }) {
+  return (
+    <ul className="flex shrink-0 items-center" aria-hidden={copy || undefined}>
+      {/* three passes of the list per copy, so one copy is wider than any screen */}
+      {[0, 1, 2].flatMap((pass) =>
+        PARTNERS.map((p) => (
+          <li key={`${pass}-${p.name}`} className="px-10 md:px-14">
+            <a
+              href={p.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              tabIndex={copy || pass > 0 ? -1 : undefined}
+              aria-label={copy || pass > 0 ? undefined : p.name}
+              className="block opacity-60 grayscale transition duration-300 hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- a static export, and SVGs need no resizing */}
+              <img src={p.src} alt="" style={{ height: p.height }} className="w-auto max-w-none select-none" draggable={false} />
+            </a>
+          </li>
+        )),
+      )}
+    </ul>
+  );
+}
+
+export function PoweredBy() {
+  return (
+    // padding, not margin, above the band: a margin would escape this black section and show the page colour
+    <div className="pt-16 md:pt-20">
+    <section aria-label="Powered by" className="relative border-y border-white/10">
+      <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 bg-black px-3 text-sm text-muted-foreground">Powered by</span>
+      <div className="group overflow-hidden py-8 [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
+        <div className="flex w-max animate-[marquee_45s_linear_infinite] group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused]">
+          <Logos />
+          <Logos copy />
+        </div>
+      </div>
+    </section>
+    </div>
+  );
+}
