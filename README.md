@@ -36,6 +36,7 @@ cd web && pnpm install --frozen-lockfile && pnpm build && cd ..
 # 4. Database, admin key, and a console login
 rehearsal up                                             # PostgreSQL in Docker on 127.0.0.1:5433, then migrations
 rehearsal bootstrap                                      # prints the project id and the admin API key, shown once
+export REHEARSAL_URL=http://127.0.0.1:7800                # this server: the CLI's default is the hosted service
 export REHEARSAL_API_KEY=rh_...
 rehearsal users add you@example.com --project prj_...    # asks for a password of 10 or more characters
 
@@ -110,7 +111,7 @@ A Python client is in `rehearsal.sdk`; see [PACKAGE.md](PACKAGE.md). To drive ep
 | `REHEARSAL_MAX_ACTIVE_BUILDS`, `REHEARSAL_MAX_ACTIVE_RUNS` | `0` (no limit) | Jobs one workspace may run at once |
 | `REHEARSAL_RUN_PARALLEL`, `REHEARSAL_BUILD_PARALLEL` | `4` | Evaluation shards per run; scenarios validated at once in a build |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |
-| `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `http://127.0.0.1:7800`, none | Used by the CLI and SDK client |
+| `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `https://rehearsalkit.xyz`, none | Used by the CLI and SDK client; set `REHEARSAL_URL` for a server of your own |
 
 The [self-hosting pages](docs/content/self-hosting/) of the documentation site cover installing with Docker Compose, upgrades, and troubleshooting.
 

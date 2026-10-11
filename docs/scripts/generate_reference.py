@@ -751,9 +751,9 @@ MESSAGES: list[tuple[int, str, str, str, str]] = [
 
 # Messages the CLI prints by itself, with no status from the server.
 CLI_MESSAGES: list[tuple[str, str, str]] = [
-    ("Cannot reach Rehearsal at http://127.0.0.1:7800 (ConnectError). Check the URL (`rehearsal login --url ...`) and that the server is running.", "Cannot reach Rehearsal at", "The address is wrong, or the server is not running. `rehearsal whoami` shows the address in use."),
+    ("Cannot reach Rehearsal at https://rehearsalkit.xyz (ConnectError). Check the URL (`rehearsal login --url ...`) and that the server is running.", "Cannot reach Rehearsal at", "The address is wrong, or the server is not running. `rehearsal whoami` shows the address in use."),
     ("Rehearsal did not answer in time. Try again; long work runs as jobs, so check 'rehearsal jobs show JOB_ID'.", "Rehearsal did not answer in time.", "Try again. Work that takes long continues on the server."),
-    ("Not signed in. Run `rehearsal login` with an API key from the console's API keys page (or set REHEARSAL_API_KEY and REHEARSAL_URL).", "Not signed in. Run `rehearsal login`", "Run `rehearsal login`."),
+    ("Not signed in. Run `rehearsal login`: it signs in to Rehearsal at https://rehearsalkit.xyz through your browser (add `--url <address>` for a server of your own). In CI, set REHEARSAL_API_KEY.", "Not signed in. Run `rehearsal login`", "Run `rehearsal login`."),
     ("This command runs a Rehearsal server, which needs the server extra", "which needs the server extra", "Run `pip install 'rehearsal-kit[server]'`. Only the commands that run a server need it."),
     ("The MCP server needs the mcp extra", "The MCP server needs the mcp extra", "Run `pip install 'rehearsal-kit[mcp]'`, or start it with `uvx --from \"rehearsal-kit[mcp]\" rehearsal mcp`."),
     ("rehearsal: unknown command 'evaal'. Did you mean 'eval'? Run 'rehearsal --help' to see every command.", "unknown command", "Use the suggested command."),
@@ -1464,7 +1464,7 @@ def sdk_page() -> str:
 # Every setting the package reads from the environment: (section, name, default shown, meaning). The script stops when the
 # code reads a variable that is not listed here.
 CONFIG: list[tuple[str, str, str, str]] = [
-    ("Client", "REHEARSAL_URL", "`http://127.0.0.1:7800`", "The server that the CLI, the Python client and the MCP server talk to. It takes precedence over a saved sign-in."),
+    ("Client", "REHEARSAL_URL", "`https://rehearsalkit.xyz`", "The server that the CLI, the Python client and the MCP server talk to. It takes precedence over a saved sign-in."),
     ("Client", "REHEARSAL_API_KEY", "", "The key they use. It takes precedence over a saved sign-in."),
     ("Client", "REHEARSAL_CONFIG", "`~/.config/rehearsal/config.json`", "Where `rehearsal login` saves the sign-in."),
     ("Client", "REHEARSAL_DEBUG", "", "Set it to anything to make the CLI log each HTTP request."),
