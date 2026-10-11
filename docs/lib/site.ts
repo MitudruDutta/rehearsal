@@ -11,7 +11,7 @@ export const site = {
   editBase: "https://github.com/MitudruDutta/rehearsal/edit/main/docs/content",
   /** the address this site is published at, used in llms.txt and link previews */
   url: (process.env.NEXT_PUBLIC_DOCS_SITE_URL || "http://localhost:3000").replace(/\/$/, ""),
-  /** where "Open console" goes: the hosted console, or your own server */
+  /** the server's address: the hosted one, or your own. "Open console" goes to its /app/ (the dashboard, or sign-in) */
   consoleUrl: (process.env.NEXT_PUBLIC_CONSOLE_URL || "http://localhost:7800").replace(/\/$/, ""),
   /** where "Ask AI" sends questions: the address of scripts/assistant.mjs. Empty means no answers in the page */
   assistantUrl: (process.env.NEXT_PUBLIC_ASSISTANT_URL || "").replace(/\/$/, ""),

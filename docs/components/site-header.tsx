@@ -95,7 +95,7 @@ export function SiteHeader({ menu, className = "" }: { menu?: ReactNode; classNa
             <GitHubMark className="size-[18px]" />
           </a>
           <a
-            href={site.consoleUrl}
+            href={`${site.consoleUrl}/app/`}
             className="ml-1 hidden h-9 items-center gap-1 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 lg:flex"
           >
             Open console
