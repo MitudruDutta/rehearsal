@@ -1,0 +1,175 @@
+---
+title: AI assistants
+description: Let Claude Code, Codex, Cursor and other assistants build worlds, run evaluations and explain results for you. What the plugin installs, and what an assistant may do.
+audience: Agent developers who use an AI coding assistant
+last_reviewed: 2026-10-11
+---
+
+An AI assistant can drive Rehearsal for you: add an application, build a world, run an evaluation, read why an
+episode failed, and propose a better agent. You install one plugin and sign in once.
+
+## What the plugin installs
+
+| Part | What it does |
+|---|---|
+| **The Rehearsal skill** | Instructions for the assistant: the workflows, how to read results, and the rule to state the cost and ask before it spends money |
+| **The Rehearsal MCP server** | 18 tools that the assistant calls. It runs on your machine from the `rehearsal-kit` package, started with [uv](https://docs.astral.sh/uv/) |
+
+The MCP server holds no data. Each tool calls the Rehearsal server with your saved sign-in.
+
+## Set up
+
+<Steps>
+<Step>
+
+### Install uv
+
+The assistant starts the MCP server with `uvx`, which is part of [uv](https://docs.astral.sh/uv/). Install uv
+first.
+
+</Step>
+<Step>
+
+### Install the plugin for your client
+
+<LinkCards>
+  <LinkCard href="/ai-assistants/claude-code" title="Claude Code">From the plugin marketplace.</LinkCard>
+  <LinkCard href="/ai-assistants/codex" title="Codex">From the plugin marketplace.</LinkCard>
+  <LinkCard href="/ai-assistants/cursor" title="Cursor">A local plugin, or the MCP settings.</LinkCard>
+</LinkCards>
+
+For another client, see [Other clients](#other-clients) below.
+
+</Step>
+<Step>
+
+### Sign in once
+
+Every client uses the same sign-in. Run it in a terminal:
+
+```bash
+uvx --from rehearsal-kit rehearsal login
+```
+
+Add `--url <address>` for a server other than the default. Your browser opens the console. Check that the code
+matches your terminal, then choose **Approve**. The terminal receives a key with **Build and evaluate** access,
+saved for your user only.
+
+On a machine with no browser, use `rehearsal login --with-key` and paste a key from the console's **API keys**
+page.
+
+</Step>
+<Step>
+
+### Check that it works
+
+Ask the assistant to show your Rehearsal workspace status. It calls `workspace_status` and reports your plan and
+what exists in the workspace.
+
+</Step>
+</Steps>
+
+Without a saved sign-in the MCP server still starts. Its tools then tell the assistant to ask you to run
+`rehearsal login`.
+
+## What an assistant may do
+
+- **It has the access of your key, and no more.** A key with "Build and evaluate" access can add applications,
+  build worlds, run evaluations and read results. It cannot manage keys or billing.
+- **It asks before it spends.** The skill tells the assistant to state the cost and wait for your yes before each of
+  the four tools that spend model budget.
+- **Your plan is a hard stop.** The plan's limits and the monthly model allowance apply to every request, whatever
+  the assistant decides.
+- **You can stop it at once.** Revoke the key on the **API keys** page. The assistant loses access immediately.
+
+| The assistant must ask before | Typical cost | Typical time |
+|---|---|---|
+| `build_world` | $3 to $8 | 1 to 3 hours |
+| `run_evaluation` | about $0.02 for each episode | 2 to 10 minutes |
+| `improve_agent` | under $0.10 | about 1 minute |
+| `recheck_world` | about $0.03 for each job | 5 to 20 minutes |
+
+<Caution title="Never paste a key into the chat">
+
+The assistant does not need to see your key, and the skill tells it never to ask for one. If it asks, run
+`rehearsal login` in a terminal instead.
+
+</Caution>
+
+## What to ask
+
+```text
+Show my Rehearsal workspace status.
+```
+
+```text
+Evaluate my support agent on the published Gitea world, on the dev jobs, with two repeats.
+```
+
+```text
+Why did the failed episodes of that run fail? Group them by cause.
+```
+
+```text
+Improve the agent from those failures. Then compare the old and the new version on holdout.
+```
+
+```text
+Act as the agent yourself on one dev job, so that I can see how a careful agent does it.
+```
+
+## Other clients
+
+The plugin follows the [Agent Plugins](https://agent-plugins.org/specification) layout, and the MCP server is a
+standard stdio server. Any client that supports one of them can use Rehearsal.
+
+### Clients with a plugin system
+
+| Client | Install |
+|---|---|
+| GitHub Copilot CLI | `copilot plugin marketplace add MitudruDutta/rehearsal`, then `copilot plugin install rehearsal@rehearsal` |
+| Factory Droid | `droid plugin marketplace add MitudruDutta/rehearsal`, then `droid plugin install rehearsal@rehearsal` |
+| Augment (Auggie) | `auggie plugin marketplace add MitudruDutta/rehearsal`, then `auggie plugin install rehearsal@rehearsal` |
+| Grok Build | `grok plugin marketplace add MitudruDutta/rehearsal`, then `grok plugin install rehearsal --trust` |
+| Antigravity CLI | Clone the repository, then `agy plugin install ~/.rehearsal-src/agent-plugin/providers/antigravity` |
+| Hermes Agent, OpenClaw, OpenHands, NanoClaw | Point the client at the `agent-plugin/` folder in a clone of the repository |
+
+### Any client with MCP
+
+Add the MCP server to the client's MCP settings. Most clients accept this entry:
+
+```json
+{
+  "mcpServers": {
+    "rehearsal": {
+      "command": "uvx",
+      "args": ["--from", "rehearsal-kit[mcp]>=0.1.1", "rehearsal", "mcp"]
+    }
+  }
+}
+```
+
+Then install the skill into the client's skills folder, if the client reads skill folders:
+
+```bash
+uvx --from rehearsal-kit rehearsal skill install --dir <skills_folder>
+```
+
+The place of the MCP settings differs by client. The command and its arguments are the same everywhere.
+
+### An assistant with a shell and no MCP
+
+The skill alone is enough: it falls back to the `rehearsal` command. Install the skill, then install the package
+and sign in:
+
+```bash
+pip install rehearsal-kit
+rehearsal login
+```
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/ai-assistants/mcp-tools" title="MCP tool reference">Every tool, with its arguments, result and cost.</LinkCard>
+  <LinkCard href="/get-started/what-costs-money" title="What costs money">What an assistant can spend, and the limits.</LinkCard>
+</LinkCards>

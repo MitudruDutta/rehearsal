@@ -1,0 +1,194 @@
+---
+title: Add an application
+description: Tell Rehearsal where your application's source and container images are, pinned to exact versions, so a world can be built from it.
+audience: Agent developers
+last_reviewed: 2026-10-11
+time: 10 minutes
+needs: a public git repository and published container images
+---
+
+An application is what a world is built from. Adding one costs nothing and starts nothing. The build is a separate
+step.
+
+## What your application must have
+
+| Requirement | Why |
+|---|---|
+| **A public git repository** | The World Compiler reads the source to learn the services, the roles and the workflows. |
+| **Container images for every service** | The application, its database, its worker and its cache each run from an image you list. |
+| **An HTTP API** that staff use, REST or GraphQL | Agent tools are made from API operations. A published API description (OpenAPI, a GraphQL schema) helps a lot. |
+| **A database Rehearsal can read**: PostgreSQL, MySQL, MariaDB or SQLite | Checks run there. |
+| **No need for outside services** | A world has no internet access. Email, payments and webhooks are emulated or blocked. |
+
+It also helps when the application has roles (administrator, agent, customer) and staff workflows where a mistake
+matters. Help desks, team chat, git hosting, content management, shops and CRM systems work well. Rehearsal is
+tested on Gitea, Chatwoot, Mattermost, WordPress and others.
+
+<Note title="One way to connect">
+
+Rehearsal connects to an application through its source and images. Other ways to connect, such as a running
+sandbox you already have, are not built.
+
+</Note>
+
+## Pin the source and the images
+
+A world must be reproducible, so both the source and the images are pinned.
+
+**The commit** is the full SHA, 40 characters. A branch or tag name is not accepted as a commit, because it can
+move. To get the SHA, check out the release you want and run:
+
+```bash
+git rev-parse HEAD
+```
+
+**Each image** is given with its digest: `image:tag@sha256:...`. A tag alone can be replaced by its publisher. To
+get the digest of an image:
+
+```bash
+docker buildx imagetools inspect gitea/gitea:28.1.0
+```
+
+Give each image a service name: `gitea=...`, `postgres=...`. List every service the application needs to start.
+
+## Write your policies
+
+Policies are rules the agent must follow, in plain words. Write them as you would tell a new employee:
+
+```text
+Never post a customer's account number in a public channel.
+Only administrators create users.
+Refunds over $200 need a manager's approval.
+```
+
+Policies are optional. The build turns them into hard rules in the jobs: an agent that breaks one gets the outcome
+"rule violated".
+
+<Caution title="Fictional data only">
+
+Do not put real customer data, real credentials or production addresses into an application or its policies. A
+world uses fictional data that Rehearsal creates.
+
+</Caution>
+
+## Add it
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+1. Open **Applications** and choose **Add application**.
+2. Enter a **Name**, the **Git repository (https)** and the **Commit**.
+3. Under **Images, one per line**, enter one `service=image@sha256:...` on each line.
+4. Under **Rules agents must follow (optional)**, enter your policies.
+5. Choose **Add application**.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal apps add gitea \
+  --git https://github.com/go-gitea/gitea \
+  --commit 4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9 \
+  --image gitea=gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a \
+  --policies-file policies.txt
+```
+
+<Output>
+
+```json
+{
+  "id": "app_da77a395b6852c5e",
+  "name": "gitea",
+  "connection_mode": "source",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/go-gitea/gitea",
+    "commit": "4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9"
+  },
+  "images": {
+    "gitea": "gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a"
+  }
+}
+```
+
+</Output>
+
+The output is shortened. Repeat `--image` for each service.
+
+</Tab>
+<Tab value="Python">
+
+```python
+from rehearsal.sdk import Rehearsal
+
+rh = Rehearsal()
+app = rh.applications.create(
+    "gitea",
+    {"kind": "git", "url": "https://github.com/go-gitea/gitea", "commit": "4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9"},
+    images={"gitea": "gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a"},
+    policies=open("policies.txt").read(),
+)
+print(app["id"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant, for example:
+
+```text
+Add Gitea to Rehearsal from https://github.com/go-gitea/gitea at commit
+4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9, with the image
+gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a.
+```
+
+The assistant calls `add_application`. Adding is free, so it does not need to ask first.
+
+</Tab>
+</Ways>
+
+The values above are the real ones for Gitea from Rehearsal's catalog. You can use them to try a build.
+
+### The sample applications
+
+Rehearsal ships a catalog of eight open-source applications, each pinned: Gitea, Chatwoot, Vikunja, WordPress,
+Mattermost, Odoo, Saleor and Easy!Appointments. To add them all, choose **Load sample applications** on the
+**Applications** page, or run:
+
+```bash
+rehearsal apps import-catalog
+```
+
+This adds eight applications at once, so the workspace's plan must keep eight or more. On a smaller plan, add one
+of them by hand with the values from this page.
+
+### Upload the source instead
+
+When the server cannot fetch your repository, upload the source as an archive. Add the application without
+`--git`, then upload a `.tar.gz`:
+
+```bash
+rehearsal apps add helpdesk --image app=acme/helpdesk:1.4@sha256:<digest>
+rehearsal apps upload <app_id> helpdesk-source.tar.gz
+```
+
+## When it is refused
+
+| Message | Cause | Fix |
+|---|---|---|
+| `commit must be a full lowercase hexadecimal object ID` | The commit is a branch, a tag or a short SHA | Give the full 40-character SHA |
+| `git source needs an HTTPS or git@host:path URL` | The address has a user name, a password, a query or another scheme | Use the plain `https://` address of the repository |
+| `The Free plan keeps 1 application, and this workspace has 1` | The plan's count is used | Remove an application, or change plan |
+| `application helpdesk exists` | An application with this name is in the workspace | Choose another name |
+
+## Remove an application
+
+In the console, open **Applications** and choose the bin icon beside the application. Over the API, removing needs
+a key with "Full access": `DELETE /v1/applications/<app_id>`. Builds of it that are still
+in progress stop. Finished runs stay in the history. The name becomes free again.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/build-a-practice-world" title="Build a practice world">Turn the application into a world your agents can practise in.</LinkCard>
+</LinkCards>

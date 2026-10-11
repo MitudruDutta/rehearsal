@@ -1,0 +1,152 @@
+---
+title: "Quickstart: console"
+description: Build a practice world and get a first verified result in the browser, without writing code.
+audience: Agent developers
+last_reviewed: 2026-10-11
+time: 15 minutes of your time, and a build of 1 to 3 hours that runs by itself
+cost: A build and a first run spend model budget
+needs: an account on a Rehearsal server
+---
+
+At the end of this page you have a finished run, and you can open one episode and say which check passed or failed.
+
+<Note title="There is no ready-made world">
+
+A new workspace has no practice world. You build one first. The build needs no attention, but it takes 1 to 3
+hours. You can close the browser while it runs.
+
+</Note>
+
+## Before you start
+
+- You need an account. On the hosted service, create one on the sign-in page. On a server that your team runs,
+  ask its operator: sign-up is closed there unless the operator opens it. See
+  [Sign in and keys](/get-started/sign-in-and-keys).
+- Read [What costs money](/get-started/what-costs-money) once. Two steps on this page spend model budget.
+
+## Steps
+
+<Steps>
+<Step>
+
+### Sign in
+
+Open the console and sign in with Google, or with your email address and password.
+
+The first time, the console asks you to **Name your workspace**. Enter your organisation and a first project, then
+choose **Create workspace**. A project holds applications, worlds, agents and runs.
+
+</Step>
+<Step>
+
+### Add an application
+
+The console now asks you to **Add your first application**. There are two choices.
+
+- **Start with the sample applications** adds the open-source applications that Rehearsal is tested on. There are
+  eight, each pinned to an exact version. Use this choice on a server your team runs, or on a plan that keeps eight
+  applications or more.
+- **Connect your own application** adds one application. Use this choice on the Free and Pro plans, which keep
+  fewer applications than the samples need.
+
+To add one sample by hand, choose **Connect your own application** and enter these values for Gitea, which come
+from Rehearsal's own catalog:
+
+| Field | Value |
+|---|---|
+| Name | `gitea` |
+| Git repository URL | `https://github.com/go-gitea/gitea` |
+| Commit | `4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9` |
+| Images, one per line | `gitea=gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a` |
+
+Then choose **Add application**. To add your own application instead, read
+[Add an application](/guides/add-an-application) first.
+
+</Step>
+<Step>
+
+### Build the world
+
+<Cost amount="about $3 to $8">
+
+A build spends model budget and stops itself at its budget. On the Free plan a build stops at $5.
+
+</Cost>
+
+Choose **Build world** beside the application. The console opens the build view.
+
+<PhaseStrip />
+
+The build goes through nine phases. The view shows which phase is in progress, what the compiler is doing, and a
+feed of its actions. You do not need to watch. When the last phase is done, the world version is published and the
+button **Open the world** appears.
+
+If the build stops, the view says why. Read
+[Build a practice world](/guides/build-a-practice-world#when-a-build-fails) before you choose **Restart build**.
+
+</Step>
+<Step>
+
+### Create an agent
+
+Open **Agents** and choose **Create a profile**.
+
+- **Name**: for example `support-agent`.
+- **Instructions**: what you want the agent to do and not do. You can leave this empty to test the platform's
+  default instructions.
+
+Choose **Create profile**. A profile is one version of an agent: its instructions and its model.
+
+</Step>
+<Step>
+
+### Run an evaluation
+
+<Cost amount="about $0.02 for each episode">
+
+A run needs jobs x agents x repeats episodes. On the Free plan, a run starts in quiet hours: the console shows
+when.
+
+</Cost>
+
+Open **Runs** and choose **Run an evaluation**.
+
+- **World version**: the version you built.
+- **Agents**: your profile.
+- **Scenario splits**: choose `dev` for a first look.
+- **Repeats per scenario**: `2`. One attempt at a job is not enough to judge an agent.
+
+Choose **Start evaluation**. A run usually takes 2 to 10 minutes. The run page shows each episode as it finishes.
+
+</Step>
+<Step>
+
+### Open an episode
+
+On the run page, the **Episodes** table has one row for each attempt, with its outcome: <Verdict is="verified" />,
+<Verdict is="not-achieved" /> or <Verdict is="rule-violated" />.
+
+Choose an episode that is not verified. Under **Independent checks**, each check shows what the database held and
+what was wanted. The timeline shows each action the agent took, with its result.
+
+</Step>
+</Steps>
+
+You now have a result that rests on the application's own records. [Read results](/guides/read-results) explains
+every number on the run page.
+
+## When it goes wrong
+
+| You see | Do this |
+|---|---|
+| A sign-in form, and you have no account | On your own server, the operator runs `rehearsal users add`. See [Troubleshooting](/self-hosting/troubleshooting#a-sign-in-form-and-no-account). |
+| "The Free plan keeps 1 application" when you add the samples | Add one application with **Connect your own application**. |
+| The build stays "queued" | No worker is running on the server. See [Troubleshooting](/self-hosting/troubleshooting#a-build-stays-queued). |
+| The run does not start | On the Free plan it waits for quiet hours. Otherwise, another run is using every sandbox of the plan. |
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/read-results" title="Read results">What each outcome, ending and number means.</LinkCard>
+  <LinkCard href="/guides/improve-an-agent" title="Improve an agent">Turn failures into a better version, and check it fairly.</LinkCard>
+</LinkCards>

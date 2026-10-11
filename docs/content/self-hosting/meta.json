@@ -1,0 +1,6 @@
+{
+  "title": "Self-hosting",
+  "description": "Run the server yourself",
+  "icon": "Server",
+  "pages": ["---Install---", "requirements", "install-with-docker-compose", "---Operate---", "troubleshooting"]
+}

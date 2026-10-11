@@ -1,0 +1,46 @@
+---
+title: Guides
+description: One task on each page, in the order you usually do them, from adding an application to comparing two versions of an agent.
+last_reviewed: 2026-10-11
+---
+
+Each guide does one task and shows it in the console, from a terminal, in Python and through an AI assistant. The
+guides follow the order of the work.
+
+## Applications and worlds
+
+<LinkCards>
+  <LinkCard href="/guides/add-an-application" title="Add an application">What your application must have, and how to pin its source and images.</LinkCard>
+  <LinkCard href="/guides/build-a-practice-world" title="Build a practice world">The nine phases, how long they take, and what to do when a build fails.</LinkCard>
+</LinkCards>
+
+## Agents
+
+<LinkCards>
+  <LinkCard href="/guides/evaluate-an-agent" title="Evaluate an agent">Choose jobs, splits and repeats, and know the episode count first.</LinkCard>
+  <LinkCard href="/guides/read-results" title="Read results">What each outcome, ending and number means, and how to read a failed check.</LinkCard>
+  <LinkCard href="/guides/improve-an-agent" title="Improve an agent">Turn failures into a better version, and check it on jobs it never saw.</LinkCard>
+  <LinkCard href="/guides/compare-agents-and-runs" title="Compare agents and runs">Which runs can be compared, and why.</LinkCard>
+</LinkCards>
+
+## Your own agent
+
+<LinkCards>
+  <LinkCard href="/guides/bring-your-own-agent" title="Bring your own agent">Test agent code that you run, in any framework, over the API.</LinkCard>
+</LinkCards>
+
+## Automate
+
+<LinkCards>
+  <LinkCard href="/guides/use-rehearsal-in-ci" title="Use Rehearsal in CI">Fail a pull request when the held-out score drops or a rule is broken.</LinkCard>
+</LinkCards>
+
+## The usual path
+
+1. [Add an application](/guides/add-an-application), once for each application.
+2. [Build a practice world](/guides/build-a-practice-world), once for each release of the application that you want
+   to test against.
+3. [Evaluate an agent](/guides/evaluate-an-agent) on the `dev` jobs, and [read the results](/guides/read-results).
+4. [Improve the agent](/guides/improve-an-agent), by hand or with the improvement step.
+5. Evaluate the old and the new version on the `holdout` jobs, and
+   [compare them](/guides/compare-agents-and-runs).

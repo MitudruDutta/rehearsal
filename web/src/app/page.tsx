@@ -15,8 +15,8 @@ import { NavActions, StartCta } from "../landing/SessionCta";
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
 const CONTACT = process.env.NEXT_PUBLIC_CONTACT_URL || (CONTACT_EMAIL ? `mailto:${CONTACT_EMAIL}?subject=Rehearsal%20Enterprise` : undefined);
 
-// Where "Docs" leads. Until the documentation site planned in handbook/DOCS_SITE_PLAN.md exists, that is the API
-// reference the server generates at /docs; set this at deploy time to point at the site instead.
+// Where "Docs" leads: the documentation site (docs/), whose address is set when the console is built. Without it,
+// the link opens the API reference the server generates at /docs.
 const DOCS = process.env.NEXT_PUBLIC_DOCS_URL || "/docs";
 
 const TIERS = [

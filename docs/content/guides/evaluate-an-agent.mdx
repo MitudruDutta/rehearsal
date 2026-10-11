@@ -1,0 +1,234 @@
+---
+title: Evaluate an agent
+description: Run one or more agents through the jobs of a published world. Choose the splits and repeats, and know the episode count before you start.
+audience: Agent developers
+last_reviewed: 2026-10-11
+time: 2 to 10 minutes for a run
+cost: About $0.02 for each episode
+needs: a published world version
+---
+
+An evaluation is a **run**: a set of agents, each attempting a set of jobs a number of times. Each attempt is an
+**episode**, and each episode ends with an outcome from the application's own database.
+
+## Before you start
+
+- You need a world version with the status `published`. If you have none,
+  [build a world](/guides/build-a-practice-world).
+- You need an agent profile, which you create below.
+
+## Create an agent profile
+
+A profile is one version of an agent: its instructions and its model.
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+1. Open **Agents** and choose **Create a profile**.
+2. Enter a **Name** and the **Instructions**.
+3. Leave **Model chain (optional)** empty to use the server's default model.
+4. Choose **Create profile**.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal profiles create support-agent --prompt-file instructions.txt
+rehearsal profiles list
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+agent = rh.profiles.create("support-agent", open("instructions.txt").read())
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to create an agent with your instructions. It calls `create_agent`.
+
+</Tab>
+</Ways>
+
+About the instructions:
+
+- They become the agent's system prompt. Empty instructions use the platform's default.
+- Each job gives each actor its own role instructions. Rehearsal adds them after yours. To place them yourself, put
+  `{instructions}` in your text. You can also use `{actor_id}` and `{role}`.
+- A second profile with the same name becomes version 2. Versions are kept, so results stay comparable.
+
+If your agent is code that you run, not instructions, see
+[Bring your own agent](/guides/bring-your-own-agent).
+
+## Choose what to run
+
+| Choice | Advice |
+|---|---|
+| **World version** | The highest published version, unless you compare with an older result |
+| **Agents** | One or more. Agents in the same run get the same jobs at the same time, which makes a fair comparison. Keep the earlier version in the run as a control |
+| **Splits** | `dev` while you explore and debug. `holdout` only for the final score, after you have stopped changing the agent |
+| **Repeats** | 2 or more. Models are not deterministic, and one attempt at a job is noise |
+
+When you choose no split and no repeats, a run uses every approved job, twice.
+
+### Count the episodes first
+
+```text
+episodes = jobs in the chosen splits x agents x repeats
+```
+
+To count the jobs in each split:
+
+```bash
+rehearsal worlds scenarios <wv_id>
+```
+
+Only jobs with the status `approved` are run.
+
+### The stress layer
+
+Every episode gets two extra events, on top of what its job contains:
+
+1. The agent's first change is refused with "too many requests". The change is not carried out. The agent must
+   try it again.
+2. After a change goes through, the customer sends the same request again. The agent must check and answer. It
+   must not do the work twice.
+
+An agent that works only on the easy path fails these.
+
+## Start the run
+
+<Cost amount="about $0.02 for each episode">
+
+A run spends model budget from the workspace's monthly allowance. `--budget` sets the spend at which the run
+stops itself.
+
+</Cost>
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+1. Open **Runs** and choose **Run an evaluation**.
+2. Choose the **World version** and the **Agents**.
+3. Choose the **Scenario splits** and the **Repeats per scenario**.
+4. Choose **Start evaluation**.
+
+The console opens the run page.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal eval <wv_id> --profile <profile_id> --split dev --repeats 2 --watch
+```
+
+Repeat `--profile` to put several agents in the run, and `--split` to run several splits. With `--watch`, the
+command prints each event and then the summary.
+
+</Tab>
+<Tab value="Python">
+
+```python
+run = rh.evaluations.create(wv_id, [agent["id"]], splits=["dev"], repeats=2)
+print(run["run_id"], run["episodes"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to evaluate the agent. It calls `run_evaluation` after it has told you the episode count and
+the cost, and you have agreed. It gives you a link to the run page.
+
+</Tab>
+</Ways>
+
+The answer has `run_id`, `episodes` (the count) and `shards` (how many sandboxes run the episodes side by side).
+
+### Quiet hours on the Free plan
+
+On the Free plan, a run starts only in the quiet window. The run is accepted and waits. The answer has `starts_at`,
+the time the run will start, and the console shows it. Paid plans and your own server start at once.
+
+## Follow the run
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+The run page shows the agents, the customer and the verifier at work, and a table of episodes that fills as they
+finish.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal runs watch <run_id>
+rehearsal runs show <run_id>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+for event in rh.runs.events(run["run_id"]):
+    print(event["type"], event["summary"])
+print(rh.runs.get(run["run_id"])["status"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+The assistant calls `run_results` every 30 to 60 seconds until the status is `finished`.
+
+</Tab>
+</Ways>
+
+A run usually takes 2 to 10 minutes. If it stays in progress with no new episode, the workers are busy with other
+work.
+
+## Pause or stop a run
+
+A run is several server jobs, one for each sandbox. A command to the run goes to all of them.
+
+<Ways items={["Console", "Python", "HTTP"]}>
+<Tab value="Console">
+
+The run page has **Pause** and **Stop**.
+
+</Tab>
+<Tab value="Python">
+
+```python
+rh.runs.command(run["run_id"], "stop")  # or "pause", "resume"
+```
+
+</Tab>
+<Tab value="HTTP">
+
+```bash
+curl -X POST https://rehearsal.example.com/v1/runs/<run_id>/commands \
+  -H "Authorization: Bearer <your_key>" -H "Content-Type: application/json" \
+  -d '{"command": "stop"}'
+```
+
+</Tab>
+</Ways>
+
+Episodes that a stopped run never started are not counted against your plan.
+
+## When it is refused
+
+| Message | Meaning | Do this |
+|---|---|---|
+| `402`: "This run needs ... episodes and the workspace has ... left this month" | The plan's episodes do not cover the run | Run fewer: one split, fewer jobs, or one repeat |
+| `429`: "All ... sandboxes of the ... plan are in use by another run" | The plan runs a fixed number of sandboxes at once | Wait for the other run, or stop it |
+| `409` | The world version is not published | Use a published version |
+| `422` | No approved job matches the chosen splits | Check the splits with `rehearsal worlds scenarios` |
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/read-results" title="Read results">What the run page and the summary tell you.</LinkCard>
+  <LinkCard href="/guides/compare-agents-and-runs" title="Compare agents and runs">Put two versions side by side.</LinkCard>
+</LinkCards>

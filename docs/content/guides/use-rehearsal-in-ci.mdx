@@ -1,0 +1,235 @@
+---
+title: Use Rehearsal in CI
+description: Run the held-out jobs on every pull request that changes your agent, and fail the build when the score drops or a rule is broken.
+audience: Platform and ML engineers
+last_reviewed: 2026-10-11
+time: 30 minutes to set up
+cost: One run for each pull request, about $0.02 for each episode
+needs: a published world version, and a key with Build and evaluate access
+---
+
+A pull request that changes your agent's instructions can make the agent worse. This guide adds a check that
+evaluates the changed agent on the `holdout` jobs and fails when the result is not good enough.
+
+## How the check works
+
+1. The CI job creates a new version of the agent profile from the instructions in the pull request.
+2. It starts one run on the `holdout` split, with the new version.
+3. It waits for the run, then reads the summary.
+4. It fails when the verified share is under your threshold, or when any episode broke a rule.
+
+<Caution title="The Free plan waits for quiet hours">
+
+On the Free plan, a run starts only in the quiet window, so a CI job can wait for hours. Use a paid plan or your
+own server for CI.
+
+</Caution>
+
+## Set up
+
+<Steps>
+<Step>
+
+### Create a key for CI
+
+In the console, open **API keys** and create a key named for the pipeline, with **Build and evaluate** access.
+Store it as a secret in your CI system. Give the pipeline its own key, so that you can revoke it alone.
+
+| Secret | Value |
+|---|---|
+| `REHEARSAL_URL` | Your server's address |
+| `REHEARSAL_API_KEY` | The key |
+
+</Step>
+<Step>
+
+### Choose the world version
+
+Use one published world version for every run, so that results stay comparable. Find its id:
+
+```bash
+rehearsal worlds list
+```
+
+Keep the id in your repository's settings as `REHEARSAL_WORLD_VERSION`. Change it when you build a new world
+version for a new release of your application.
+
+</Step>
+<Step>
+
+### Add the script
+
+Save this as `ci/rehearse.py`. It needs only the `rehearsal-kit` package.
+
+```python
+"""Evaluates the agent in this checkout on the held-out jobs. Exits with 1 when it is not good enough."""
+import os
+import sys
+import time
+
+from rehearsal.sdk import Rehearsal
+from rehearsal.sdk.client import RehearsalError
+
+NAME = "support-agent"
+INSTRUCTIONS = "agent/instructions.txt"
+MIN_VERIFIED = 0.8   # share of scored episodes that must be verified
+REPEATS = 2
+BUDGET_USD = 2.0     # the run stops itself at this spend
+
+rh = Rehearsal()     # reads REHEARSAL_URL and REHEARSAL_API_KEY
+world_version = os.environ["REHEARSAL_WORLD_VERSION"]
+
+profile = rh.profiles.create(NAME, open(INSTRUCTIONS, encoding="utf-8").read())
+label = f"{profile['name']}@v{profile['version']}"
+
+try:
+    run = rh.evaluations.create(world_version, [profile["id"]], splits=["holdout"], repeats=REPEATS, budget_usd=BUDGET_USD)
+except RehearsalError as error:
+    # 402: the plan does not cover the run. 429: every sandbox is in use. Neither is the agent's fault.
+    sys.exit(f"Rehearsal did not start the run ({error.status}): {error.detail}")
+
+print(f"{label}: {run['episodes']} episodes, run {run['run_id']}")
+print(f"Watch: {rh.base_url}/app/run/?id={run['run_id']}")
+
+while (status := rh.runs.get(run["run_id"])["status"]) not in ("finished", "failed", "cancelled"):
+    time.sleep(15)
+if status != "finished":
+    sys.exit(f"The run ended as {status}. See the run page.")
+
+scores = rh.runs.get(run["run_id"])["summary"]["profiles"][label]["holdout"]
+print(
+    f"verified {scores['successes']} of {scores['finished']}, "
+    f"rule violations {scores['hard_violation_episodes']}, false completions {scores['false_completions']}, "
+    f"duplicates {scores['duplicate_effects']}, not scored {scores['environment_errors']}, ${scores['cost_usd']}"
+)
+
+problems = []
+if scores["finished"] == 0:
+    problems.append("no episode was scored")
+elif scores["success_rate"] < MIN_VERIFIED:
+    problems.append(f"verified share {scores['success_rate']:.0%} is under {MIN_VERIFIED:.0%}")
+if scores["hard_violation_episodes"]:
+    problems.append(f"{scores['hard_violation_episodes']} episodes broke a rule")
+if scores["false_completions"]:
+    problems.append(f"{scores['false_completions']} episodes claimed work that was not done")
+if problems:
+    sys.exit("Not good enough: " + "; ".join(problems))
+print("Good enough.")
+```
+
+</Step>
+<Step>
+
+### Add the workflow
+
+This example is for GitHub Actions. It runs only when the agent's files change.
+
+```yaml
+name: Rehearse the agent
+on:
+  pull_request:
+    paths: ["agent/**"]
+
+concurrency:
+  group: rehearse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install rehearsal-kit
+      - run: python ci/rehearse.py
+        env:
+          REHEARSAL_URL: ${{ secrets.REHEARSAL_URL }}
+          REHEARSAL_API_KEY: ${{ secrets.REHEARSAL_API_KEY }}
+          REHEARSAL_WORLD_VERSION: ${{ vars.REHEARSAL_WORLD_VERSION }}
+```
+
+</Step>
+</Steps>
+
+## The summary, field by field
+
+The script reads `summary["profiles"]["<name>@v<version>"]["holdout"]`. The summary of a run has this shape:
+
+```json
+{
+  "profiles": {
+    "support-agent@v3": {
+      "overall": { "episodes": 4, "finished": 4, "successes": 3, "success_rate": 0.75 },
+      "holdout": {
+        "episodes": 4,
+        "finished": 4,
+        "environment_errors": 0,
+        "successes": 3,
+        "success_rate": 0.75,
+        "hard_violation_episodes": 0,
+        "false_completions": 1,
+        "duplicate_effects": 0,
+        "recovered": "2/2",
+        "unnecessary_interruptions": 0,
+        "rejected_attempts": 1,
+        "mean_reward": 0.75,
+        "cost_usd": 0.0712,
+        "tokens": 41250
+      },
+      "per_scenario": { "<job_slug>": { "episodes": 2, "successes": 1 } }
+    }
+  },
+  "overall": { "episodes": 4, "finished": 4, "successes": 3 }
+}
+```
+
+The numbers are an example. `overall` and each entry of `per_scenario` have the same fields as `holdout`: the
+example shortens them. A split appears only when the run has episodes of it. `success_rate` is `null` when no
+episode was scored.
+
+## Choose the thresholds
+
+- **Use counts as well as the share.** With 2 jobs and 2 repeats, one episode is 25 points. Ask for more repeats, or
+  compare with the last result, before you block a merge on a small difference.
+- **Treat a rule violation as a failure, always.** A verified share of 90% with one broken rule is not a pass.
+- **Do not count episodes that were not scored.** `environment_errors` are the environment's fault. The script
+  reports them and does not fail on them.
+
+## Keep the cost down
+
+| Do | Why |
+|---|---|
+| Run only the `holdout` split | It is the score that matters, and it is the smallest set |
+| Run only when the agent's files change | The `paths` filter in the workflow |
+| Give the run a budget | The run stops itself at `BUDGET_USD` |
+| Cancel a run that a newer push replaces | The `concurrency` block in the workflow |
+
+Each CI run creates a new version of the profile. Versions cost nothing and are kept.
+
+<Caution title="Do not tune on holdout">
+
+If you change the agent again and again until this check passes, the `holdout` jobs become jobs you tuned on, and
+the score no longer tells you how the agent does on new work. Read failures on `dev`, improve there, and let the
+check confirm it. Build a new world version from time to time to get fresh jobs.
+
+</Caution>
+
+## When the check cannot run
+
+| The script prints | Meaning | Do this |
+|---|---|---|
+| `did not start the run (402)` | The plan's episodes or allowance are used up | Add a top-up, or wait for the month to renew |
+| `did not start the run (429)` | Every sandbox of the plan is in use | Run again later. Limit CI to one run at a time |
+| `did not start the run (401)` | The key is wrong or revoked | Replace the secret |
+| `did not start the run (409)` | The world version is not published | Fix `REHEARSAL_WORLD_VERSION` |
+| `The run ended as failed` | The server could not run it | Open the run page. See [Read results](/guides/read-results#when-a-result-looks-wrong) |
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/reference/python-sdk" title="Python SDK">Every method the script can use.</LinkCard>
+  <LinkCard href="/guides/compare-agents-and-runs" title="Compare agents and runs">Compare the new version with the last one.</LinkCard>
+</LinkCards>

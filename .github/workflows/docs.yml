@@ -1,0 +1,75 @@
+name: Docs
+
+# The documentation site in docs/. It runs when the site changes, and when the code that the reference pages are
+# generated from changes, so a reference page can never disagree with the product.
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "rehearsal/**"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "rehearsal/**"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  reference:
+    name: Reference pages match the code
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      # The scripts read definitions only: no settings file, no database, no model.
+      REHEARSAL_ENV_FILE: /dev/null
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install the package with the server extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[server]'
+      - name: Generated pages are up to date
+        run: python docs/scripts/generate_reference.py --check
+      - name: Commands and samples in the pages are valid
+        run: python docs/scripts/check_samples.py
+
+  site:
+    name: Lint, build and link check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install pnpm and dependencies
+        run: |
+          npm install --global pnpm@12.10.1
+          pnpm --dir docs install --frozen-lockfile
+      - name: Lint
+        run: pnpm --dir docs lint
+      # The build type-checks, exports the site, copies each page's Markdown, and fails on a broken internal link.
+      - name: Build
+        run: pnpm --dir docs build

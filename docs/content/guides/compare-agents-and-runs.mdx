@@ -1,0 +1,100 @@
+---
+title: Compare agents and runs
+description: Put two agents, or two versions of one agent, side by side. Which runs can be compared, and why runs on different world versions cannot.
+audience: Agent developers, and product or QA leads
+last_reviewed: 2026-10-11
+time: 5 minutes
+needs: one or two finished runs
+---
+
+A comparison answers "is version 2 better than version 1?" with the same measures for both. It is only fair when
+both agents faced the same jobs with the same checks.
+
+## What can be compared
+
+| You compare | Allowed | Why |
+|---|---|---|
+| Agents inside one run | Yes. This is the best comparison | Same jobs, same world version, same time |
+| Two runs on the same world version | Yes | Same jobs and the same checks |
+| Two runs on different world versions | **No.** The server refuses with `409` | Each build writes its own jobs and checks. A score on one version and a score on another measure different things |
+
+The refusal says: "runs use different world versions; their graders are not comparable".
+
+To compare an agent across two releases of your application, run it on each world version and read each result by
+itself. Do not subtract one score from the other.
+
+## Compare
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+1. Open **Compare**.
+2. Under **Run**, choose a run. To compare the agents inside it, stop here.
+3. To compare two runs, choose the **Second run (optional)**.
+
+The page shows a table of **Measures** with the change between the two, and a table **Per scenario** with the result
+of each job.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal compare <run_a>
+rehearsal compare <run_a> <run_b>
+```
+
+With one run, the command compares the agents inside it. With two, both runs must use the same world version.
+
+</Tab>
+<Tab value="Python">
+
+```python
+both = rh.evaluations.compare(run_a, run_b)  # run_b is optional
+for run_id, summary in both["runs"].items():
+    print(run_id, summary)
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to compare the runs. It calls `compare_runs`.
+
+</Tab>
+</Ways>
+
+## The measures
+
+| Measure | Better is | Field |
+|---|---|---|
+| Verified success | Higher | `success_rate` |
+| Episodes with a rule violation | Lower | `hard_violation_episodes` |
+| Claimed done but was not | Lower | `false_completions` |
+| Duplicate side effects | Lower | `duplicate_effects` |
+| Unneeded customer interruptions | Lower | `unnecessary_interruptions` |
+| Blocked tool calls | Lower | `rejected_attempts` |
+| Model cost (USD) | Lower | `cost_usd` |
+
+The page also shows **Episodes scored** and **Recovered after a fault** for each side.
+
+## Read a comparison
+
+1. **Look at `holdout` first.** It is the score on jobs that neither version was tuned on.
+2. **Then look at rule violations and duplicates.** A version with a higher success rate and more duplicates is not
+   better for an agent in production.
+3. **Check the episode counts.** A difference of one episode in ten is noise. Run more repeats before you decide.
+4. **Read the jobs that changed.** In **Per scenario**, find the jobs that one version passes and the other fails,
+   and open an episode of each: see [Read results](/guides/read-results).
+
+## Good practice
+
+- Prefer one run with both agents over two runs. Put the earlier version in every run as a control.
+- Use 2 or more repeats.
+- Keep the world version fixed while you compare versions of an agent. Build a new world version when your
+  application changes, and start a new series of comparisons there.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/improve-an-agent" title="Improve an agent">Make the next version to compare.</LinkCard>
+  <LinkCard href="/get-started/core-concepts#ready-to-pilot" title="Ready to pilot">When the console calls an agent ready.</LinkCard>
+</LinkCards>

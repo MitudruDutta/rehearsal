@@ -1,26 +1,366 @@
 @import "tailwindcss";
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
 
+/* The console's "Studio" theme, copied from web/src/app/globals.css so the docs and the console look like one
+   product: near-black canvas, graphite surfaces, one violet accent for things the reader can act on, and four
+   status colours that carry meaning and nothing else (green = verified or a tip, amber = costs money or a caution,
+   red = rule violated or cannot be undone, blue = a note). */
 :root {
+  --radius: 0.6rem;
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f1012;
+  --card: #ffffff;
+  --card-foreground: #0f1012;
+  --popover: #ffffff;
+  --popover-foreground: #0f1012;
+  --primary: #5b4ee6;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f6;
+  --secondary-foreground: #1d1e22;
+  --muted: #f6f6f7;
+  --muted-foreground: #6b6f76;
+  --accent: #f0eefe;
+  --accent-foreground: #1d1e22;
+  --destructive: #d93036;
+  --success: #12875a;
+  --warning: #a35c00;
+  --info: #2f66d8;
+  --border: #e6e7ea;
+  --input: #dcdde1;
+  --ring: #5b4ee6;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1d1e22;
+  --sidebar-primary: #5b4ee6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0eefe;
+  --sidebar-accent-foreground: #0f1012;
+  --sidebar-border: #e6e7ea;
+  --sidebar-ring: #5b4ee6;
+  /* body text that is quieter than headings but still passes AA on the page colour */
+  --prose: #33363c;
+  --code-surface: #fafafb;
+}
+
+.dark {
+  --background: #08090a;
+  --foreground: #f7f8f8;
+  --card: #0f1012;
+  --card-foreground: #f7f8f8;
+  --popover: #121316;
+  --popover-foreground: #f7f8f8;
+  --primary: #6a5af0;
+  --primary-foreground: #ffffff;
+  --secondary: #16171a;
+  --secondary-foreground: #f7f8f8;
+  --muted: #141518;
+  --muted-foreground: #8a8f98;
+  --accent: #1c1b2b;
+  --accent-foreground: #f7f8f8;
+  --destructive: #ff6363;
+  --success: #3ecf8e;
+  --warning: #f5a524;
+  --info: #4c9aff;
+  --border: #212226;
+  --input: #2a2c31;
+  --ring: #8b7dff;
+  --sidebar: #08090a;
+  --sidebar-foreground: #c9ccd2;
+  --sidebar-primary: #6a5af0;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #17171f;
+  --sidebar-accent-foreground: #f7f8f8;
+  --sidebar-border: #212226;
+  --sidebar-ring: #8b7dff;
+  --prose: #c9ccd2;
+  --code-surface: #0f1012;
+}
+
+/* Violet as text: links and the current navigation item. The button violet is too dark to read on the dark
+   canvas, so text uses the lighter step there. */
+:root {
+  --link: #5b4ee6;
+}
+.dark {
+  --link: #9d91ff;
+}
+
+/* Fumadocs reads these; point its status colours at ours so callouts match the console. */
+:root,
+.dark {
+  --color-fd-info: var(--info);
+  --color-fd-warning: var(--warning);
+  --color-fd-error: var(--destructive);
+  --color-fd-success: var(--success);
+  --color-fd-idea: var(--success);
 }
 
 @theme inline {
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-head), var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--destructive);
+  --color-info: var(--info);
+  --color-link: var(--link);
+  --color-prose: var(--prose);
+  --color-code-surface: var(--code-surface);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    scroll-padding-top: 5rem;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 28%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
-body {
+/* ---- Layout. The page is used from edge to edge at every width: the sidebar is at the window's left edge, the
+   list of the page's headings is at the right edge, and the page itself is in the middle of what is between them.
+   On a wide screen the page column and its type grow a step (see .rh-prose), so the middle does not look lost. ---- */
+/* --rh-column is the page: its title, tables and samples. --rh-measure is a line of body text. They are set on the
+   layout, not on :root, because the build drops a :root setting that no theme colour or font refers to. */
+#nd-notebook-layout {
+  --fd-layout-width: 100vw;
+  --rh-column: 50rem;
+  --rh-measure: 45rem;
+}
+@media (min-width: 110rem) {
+  #nd-notebook-layout {
+    --rh-column: 54rem;
+    --rh-measure: 47rem;
+  }
+}
+@media (min-width: 48rem) {
+  #nd-notebook-layout:has([data-sidebar-placeholder]) {
+    --fd-sidebar-width: 280px;
+  }
+}
+@media (min-width: 80rem) {
+  #nd-notebook-layout:has(#nd-toc) {
+    --fd-toc-width: 264px;
+  }
+}
+
+/* Sidebar: every section in one list. Quiet until needed; the current page is the only violet item. */
+#nd-sidebar {
+  width: var(--fd-sidebar-width);
   background: var(--background);
+  border-inline-end: 1px solid var(--border);
+}
+#nd-sidebar a[data-active="true"],
+#nd-sidebar-mobile a[data-active="true"] {
+  color: var(--link);
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  font-weight: 500;
+}
+/* the first level (Overview and the six sections): icon and name read as headings, a section's pages hang under it */
+:is(#nd-sidebar, #nd-sidebar-mobile) [data-radix-scroll-area-viewport] > div > a,
+:is(#nd-sidebar, #nd-sidebar-mobile) [data-radix-scroll-area-viewport] > div > [data-state] > :is(a, button) {
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 500;
+}
+:is(#nd-sidebar, #nd-sidebar-mobile) [data-radix-scroll-area-viewport] > div > a:not([data-active="true"]) > svg:first-child,
+:is(#nd-sidebar, #nd-sidebar-mobile) [data-radix-scroll-area-viewport] > div > [data-state] > :is(a, button):not([data-active="true"]) > svg:first-child {
+  color: var(--muted-foreground);
+}
+/* a group inside a section ("First result", "Understand"): a small label, close to the pages it names */
+:is(#nd-sidebar, #nd-sidebar-mobile) [data-state] p {
+  margin-top: 0.875rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+:is(#nd-sidebar, #nd-sidebar-mobile) [data-state] p:first-child {
+  margin-top: 0.5rem;
+}
+
+/* The Ask AI panel takes the place of the right rail. */
+#nd-notebook-layout > aside {
+  background: var(--background);
+}
+
+/* ---- Type: section 9.3. Scoped to the page body (.rh-prose): Fumadocs also puts "prose" on small things such as
+   table-of-contents items, which must keep their own size and colour. ---- */
+.rh-prose {
+  color: var(--prose);
+  font-size: 1rem;
+  line-height: 1.6875; /* 27px */
+  max-width: var(--rh-column); /* the title, the body and the footer share one left edge */
+}
+@media (min-width: 110rem) {
+  .rh-prose {
+    font-size: 1.0625rem;
+  }
+}
+.rh-prose :where(h1, h2, h3, h4) {
+  color: var(--foreground);
+  scroll-margin-top: 5.5rem;
+  text-wrap: balance;
+}
+.rh-prose :where(h2) {
+  font-family: var(--font-heading);
+  font-size: 1.625rem;
+  line-height: 2.125rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+}
+.rh-prose :where(h3) {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 2rem;
+  margin-bottom: 0.625rem;
+}
+.rh-prose :where(h4) {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.rh-prose :where(p, ul, ol, blockquote, dl) {
+  max-width: var(--rh-measure); /* 60 to 75 characters of body text */
+}
+.rh-prose :where(strong) {
+  color: var(--foreground);
+  font-weight: 600;
+}
+/* Links are the only violet text in the body. */
+.rh-prose :where(a):not([data-card], .not-prose *) {
+  color: var(--link);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in oklab, var(--link) 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+.rh-prose :where(a):not([data-card], .not-prose *):hover {
+  text-decoration-color: var(--link);
+}
+.rh-prose :where(:not(pre) > code):not(.not-prose *) {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  font-weight: 400;
+  color: var(--foreground);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.1em 0.35em;
+}
+.rh-prose :where(hr) {
+  border-color: var(--border);
+  margin-block: 2.5rem;
+}
+
+/* Tables scroll inside their own frame, never the page. */
+.rh-prose :where(table) {
+  font-size: 0.9375rem;
+  line-height: 1.5rem;
+}
+.rh-prose :where(thead th) {
+  background: var(--muted);
+  color: var(--foreground);
+  font-weight: 600;
+  text-align: start;
+  white-space: nowrap;
+}
+.rh-prose :where(td, th) {
+  vertical-align: top;
+}
+.rh-prose :where(td:first-child) > :where(code):first-child {
+  white-space: nowrap;
+}
+.rh-prose :where(td:not(:first-child)) :where(code) {
+  overflow-wrap: anywhere;
+}
+
+/* Code blocks: 14 / 22 px. */
+.rh-prose :where(pre) {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+figure.shiki {
+  background: var(--code-surface);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+/* An empty line in a sample keeps its height. */
+figure.shiki .line {
+  min-height: 1lh;
+}
+
+/* A value the reader must replace, written <like_this>: amber and slanted, so it is not typed as it is. */
+.shiki .rh-placeholder,
+.rh-prose code .rh-placeholder {
+  color: var(--warning) !important;
+  font-style: italic;
+}
+
+/* What the reader should see after a step: quieter than a command, and nothing to copy. */
+.rh-output figure.shiki {
+  background: transparent;
+  border-style: dashed;
+  margin-block: 0;
+}
+.rh-output figure.shiki button {
+  display: none;
+}
+.rh-output pre {
+  color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

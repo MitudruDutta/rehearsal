@@ -1,0 +1,259 @@
+---
+title: Bring your own agent
+description: Test agent code that you run yourself, in any framework. Rehearsal sends each turn over the API, and your agent answers with one action.
+audience: Platform and ML engineers
+last_reviewed: 2026-10-11
+time: 30 minutes to connect an agent
+cost: The world and the simulated customer spend model budget. Your agent's own model calls are yours
+needs: a published world version, and a key with Build and evaluate access
+---
+
+Use this when your agent is code: LangGraph, the OpenAI Agents SDK, CrewAI, or your own loop. Rehearsal does not run
+a model for such an agent. It runs the world, the simulated customer and the checks. Your code decides each action.
+
+## How it works
+
+1. You create an agent profile that is marked as your own.
+2. You start a run with it. The episodes start and wait for your agent.
+3. For each waiting episode, your agent reads a **turn**: who it plays, what is new, and which tools it may call.
+4. Your agent sends **one action**. Rehearsal carries it out in the world and returns the result.
+5. This repeats until the episode ends. Then the checks run, as for any agent.
+
+<Caution title="Each turn waits 10 minutes">
+
+If no action arrives within 10 minutes of a turn, the episode ends with `external_timeout`. Start your agent's loop
+as soon as the run starts.
+
+</Caution>
+
+## Set up
+
+<Steps>
+<Step>
+
+### Create the profile
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Open **Agents**, choose **Create a profile**, and turn on **My own agent sends actions through the API**.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal profiles create my-agent --external
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+agent = rh.profiles.create("my-agent", driver="external")
+```
+
+</Tab>
+<Tab value="MCP">
+
+The assistant calls `create_agent` with `bring_your_own=true`.
+
+</Tab>
+</Ways>
+
+</Step>
+<Step>
+
+### Start a run
+
+<Cost>
+
+The world and the simulated customer spend model budget in each episode.
+
+</Cost>
+
+```bash
+rehearsal eval <wv_id> --profile <profile_id> --split dev --repeats 1
+```
+
+Keep the `run_id`.
+
+</Step>
+<Step>
+
+### Run your agent's loop
+
+Use the Python client, or plain HTTP. Both are below.
+
+</Step>
+</Steps>
+
+## The loop in Python
+
+```python
+import uuid
+from rehearsal.sdk import Rehearsal
+
+rh = Rehearsal()
+run = rh.evaluations.create(WORLD_VERSION_ID, [AGENT_ID], splits=["dev"], repeats=1)
+memory = {}  # (episode id, actor) -> everything that actor has seen
+
+while rh.runs.get(run["run_id"])["status"] not in ("finished", "failed", "cancelled"):
+    for episode in rh.runs.episodes(run["run_id"]):
+        if episode["status"] != "running":
+            continue
+        observation = rh.external.observation(episode["id"])
+        if not observation.get("awaiting_action"):
+            continue
+        turn = observation["turn"]["data"]
+        history = memory.setdefault((episode["id"], turn["actor"]), [])
+        history += turn["new"]
+
+        tool, args = my_agent_decide(history, turn["tools"])  # your agent: exactly one tool call
+
+        result = rh.external.act(episode["id"], turn["actor"], tool, args, idempotency_key=uuid.uuid4().hex)
+        history.append({"role": "tool", "name": tool, "content": str(result)})
+```
+
+`my_agent_decide` is your code. It gets the conversation so far and the tools, and returns one tool name with its
+arguments.
+
+- `turn["tools"]` uses the OpenAI function format: `{"type": "function", "function": {"name", "description",
+  "parameters"}}`. Most agent frameworks accept it as their list of tools.
+- `turn["new"]` has only what arrived since the actor's last action. Keep your own memory for each episode and
+  actor, as the example does.
+- A run can have several episodes waiting at once, one for each sandbox.
+
+The repository has a complete example with a LangGraph ReAct agent: `examples/agents/langgraph_react.py`.
+
+## The loop over HTTP
+
+Every request carries `Authorization: Bearer <your_key>`.
+
+### 1. Read the turn
+
+<Operation method="GET" path="/v1/episodes/<episode_id>/observation" access="read" />
+
+<Output label="Response">
+
+```json
+{
+  "episode_status": "running",
+  "awaiting_action": true,
+  "turn": {
+    "data": {
+      "actor": "mira",
+      "new": [{"role": "system", "content": "You are mira (maintainer). ..."}],
+      "goal_version_observed": 1,
+      "tools": [{"type": "function", "function": {"name": "create_comment", "description": "...", "parameters": {}}}]
+    }
+  }
+}
+```
+
+</Output>
+
+The actor name and the tool are examples. `new` holds chat messages: the first turn has the role's instructions, and
+later turns have tool results, customer messages and messages from other actors. When `awaiting_action` is `false`, no turn is waiting: ask again in a
+second or two.
+
+### 2. Send one action
+
+<Operation method="POST" path="/v1/episodes/<episode_id>/actions" access="write" />
+
+```json
+{
+  "actor": "mira",
+  "tool": "create_comment",
+  "args": {"index": 12, "body": "Thank you. The fix is in the next release."},
+  "idempotency_key": "6f1c2a9e7b0d4c53"
+}
+```
+
+The server answers `202` at once. The action is carried out in the world after that.
+
+### 3. Get the result
+
+<Operation method="GET" path="/v1/episodes/<episode_id>/actions/<idempotency_key>" access="read" />
+
+<Output label="Response">
+
+```json
+{"status": "done", "result": {}}
+```
+
+</Output>
+
+While the action is in progress, the answer is `{"status": "pending"}`. Ask again in half a second.
+
+### What the idempotency key is for
+
+The key names one action. You choose it: 8 to 64 characters, different for each action. A random UUID is a good
+key.
+
+- If your request is lost and you send the same action again **with the same key**, the server knows it and does
+  not carry it out twice.
+- You use the same key to get the result.
+- The same key with a different action is refused with `409`.
+
+### Errors from an action
+
+| Status | Message | Meaning |
+|---|---|---|
+| `409` | `episode is not running` | The episode has ended |
+| `409` | `actor does not match the current external turn` | The turn belongs to another actor |
+| `409` | `current external turn already has an action` | One action for each turn. Read the next turn |
+| `409` | `idempotency key already used for a different action` | Use a new key for a new action |
+| `409` | `episode does not use an external agent` | The profile is not a bring-your-own profile |
+| `422` | `tool is not offered in the current external turn` | Call only the tools that the turn lists |
+
+## Tools that every world offers
+
+Besides the application's own tools, a turn can offer these.
+
+| Tool | Use |
+|---|---|
+| `reply_to_customer(text)` | Talk to the customer. Each contact interrupts them, so keep contacts necessary |
+| `send_message(to, text)` | Message another actor, for example to ask an administrator to make a change that your role cannot |
+| `retry_operation(operation_id)` | Safely send an earlier write again after an `UNKNOWN` result. It returns the original effect if the write did happen |
+| `wait()` | Wait for new messages, for example a teammate's answer |
+| `complete(summary)` | Say that the customer's latest request is done and checked. Only one actor has it |
+
+When the customer talks through the application itself, such as a chat channel or an issue comment, their messages
+arrive as notifications, and you answer with the application's own tools.
+
+## What a careful agent does
+
+Your agent is tested on these. They are also good practice in production.
+
+1. Read the customer's **latest** message before every write. Requests change during the work.
+2. When a write returns "not carried out: a new message from the customer arrived", read the new message, then
+   decide again.
+3. After an `UNKNOWN` result, do not repeat the write blindly. Read the state first, or use `retry_operation`.
+4. Find ids with read tools. Never guess an id.
+5. Call `complete` only after a read shows that the work is done.
+6. Do not contact the customer more than necessary.
+
+## A key for the agent only
+
+A key with "Build and evaluate" access can do everything on this page. To give agent code less, create a key with
+only the `agent` scope. It can read the waiting turn of an episode and send its action, and nothing else. Another
+program, with its own key, must then start the run and tell the agent the episode ids.
+
+```bash
+curl -X POST https://rehearsal.example.com/v1/api-keys \
+  -H "Authorization: Bearer <a_full_access_key>" -H "Content-Type: application/json" \
+  -d '{"name": "agent runner", "scopes": ["agent"]}'
+```
+
+## Act as the agent from an AI assistant
+
+An AI assistant can play the agent through two MCP tools: `waiting_turns` returns the episodes that wait, and
+`take_action` sends one action. This is a good way to see how a careful agent behaves, or to check that a job is
+fair. See the [MCP tool reference](/ai-assistants/mcp-tools#bring-your-own-agent).
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/read-results" title="Read results">See how your agent did, episode by episode.</LinkCard>
+  <LinkCard href="/reference/errors" title="Errors">Every status and what to do.</LinkCard>
+</LinkCards>

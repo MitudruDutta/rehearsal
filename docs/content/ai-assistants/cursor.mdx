@@ -1,0 +1,123 @@
+---
+title: Cursor
+description: Install the Rehearsal plugin in Cursor as a local plugin, or add only the MCP server. Sign in, check that it works, and remove it.
+audience: Cursor users
+last_reviewed: 2026-10-11
+time: 5 minutes
+needs: Cursor, git, uv, and an account on a Rehearsal server
+---
+
+## Install
+
+Cursor loads the plugin from a folder on your machine. Clone the repository, then link the plugin folder into
+Cursor's local plugins.
+
+<OS>
+<Tab value="macOS and Linux">
+
+```bash
+git clone --depth 1 https://github.com/MitudruDutta/rehearsal ~/.rehearsal-src
+mkdir -p ~/.cursor/plugins/local
+ln -s ~/.rehearsal-src/agent-plugin ~/.cursor/plugins/local/rehearsal
+```
+
+</Tab>
+<Tab value="Windows (PowerShell)">
+
+```powershell
+git clone --depth 1 https://github.com/MitudruDutta/rehearsal "$HOME\.rehearsal-src"
+New-Item -ItemType Directory -Force "$HOME\.cursor\plugins\local" | Out-Null
+New-Item -ItemType Junction -Path "$HOME\.cursor\plugins\local\rehearsal" -Target "$HOME\.rehearsal-src\agent-plugin"
+```
+
+</Tab>
+</OS>
+
+Restart Cursor. The plugin adds the Rehearsal skill and the Rehearsal MCP server. Cursor starts the MCP server
+itself, with `uvx`. Install [uv](https://docs.astral.sh/uv/) if you do not have it.
+
+To update the plugin later, run `git pull` in the clone and restart Cursor.
+
+### Or add only the MCP server
+
+Put this entry in Cursor's MCP settings, `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "rehearsal": {
+      "command": "uvx",
+      "args": ["--from", "rehearsal-kit[mcp]>=0.1.1", "rehearsal", "mcp"]
+    }
+  }
+}
+```
+
+With only the MCP server, the assistant has the tools and not the skill. The MCP server still tells it to ask
+before it spends money.
+
+## Sign in
+
+Run this in a terminal, once:
+
+```bash
+uvx --from rehearsal-kit rehearsal login
+```
+
+Add `--url <address>` for a server other than the default. Your browser opens the console. Check that the code
+matches your terminal, then choose **Approve**. The sign-in is saved for your user only, and the MCP server reads
+it.
+
+## Check that it works
+
+1. Open Cursor's settings and look at the MCP servers. A server named `rehearsal` is listed, with its tools.
+2. In the agent chat, ask:
+
+   ```text
+   Show my Rehearsal workspace status.
+   ```
+
+   The agent calls `workspace_status` and reports your plan and what exists in the workspace.
+
+If the tool answers that Rehearsal is not signed in, run the sign-in command above and ask again.
+
+## What to ask
+
+```text
+Evaluate my support agent on the published world for Gitea. Use the dev jobs and two repeats.
+The instructions are in agent/instructions.txt.
+```
+
+The agent tells you the number of episodes and the cost, and waits for your yes, before it starts the run.
+
+```text
+Why did the failed episodes fail? Group the causes.
+```
+
+More prompts are in [AI assistants](/ai-assistants#what-to-ask).
+
+## Remove
+
+Delete the link and the clone, then restart Cursor.
+
+<OS>
+<Tab value="macOS and Linux">
+
+```bash
+rm ~/.cursor/plugins/local/rehearsal
+rm -rf ~/.rehearsal-src
+```
+
+</Tab>
+<Tab value="Windows (PowerShell)">
+
+```powershell
+(Get-Item "$HOME\.cursor\plugins\local\rehearsal").Delete()
+Remove-Item -Recurse -Force "$HOME\.rehearsal-src"
+```
+
+</Tab>
+</OS>
+
+To end the access as well, revoke the key on the console's **API keys** page, and run
+`uvx --from rehearsal-kit rehearsal logout`.

@@ -1,0 +1,76 @@
+---
+title: Codex
+description: Install the Rehearsal plugin in the Codex CLI, sign in, check that the tools are there, and end its access.
+audience: Codex users
+last_reviewed: 2026-10-11
+time: 5 minutes
+needs: the Codex CLI, uv, and an account on a Rehearsal server
+---
+
+## Install
+
+Add the Rehearsal marketplace, then add the plugin from it:
+
+```bash
+codex plugin marketplace add MitudruDutta/rehearsal
+codex plugin add rehearsal@rehearsal
+```
+
+The plugin adds the Rehearsal skill and the Rehearsal MCP server. Codex starts the MCP server itself, with `uvx`.
+Install [uv](https://docs.astral.sh/uv/) if you do not have it.
+
+## Sign in
+
+Run this in a terminal, once:
+
+```bash
+uvx --from rehearsal-kit rehearsal login
+```
+
+Add `--url <address>` for a server other than the default. Your browser opens the console. Check that the code
+matches your terminal, then choose **Approve**. The sign-in is saved for your user only, and the MCP server reads
+it.
+
+On a machine with no browser, use `rehearsal login --with-key`. Or set `REHEARSAL_URL` and `REHEARSAL_API_KEY` in
+the environment that Codex runs in: they take precedence over a saved sign-in.
+
+## Check that it works
+
+Start Codex and ask:
+
+```text
+Show my Rehearsal workspace status.
+```
+
+Codex calls the `workspace_status` tool and reports your plan and what exists in the workspace. If the tool answers
+that Rehearsal is not signed in, run the sign-in command above and ask again.
+
+## What to ask
+
+```text
+Evaluate my support agent on the published world for Gitea. Use the dev jobs and two repeats.
+The instructions are in agent/instructions.txt.
+```
+
+Codex tells you the number of episodes and the cost, and waits for your yes, before it starts the run.
+
+```text
+Why did the failed episodes fail? Group the causes.
+```
+
+```text
+Improve the agent from those failures, then compare both versions on holdout.
+```
+
+More prompts are in [AI assistants](/ai-assistants#what-to-ask).
+
+## End its access
+
+Revoke the key on the console's **API keys** page. Codex loses access at once. Then remove the saved sign-in from
+the machine:
+
+```bash
+uvx --from rehearsal-kit rehearsal logout
+```
+
+To remove the plugin itself, use Codex's own plugin commands.

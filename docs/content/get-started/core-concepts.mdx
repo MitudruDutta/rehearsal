@@ -1,0 +1,104 @@
+---
+title: Core concepts
+description: The words Rehearsal uses, each defined once, in the order you meet them.
+audience: Everyone
+last_reviewed: 2026-10-11
+---
+
+Rehearsal uses a small set of words, and it uses each one for one thing. This page defines them in the order you
+meet them: from your application, to a world, to an agent, to a result.
+
+<Note title="One word differs in the API">
+
+The console says **job**. The API, the CLI and the MCP tools say **scenario** for the same thing. These pages say
+"job", and show `scenario` where you type it or read it in output.
+
+</Note>
+
+## From your application to a world
+
+| Word | Meaning |
+|---|---|
+| **Application** | Your software, which a world is built from. You give it as a public git repository at a pinned commit, with the container images you publish. |
+| **Policies** | Rules the agent must follow, in plain words. For example: "Never share a customer's account number in a public channel." Jobs turn them into hard rules. |
+| **Practice world**, **world** | The application running in a sandbox, with fictional data, tools for agents, and jobs. |
+| **World version** | One published build of a world. It never changes. Its id starts with `wv_`. Only a published version can be evaluated. |
+| **Build** | The work that makes a world version from an application. The World Compiler does it in nine phases. |
+| **Sandbox** | The isolated containers that one world runs in, on a network with no internet access. |
+
+When your application changes, you build a new world version. Results stay attached to the version they were
+measured on.
+
+## Inside a world
+
+| Word | Meaning |
+|---|---|
+| **Job** | One task for an agent: a customer request, the events that happen during the work, and the checks that decide success. |
+| **Check** | One read-only question to the application's database, with the wanted answer. |
+| **Goal check** | A check that the request was done. |
+| **Hard rule** | A check for something that must never happen. Breaking one makes the outcome "rule violated", whatever else the agent did. |
+| **Split** | Which use a job is for: `train`, `dev` or `holdout`. |
+| **Tool** | One action an agent may take. Each maps to a real operation of the application. |
+| **Role**, **actor** | An actor is one participant in a job, such as a support agent or an administrator. Its role decides which tools it has. |
+| **Simulated customer** | The participant who makes the request, and who can change it. |
+| **Fault** | Something that goes wrong on purpose: a refused request, or a write whose result comes back unknown. |
+
+### The three splits
+
+| Split | Use it to | Rule |
+|---|---|---|
+| `train` | Find failures to learn from | The improvement step reads these episodes |
+| `dev` | Check a change while you work | The improvement step reads these episodes too |
+| `holdout` | Get the final score | Never used to improve an agent. Run it when you have stopped changing the agent |
+
+A score on jobs that the agent was tuned on says little. The `holdout` split exists so that one score stays honest.
+
+## Agents and results
+
+| Word | Meaning |
+|---|---|
+| **Agent**, **agent profile** | The agent under test. A profile is one version of it: its instructions and its model. A second profile with the same name becomes version 2. |
+| **Bring-your-own agent** | A profile for agent code that you run. Rehearsal sends each turn over the API, and your agent answers. |
+| **Run** | One evaluation: a set of agents x jobs x repeats on one world version. |
+| **Episode** | One attempt by one agent at one job. Each episode starts from the same saved state of the world. |
+| **Turn** | One step inside an episode: the agent reads what is new and takes one action. |
+| **Outcome** | The result of an episode: verified, not achieved, or rule violated. |
+| **Ending** | How the episode stopped: the agent said it was done, it gave up, or it reached a limit. |
+| **Stress layer** | Two events that every episode gets: the agent's first change is refused once, and after a change the customer repeats the request. |
+| **Readiness** | The console's verdict for one agent on one application: "Ready to pilot" or "Needs work". |
+
+### The outcomes
+
+| Outcome | The API says | Meaning |
+|---|---|---|
+| <Verdict is="verified" /> | `reward` is `1` | Every goal check of the final request passed. No hard rule was broken. |
+| <Verdict is="not-achieved" /> | `reward` is `0` | The request was not done. No hard rule was broken. |
+| <Verdict is="rule-violated" /> | `reward` is `-1` | A hard rule was broken. |
+| <Verdict is="not-scored" /> | No reward | The environment failed, not the agent. The episode is not counted. |
+
+### Ready to pilot
+
+The console's **Overview** shows an agent as "Ready to pilot" on an application when all of these are true:
+
+- It has at least 3 scored episodes on jobs that this agent version never learned from. For a version that nobody
+  improved, that is every job. For a version made by the improvement step, that is the `holdout` jobs.
+- 80% or more of those episodes are verified.
+- No episode broke a hard rule.
+- No episode claimed to be done when it was not.
+
+## Jobs, builds and runs on the server
+
+| Word | Meaning |
+|---|---|
+| **Workspace**, **organisation** | Your team's account. It owns projects and has one plan. |
+| **Project** | Holds applications, worlds, agents and runs. A key belongs to one project. |
+| **Server job** | A long piece of work that a worker does: a build, a part of a run, an improvement, a re-check. Its id starts with `job_`. `rehearsal jobs` controls server jobs, not the jobs inside a world. |
+| **Worker** | The process that does server jobs. |
+| **Allowance** | The model budget a workspace may spend in a month. |
+
+## Where to go next
+
+<LinkCards>
+  <LinkCard href="/get-started/how-scoring-works" title="How scoring works">Why a model cannot talk its way to a pass.</LinkCard>
+  <LinkCard href="/get-started/what-costs-money" title="What costs money">Which actions spend model budget.</LinkCard>
+</LinkCards>

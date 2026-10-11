@@ -1,0 +1,17 @@
+{
+  "title": "Get started",
+  "description": "What Rehearsal is, and a first result",
+  "icon": "Rocket",
+  "pages": [
+    "index",
+    "---First result---",
+    "quickstart-console",
+    "quickstart-cli",
+    "quickstart-ai-assistant",
+    "sign-in-and-keys",
+    "---Understand---",
+    "core-concepts",
+    "how-scoring-works",
+    "what-costs-money"
+  ]
+}

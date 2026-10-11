@@ -1,0 +1,256 @@
+---
+title: "Quickstart: CLI and Python"
+description: Sign in from a terminal, evaluate an agent on a published world, and read the result. Then do the same in Python.
+audience: Agent developers
+last_reviewed: 2026-10-11
+time: 10 minutes when a world is published. A first build adds 1 to 3 hours
+cost: A build and a run spend model budget
+needs: Python 3.11 or later, and an account on a Rehearsal server
+---
+
+At the end of this page, `rehearsal eval ... --watch` has finished and printed a summary of the run.
+
+## Install and sign in
+
+<Steps>
+<Step>
+
+### Install the package
+
+```bash
+pip install rehearsal-kit
+rehearsal --version
+```
+
+<Output>
+
+```text
+rehearsal-kit 0.1.2
+```
+
+</Output>
+
+To run commands without an installation, put `uvx --from rehearsal-kit` before each one.
+
+</Step>
+<Step>
+
+### Sign in
+
+```bash
+rehearsal login
+```
+
+The command signs in to the server at `http://127.0.0.1:7800`. For another server, add `--url <address>`.
+
+<Output>
+
+```text
+Signing in to Rehearsal at https://rehearsal.example.com
+
+Approve this sign-in in your browser:
+  https://rehearsal.example.com/app/cli-login/?code=ZKCZ-BVBS
+
+Confirmation code: ZKCZ-BVBS  (the browser shows the same code)
+
+Waiting for approval (Ctrl+C to cancel)....
+```
+
+</Output>
+
+Your browser opens the console. Check that the page shows the same code as your terminal, then choose
+**Approve**. The terminal continues:
+
+<Output>
+
+```text
+✓ Signed in to Acme (project default) at https://rehearsal.example.com.
+  Saved to ~/.config/rehearsal/config.json (readable by you only). The CLI, the Python SDK and the MCP server use it.
+  Next: rehearsal worlds list
+```
+
+</Output>
+
+The terminal now holds a key with "Build and evaluate" access. On a machine with no browser, use
+`rehearsal login --with-key` and paste a key from the console's **API keys** page.
+
+</Step>
+<Step>
+
+### Check the sign-in
+
+```bash
+rehearsal whoami
+```
+
+<Output>
+
+```text
+Server:     https://rehearsal.example.com
+Workspace:  Acme (project default)
+Key:        rh_1a2b3c4d_…  access: write, evaluator
+Signed in:  saved sign-in (~/.config/rehearsal/config.json)
+```
+
+</Output>
+
+</Step>
+</Steps>
+
+## Find or build a world
+
+```bash
+rehearsal worlds list
+```
+
+The command prints the worlds of the workspace and their versions. You need the id of a version whose status is
+`published`. It starts with `wv_`.
+
+If the list is empty (`[]`), build a world first:
+
+<Cost amount="about $3 to $8">
+
+A build spends model budget and takes 1 to 3 hours. `--budget` sets the spend at which the build stops itself.
+
+</Cost>
+
+```bash
+rehearsal apps list
+rehearsal build <app_id> --budget 6 --watch
+```
+
+If `apps list` is also empty, add an application: see [Add an application](/guides/add-an-application). With
+`--watch`, the command prints each event until the build ends. You can stop watching with Ctrl+C: the build
+continues on the server, and `rehearsal jobs watch <job_id>` attaches again.
+
+## Evaluate an agent
+
+<Steps>
+<Step>
+
+### Create an agent profile
+
+Put the agent's instructions in a text file, then create the profile.
+
+```bash
+rehearsal profiles create support-agent --prompt-file instructions.txt
+```
+
+<Output>
+
+```json
+{
+  "id": "prof_7f37a04a339513ca",
+  "name": "support-agent",
+  "version": 1,
+  "created_by": "user"
+}
+```
+
+</Output>
+
+The output is shortened here. Keep the `id`.
+
+</Step>
+<Step>
+
+### See the jobs
+
+```bash
+rehearsal worlds scenarios <wv_id>
+```
+
+Each job has a `split`: `train`, `dev` or `holdout`. Count the jobs in the split you will run.
+
+</Step>
+<Step>
+
+### Run the evaluation
+
+<Cost amount="about $0.02 for each episode">
+
+Episodes = jobs in the chosen splits x agents x repeats. Six `dev` jobs, one agent and two repeats are 12
+episodes.
+
+</Cost>
+
+```bash
+rehearsal eval <wv_id> --profile <profile_id> --split dev --repeats 2 --watch
+```
+
+The command prints the run id, then each event as it happens, then the summary: for each agent, the number of
+verified episodes, duplicates, false completions and the cost.
+
+</Step>
+<Step>
+
+### Read the episodes
+
+```bash
+rehearsal runs episodes <run_id>
+rehearsal runs episode <episode_id>
+```
+
+The first command prints one line for each episode, with its `reward` and how it ended. The second prints
+everything about one episode: the request, each action and each check.
+
+</Step>
+</Steps>
+
+[Read results](/guides/read-results) explains the fields.
+
+## The same in Python
+
+The package is also a Python client. It uses the same saved sign-in.
+
+```python
+from rehearsal.sdk import Rehearsal
+
+rh = Rehearsal()  # the saved sign-in, or REHEARSAL_API_KEY and REHEARSAL_URL
+
+version = next(v for w in rh.worlds.list() for v in w["versions"] if v["status"] == "published")
+agent = rh.profiles.create("support-agent", open("instructions.txt").read())
+
+run = rh.evaluations.create(version["id"], [agent["id"]], splits=["dev"], repeats=2)
+for event in rh.runs.events(run["run_id"]):  # ends when the run ends
+    print(event["type"], event["summary"])
+
+print(rh.runs.get(run["run_id"])["summary"])
+for episode in rh.runs.episodes(run["run_id"]):
+    print(episode["id"], episode["scenario"], episode["reward"], episode["termination"])
+```
+
+A failed request raises `RehearsalError`, which has the HTTP `status` and the server's `detail`.
+
+## In CI
+
+A CI job has no browser. Give it a key in the environment instead of a saved sign-in:
+
+```bash
+export REHEARSAL_URL=https://rehearsal.example.com
+export REHEARSAL_API_KEY=<key_from_the_api_keys_page>
+```
+
+Store the key as a secret in your CI system. The environment variables take precedence over a saved sign-in.
+
+## When it goes wrong
+
+The CLI prints the server's message and a hint. For example:
+
+<Output>
+
+```text
+Error (403): write scope required
+This API key's access does not allow that. Use a key with "Build and evaluate" or "Full access".
+```
+
+</Output>
+
+[Errors](/reference/errors) lists every status and what to do.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/reference/cli" title="CLI reference">Every command and argument.</LinkCard>
+  <LinkCard href="/guides/bring-your-own-agent" title="Bring your own agent">Test agent code that you run yourself.</LinkCard>
+</LinkCards>

@@ -1,0 +1,19 @@
+{
+  "title": "Guides",
+  "description": "One task on each page",
+  "icon": "BookOpen",
+  "pages": [
+    "---Applications and worlds---",
+    "add-an-application",
+    "build-a-practice-world",
+    "---Agents---",
+    "evaluate-an-agent",
+    "read-results",
+    "improve-an-agent",
+    "compare-agents-and-runs",
+    "---Your own agent---",
+    "bring-your-own-agent",
+    "---Automate---",
+    "use-rehearsal-in-ci"
+  ]
+}

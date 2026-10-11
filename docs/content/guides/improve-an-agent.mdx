@@ -1,0 +1,150 @@
+---
+title: Improve an agent
+description: Let Rehearsal propose a better version of an agent from its failures, then check the new version on jobs it has never seen.
+audience: Agent developers
+last_reviewed: 2026-10-11
+time: 1 minute for the proposal, then one run
+cost: Under $0.10 for the proposal, then the cost of a run
+needs: a finished run with train or dev episodes
+---
+
+The improvement step reads how an agent failed and writes the next version of its instructions. You then prove
+the new version on the `holdout` jobs before you keep it.
+
+## What it reads, and what it may change
+
+| | |
+|---|---|
+| **It reads** | The failed episodes of one agent in one run, on `train` and `dev` jobs that are approved |
+| **It never reads** | `holdout` episodes. They stay unseen, so the final score stays honest |
+| **It changes** | The agent's instructions and its guidance for tools. The result is a new version of the same profile |
+| **It keeps general** | The changes do not name record ids or copy a job's wording. A version that memorised the jobs would not help in production |
+| **It does not change** | The earlier version. Versions are kept, so you can go back |
+
+## Before you start
+
+- Run the agent on `train`, `dev` or both: see [Evaluate an agent](/guides/evaluate-an-agent). The run must be
+  finished.
+- Read the failures first: see [Read results](/guides/read-results). If every failure is an environment error or an
+  unfair job, there is nothing to learn. Do not run the improvement.
+
+## Steps
+
+<Steps>
+<Step>
+
+### Ask for a new version
+
+<Cost amount="under $0.10">
+
+The improvement step spends a small amount of model budget.
+
+</Cost>
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Open the finished run and choose **Improve** with the agent's name. The new version appears on the **Agents** page
+when the work is done, in about a minute.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal improve <profile_id> <run_id>
+rehearsal jobs show <job_id>
+```
+
+The first command prints a job id. The second shows the job. When its status is `succeeded`, its `result` has the
+new `profile_id`, the `version` and the `rationale`.
+
+</Tab>
+<Tab value="Python">
+
+```python
+job = rh.post("/v1/improvements", {"profile_id": profile_id, "run_id": run_id})
+done = rh.jobs.wait(job["job_id"])
+print(done["result"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to improve the agent from the run. It calls `improve_agent` after you agree, then `job_status`
+until the work is done.
+
+</Tab>
+</Ways>
+
+</Step>
+<Step>
+
+### Read the reasons
+
+Open **Agents**. The new version shows **Why this version**: the reason for each change. Read it. A change you do
+not agree with is a reason to write the next version by hand.
+
+</Step>
+<Step>
+
+### Check both versions on holdout
+
+Run the old version and the new version together, on the `holdout` split, with 2 or more repeats.
+
+```bash
+rehearsal eval <wv_id> --profile <old_profile_id> --profile <new_profile_id> --split holdout --repeats 2 --watch
+```
+
+Both agents get the same jobs at the same time, so the comparison is fair.
+
+</Step>
+<Step>
+
+### Compare, then decide
+
+```bash
+rehearsal compare <run_id>
+```
+
+Keep the new version only when it is better on `holdout` **and** it does not add duplicates or rule violations. A
+higher success rate with more duplicates is not an improvement for an agent in production.
+
+When the new version is worse, keep the old one. Nothing is lost.
+
+</Step>
+</Steps>
+
+## After the decision
+
+The console's **Overview** shows the result under **Before and after improvement**: the verified success of each
+version on the same world.
+
+A version made by the improvement step has learned from the `train` and `dev` jobs. For that reason, its readiness
+on the **Overview** page counts only `holdout` episodes.
+
+<Caution title="Do not tune on holdout">
+
+If you change the agent because of a `holdout` failure, the `holdout` score no longer tells you how the agent does
+on new work. Build a new world version to get fresh jobs.
+
+</Caution>
+
+## A bring-your-own agent
+
+Rehearsal cannot change code that you run. For a bring-your-own agent, the improvement step still proposes new
+instructions. Treat them as a suggestion, and apply them in your own agent.
+
+## Improve by hand
+
+You do not need the improvement step. Create a profile with the same name and your new instructions: it becomes the
+next version. Then check it on `holdout` in the same way.
+
+```bash
+rehearsal profiles create support-agent --prompt-file instructions-v2.txt
+```
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/compare-agents-and-runs" title="Compare agents and runs">Read the comparison, measure by measure.</LinkCard>
+</LinkCards>

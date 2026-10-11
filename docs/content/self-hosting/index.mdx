@@ -1,0 +1,48 @@
+---
+title: Self-hosting
+description: Run the Rehearsal server, its workers and its sandboxes on your own machine. What the parts are, and where to start.
+audience: Operators
+label: self-hosted
+last_reviewed: 2026-10-11
+---
+
+Rehearsal is one package. The same code that runs the hosted service runs on your machine: the API and console,
+the workers, and the sandboxes that worlds run in. You bring a Linux host with Docker, a PostgreSQL database and a
+model provider key.
+
+<ArchitectureDiagram />
+
+## The parts
+
+| Part | What it does | How it runs |
+|---|---|---|
+| **API and console** | Takes every request, and serves the console to browsers | One container, on port 7800 |
+| **PostgreSQL** | Holds applications, worlds, runs and results. It is also the queue of work | A managed database, or a container on the same host |
+| **Workers** | Take work from the queue: build worlds, run episodes, improve agents | One or more containers. More workers do more at once |
+| **Sandboxes** | The containers of one world, on a network with no internet access | Started and removed by the workers, with the host's Docker |
+| **Model provider** | The language models that build worlds and play the customer | An outside service. Its key stays on the server |
+
+Two things follow from this design:
+
+- **Nothing runs without a worker.** The API accepts a build or a run and puts it in the queue. If no worker is
+  running, the work stays "queued".
+- **A worker controls Docker on its host.** It starts containers from the images that applications name. Give
+  Rehearsal a machine of its own.
+
+## Start here
+
+<LinkCards>
+  <LinkCard href="/self-hosting/requirements" title="Requirements">The machine, the database and the model key you need.</LinkCard>
+  <LinkCard href="/self-hosting/install-with-docker-compose" title="Install with Docker Compose">From a clone of the repository to a signed-in console.</LinkCard>
+  <LinkCard href="/self-hosting/troubleshooting" title="Troubleshooting">Each message you can meet, why, and the fix.</LinkCard>
+</LinkCards>
+
+## What differs from the hosted service
+
+| | Hosted | Your server |
+|---|---|---|
+| Plans and limits | Every workspace is on a plan | Off, unless you set `REHEARSAL_PLANS=on` |
+| Sign-up | Open | Closed, unless you set `REHEARSAL_SIGNUP=open`. You create accounts with `rehearsal users add` |
+| Model calls | On Rehearsal's model account, within the plan's allowance | On your provider keys. Your provider bills you |
+| A spend limit | The plan's monthly allowance | `REHEARSAL_MONTHLY_ALLOWANCE_USD` for the whole server. Off by default |
+| Application source from a folder | No | Yes, for folders inside `REHEARSAL_SOURCE_ROOTS` |

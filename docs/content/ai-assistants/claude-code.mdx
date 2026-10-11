@@ -1,0 +1,104 @@
+---
+title: Claude Code
+description: Install the Rehearsal plugin in Claude Code, sign in, check that the tools are there, and remove it again.
+audience: Claude Code users
+last_reviewed: 2026-10-11
+time: 5 minutes
+needs: Claude Code, uv, and an account on a Rehearsal server
+---
+
+## Install
+
+Add the Rehearsal marketplace, then install the plugin from it:
+
+```bash
+claude plugin marketplace add MitudruDutta/rehearsal
+claude plugin install rehearsal@rehearsal
+```
+
+The plugin adds the Rehearsal skill and the Rehearsal MCP server. Claude Code starts the MCP server itself, with
+`uvx`. Install [uv](https://docs.astral.sh/uv/) if you do not have it.
+
+## Sign in
+
+Run this in a terminal, once:
+
+```bash
+uvx --from rehearsal-kit rehearsal login
+```
+
+Add `--url <address>` for a server other than the default. Your browser opens the console. Check that the code
+matches your terminal, then choose **Approve**.
+
+### Or set the plugin's options
+
+The plugin has two optional settings, which you can set in `/config` in place of `rehearsal login`:
+
+| Option | Value |
+|---|---|
+| **Rehearsal server URL** | For example `https://rehearsal.example.com` |
+| **Rehearsal API key** | A key with "Build and evaluate" access, from the console's **API keys** page |
+
+Leave both empty to use the saved sign-in. When you set them, they take precedence over it.
+
+## Check that it works
+
+1. Start Claude Code and run `/mcp`. The list shows a server named `rehearsal`.
+2. Ask:
+
+   ```text
+   Show my Rehearsal workspace status.
+   ```
+
+   Claude calls `workspace_status` and reports your plan and what exists in the workspace.
+
+If the tool answers that Rehearsal is not signed in, run the sign-in command above and ask again.
+
+## What to ask
+
+```text
+Evaluate my support agent on the published world for Gitea. Use the dev jobs and two repeats.
+The instructions are in agent/instructions.txt.
+```
+
+Claude lists the worlds and the jobs, creates the agent profile, tells you the number of episodes and the cost, and
+waits for your yes. Then it starts the run and gives you a link to watch it.
+
+```text
+Why did the failed episodes fail? Group the causes, and say which fix would help most.
+```
+
+```text
+Improve the agent from those failures, then compare both versions on holdout.
+```
+
+More prompts are in [AI assistants](/ai-assistants#what-to-ask).
+
+## Without the plugin
+
+To add only the MCP server:
+
+```bash
+claude mcp add rehearsal -- uvx --from "rehearsal-kit[mcp]" rehearsal mcp
+```
+
+To add only the skill, which then uses the `rehearsal` command:
+
+```bash
+uvx --from rehearsal-kit rehearsal skill install
+```
+
+The skill is installed in `~/.claude/skills/rehearsal/`.
+
+## Remove
+
+```bash
+claude plugin uninstall rehearsal@rehearsal
+```
+
+To end the access as well, revoke the key on the console's **API keys** page, and remove the saved sign-in from the
+machine:
+
+```bash
+uvx --from rehearsal-kit rehearsal logout
+```

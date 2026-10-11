@@ -1,0 +1,124 @@
+---
+title: Requirements
+description: The operating system, memory, database and model provider key that a Rehearsal server needs, and where Windows stands.
+audience: Operators
+label: self-hosted
+last_reviewed: 2026-10-11
+---
+
+## In short
+
+| You need | Detail |
+|---|---|
+| **A Linux machine with Docker** | Docker Engine with the Compose plugin. Use a machine that runs nothing else |
+| **A PostgreSQL database** | A managed one (recommended), or the PostgreSQL 16 container that the Compose file can start |
+| **A model provider key** | One or more. Without a key, no build and no run can work |
+| **Memory for sandboxes** | Each sandbox uses 0.3 to 1.5 GB. Plan for the number you run at once |
+| **A domain name**, for a public server | Its DNS record points at the machine. The Compose file gets the HTTPS certificate |
+
+## Operating system
+
+**Run the server on Linux.** The project's own tests run on Ubuntu 24.04, and the container image is built on
+Debian.
+
+| System | Server, workers and sandboxes | CLI, Python client and MCP server |
+|---|---|---|
+| Linux | Yes | Yes |
+| macOS | Not tested for this page | Yes |
+| Windows | Inside WSL 2 only: see below | Yes |
+
+### Windows
+
+The CLI, the Python client and the MCP server work on Windows. The server does not run well on Windows itself:
+
+- A world build fetches the application's source into a folder with a long name. Windows limits a path to 260
+  characters unless long paths are turned on, and the build stops with `Filename too long`.
+- The console's build script uses `rm` and `cp`, which the Windows command line does not have.
+
+Run the server inside **WSL 2**, with Docker Engine installed in the Linux distribution. One installation on
+Windows 11, with Ubuntu 24.04 in WSL 2, ran this way on 10 October 2026. Keep the distribution running: when WSL
+stops it, the containers stop too. [Troubleshooting](/self-hosting/troubleshooting#on-windows) has the details.
+
+## The machine
+
+A worker starts containers with the host's Docker. For that reason:
+
+- Use a **dedicated machine** or virtual machine. Do not give Rehearsal the Docker of a machine that runs other
+  things.
+- Build worlds only from repositories and images that you trust. For source from people you do not know, put each
+  job in its own virtual machine.
+
+### Memory and processors
+
+What uses memory is the sandboxes, not the server.
+
+| What runs | Uses |
+|---|---|
+| One sandbox (one world's containers) | 0.3 to 1.5 GB, by the application |
+| One container inside a sandbox | At most 1 GB, 1 processor and 256 processes, by default |
+| One evaluation run | Up to 4 sandboxes at once, one worker each (`REHEARSAL_RUN_PARALLEL`) |
+| One world build | One sandbox while it builds, then up to 4 copies while it validates jobs (`REHEARSAL_BUILD_PARALLEL`) |
+
+With the default settings, one build and one run at the same time can have 8 sandboxes at once. At 1.5 GB each,
+that is 12 GB for the sandboxes, before what the API, the workers and the database need. To use a smaller machine,
+lower the two settings.
+
+The container limits are `REHEARSAL_CONTAINER_MEMORY`, `REHEARSAL_CONTAINER_CPUS` and `REHEARSAL_CONTAINER_PIDS`.
+An application that needs more than 1 GB in one container is stopped by its limit: raise it.
+
+### Disk
+
+The server keeps application sources, world snapshots and exported files in one data folder,
+`/var/lib/rehearsal`. Docker keeps the application images. The size depends on your applications and is not
+measured for this page: watch it after the first build.
+
+## The database
+
+Rehearsal needs PostgreSQL. It holds all records and it is the queue of work, so every worker and the API connect
+to it all the time.
+
+- **A managed database** is the default of the Compose file. Use one in the same region as the machine. Give
+  Rehearsal its own role, and a schema of its own, not `public`.
+- **A local database** is one option of the Compose file away: `--profile localdb` starts PostgreSQL 16 in a
+  container on the same host.
+
+A managed database limits connections. Each process (the API and each worker) keeps a pool. Set
+`REHEARSAL_DB_POOL_SIZE` and `REHEARSAL_DB_MAX_OVERFLOW` so that the processes together stay well under the limit.
+For a database that allows 60 connections, the example settings are 2 and 3.
+
+Do not choose a database that scales to zero when it is idle. The workers ask the queue for work all the time, so
+the database is never idle.
+
+## A model provider key
+
+The World Compiler, the simulated customer and the agents you describe with instructions all call a language
+model. Set one provider key or more.
+
+| Provider | Key |
+|---|---|
+| Nebius (the default models of the Compose file) | `NEBIUS_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| Google | `GOOGLE_API_KEY` |
+| A LiteLLM proxy | `LITELLM_API_KEY` and `LITELLM_BASE_URL` |
+
+Which model does what is set by three **model chains**: `REHEARSAL_MODEL_COMPILER`, `REHEARSAL_MODEL_AGENT` and
+`REHEARSAL_MODEL_PARTICIPANT`. A chain is a list of `provider:model`, tried in order:
+
+```text
+REHEARSAL_MODEL_COMPILER=nebius:deepseek-ai/DeepSeek-V4.1-Flash,google:gemini-3.5-flash
+```
+
+Without a key for the models in the chains, a build fails in its first phase with `inspector: model unavailable`.
+
+## For the console sign-in
+
+- An account with a password needs nothing more: you create it with `rehearsal users add`.
+- **Sign in with Google** needs a Google OAuth web client id in `GOOGLE_CLIENT_ID`, with your server's address as an
+  authorised JavaScript origin.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/self-hosting/install-with-docker-compose" title="Install with Docker Compose">Start the server, create the first admin, and sign in.</LinkCard>
+</LinkCards>

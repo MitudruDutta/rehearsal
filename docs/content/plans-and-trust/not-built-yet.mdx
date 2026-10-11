@@ -1,0 +1,50 @@
+---
+title: Not built yet
+description: Features that are planned and are not in this version. This is the only page that describes them.
+label: coming-soon
+last_reviewed: 2026-10-11
+---
+
+Every other page describes what version 0.1.2 does. This page lists what it does not do yet, so that you do not
+look for it.
+
+## Train a model on a world
+
+Training a model with reinforcement learning on a practice world is not built.
+
+| You find | It does |
+|---|---|
+| `rehearsal train` | Prints that training is coming soon, and exits |
+| The API operation for training jobs | Answers that training is coming soon |
+
+**What works today:** every episode already ends with an outcome from the application's database, which is the
+reward that training needs. You can export verified episodes as a dataset with `rehearsal export`, and you can
+improve an agent's instructions from its failures: see [Improve an agent](/guides/improve-an-agent).
+
+## Run a world from a bundle on your own machine
+
+`rehearsal worlds bundle` exports a world version as a file. Starting a world from that file on your own machine is
+not built: `rehearsal run-bundle` prints that it is coming soon, and exits.
+
+**What works today:** evaluate the published world through the server.
+
+## Other ways to connect an application
+
+An application connects through its source and its container images. These other ways are not built:
+
+- A sandbox that you already run.
+- An application that is driven through a browser only.
+- An application that Rehearsal emulates with no source.
+
+**What works today:** an application with a public git repository, published images, an HTTP API and a supported
+database: see [Add an application](/guides/add-an-application).
+
+## In these pages
+
+These parts of the documentation are planned:
+
+- A guide to change a request or cause a fault during an episode by hand.
+- A guide to review, approve and reject the jobs of a world.
+- Guides to back up, upgrade and scale a server you run.
+- A list of every event type that a build and a run send. [REST API](/reference/api#the-event-format) has the
+  format.

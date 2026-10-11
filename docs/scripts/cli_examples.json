@@ -1,0 +1,118 @@
+{
+  "login": [
+    {
+      "cmd": "rehearsal login --url https://rehearsal.example.com",
+      "out": "Signing in to Rehearsal at https://rehearsal.example.com\n\nApprove this sign-in in your browser:\n  https://rehearsal.example.com/app/cli-login/?code=ZKCZ-BVBS\n\nConfirmation code: ZKCZ-BVBS  (the browser shows the same code)\n\nWaiting for approval (Ctrl+C to cancel)....\n\n✓ Signed in to Acme (project default) at https://rehearsal.example.com.\n  Saved to ~/.config/rehearsal/config.json (readable by you only). The CLI, the Python SDK and the MCP server use it.\n  Next: rehearsal worlds list"
+    },
+    {
+      "cmd": "rehearsal login --url https://rehearsal.example.com --with-key",
+      "note": "With `--with-key` the terminal asks for a key and hides what you paste. Use it on a server or in CI, where no browser is at hand."
+    }
+  ],
+  "whoami": [
+    {
+      "cmd": "rehearsal whoami",
+      "out": "Server:     https://rehearsal.example.com\nWorkspace:  Acme (project default)\nKey:        rh_1a2b3c4d_…  access: write, evaluator\nSigned in:  saved sign-in (~/.config/rehearsal/config.json)"
+    }
+  ],
+  "logout": [
+    {
+      "cmd": "rehearsal logout",
+      "out": "Signed out. The saved key is removed from this machine; revoke it on the console's API keys page to disable it everywhere."
+    }
+  ],
+  "apps": [
+    {
+      "cmd": "rehearsal apps add helpdesk --git https://github.com/you/app --commit 0123456789abcdef0123456789abcdef01234567 --image app=you/app:1.4@sha256:<digest> --policies-file policies.txt",
+      "out": "{\n  \"id\": \"app_da77a395b6852c5e\",\n  \"project_id\": \"prj_7f4a9532b99af3d2\",\n  \"name\": \"helpdesk\",\n  \"connection_mode\": \"source\",\n  \"source\": {\n    \"kind\": \"git\",\n    \"url\": \"https://github.com/you/app\",\n    \"commit\": \"0123456789abcdef0123456789abcdef01234567\"\n  },\n  \"images\": {\n    \"app\": \"you/app:1.4@sha256:...\"\n  },\n  \"policies\": \"...\",\n  \"notes\": \"\",\n  \"created_at\": \"2026-10-10T20:49:54.962887+00:00\",\n  \"removed_at\": null\n}"
+    },
+    {
+      "cmd": "rehearsal apps list",
+      "out": "[\n  {\n    \"id\": \"app_e184a0bb1120d4ce\",\n    \"name\": \"gitea\",\n    \"source\": {\n      \"ref\": \"v28.1.0\",\n      \"url\": \"https://github.com/go-gitea/gitea\",\n      \"kind\": \"git\",\n      \"commit\": \"4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9\"\n    },\n    \"notes\": \"split=development; domain=code collaboration / issue tracking; license=MIT\"\n  }\n]"
+    }
+  ],
+  "build": [
+    {
+      "cmd": "rehearsal build <app_id> --budget 6 --watch",
+      "note": "The command prints `job_id`, `world_id`, `world_version_id` and `version`, then one line for each event: the time, the event type and a summary."
+    }
+  ],
+  "worlds": [
+    {
+      "cmd": "rehearsal worlds list",
+      "note": "A workspace with no world prints `[]`. Each world has a `name`, its `application_id` and its `versions`; each version has an `id`, a `version` number and a `status`."
+    },
+    { "cmd": "rehearsal worlds scenarios <wv_id>", "note": "Each job is printed with its `id`, `slug`, `family`, `split` and `status`." }
+  ],
+  "jobs": [
+    { "cmd": "rehearsal jobs show <job_id>" },
+    { "cmd": "rehearsal jobs retry <job_id>" }
+  ],
+  "profiles": [
+    {
+      "cmd": "rehearsal profiles create support-agent --prompt-file instructions.txt",
+      "out": "{\n  \"id\": \"prof_7f37a04a339513ca\",\n  \"project_id\": \"prj_7f4a9532b99af3d2\",\n  \"name\": \"support-agent\",\n  \"version\": 1,\n  \"spec\": {\n    \"name\": \"support-agent\",\n    \"version\": 1,\n    \"driver\": \"llm\",\n    \"system_prompt\": \"...\",\n    \"tool_guidance\": {},\n    \"model\": null,\n    \"temperature\": 0.2,\n    \"max_turns_per_actor\": 25\n  },\n  \"parent_id\": null,\n  \"created_by\": \"user\",\n  \"rationale\": \"\",\n  \"created_at\": \"2026-10-10T20:49:24.980272+00:00\"\n}"
+    },
+    { "cmd": "rehearsal profiles list", "note": "Each profile is printed with its `id`, `name`, `version` and `created_by`." }
+  ],
+  "eval": [
+    {
+      "cmd": "rehearsal eval <wv_id> --profile <profile_id> --split dev --repeats 2 --watch",
+      "note": "The command prints `run_id`, `job_id`, `episodes` and `shards`, then one line for each event, then the summary of the run. [Use Rehearsal in CI](/guides/use-rehearsal-in-ci#the-summary-field-by-field) shows the summary's shape."
+    }
+  ],
+  "runs": [
+    { "cmd": "rehearsal runs episodes <run_id>", "note": "Each episode is printed with its `id`, `scenario`, `split`, `profile`, `status`, `reward` and `termination`." },
+    { "cmd": "rehearsal runs episode <episode_id>" },
+    {
+      "cmd": "rehearsal runs show run_doesnotexist",
+      "out": "Error (404): Run run_doesnotexist not found\nCheck the id: list what exists with 'rehearsal apps list', 'worlds list', 'profiles list' or 'runs show'."
+    }
+  ],
+  "compare": [{ "cmd": "rehearsal compare <run_a> <run_b>" }],
+  "improve": [{ "cmd": "rehearsal improve <profile_id> <run_id>", "note": "The command prints a `job_id`. Follow it with `rehearsal jobs show <job_id>`." }],
+  "export": [{ "cmd": "rehearsal export <run_id> --split train", "note": "The command prints a job. The dataset then appears in `rehearsal artifacts list`." }],
+  "artifacts": [
+    { "cmd": "rehearsal artifacts list" },
+    { "cmd": "rehearsal artifacts download <artifact_id> dataset.jsonl" }
+  ],
+  "export-example": [{ "cmd": "rehearsal export-example <wv_id>" }],
+  "export-replay": [{ "cmd": "rehearsal export-replay <run_id> replay.json" }],
+  "mcp": [{ "cmd": "rehearsal mcp", "note": "The server talks over standard input and output, so it prints nothing in a terminal. It needs the mcp extra: `pip install 'rehearsal-kit[mcp]'`." }],
+  "skill": [{ "cmd": "rehearsal skill install --dir ~/.claude/skills" }],
+  "serve": [
+    {
+      "cmd": "rehearsal serve --host 127.0.0.1 --port 7800",
+      "out": "Rehearsal API on http://127.0.0.1:7800, database 127.0.0.1"
+    }
+  ],
+  "worker": [{ "cmd": "rehearsal worker --kinds world_build", "note": "Without `--kinds`, the worker takes every kind of work: `world_build`, `world_validate`, `evaluation`, `improvement`, `dataset_export` and `bundle_export`." }],
+  "up": [{ "cmd": "rehearsal up" }],
+  "migrate": [{ "cmd": "rehearsal migrate" }],
+  "bootstrap": [
+    {
+      "cmd": "rehearsal bootstrap --org Acme --project default",
+      "out": "project: prj_7f4a9532b99af3d2\nadmin API key (shown once): rh_1a2b3c4d_...\nexport REHEARSAL_API_KEY=rh_1a2b3c4d_..."
+    }
+  ],
+  "users": [
+    {
+      "cmd": "rehearsal users add you@example.com --project <project_id>",
+      "out": "Password (10+ characters): \nRepeat: \nyou@example.com can sign in to the console as owner of project prj_7f4a9532b99af3d2."
+    }
+  ],
+  "openapi": [{ "cmd": "rehearsal openapi > openapi.json" }],
+  "prices": [{ "cmd": "rehearsal prices", "note": "For each model chain, the command prints the price the server charges at, with its source and date, and the range that other hosts charge." }],
+  "train": [
+    {
+      "cmd": "rehearsal train <wv_id>",
+      "out": "Training a model on your practice worlds (reinforcement learning) is coming soon. Every episode already ends with a verified score from the application's database; today you can export verified episodes as a dataset with `rehearsal export`, and improve an agent's instructions with `rehearsal improve`."
+    }
+  ],
+  "run-bundle": [
+    {
+      "cmd": "rehearsal run-bundle world.tar",
+      "out": "Starting a world from a bundle on your own machine is coming soon. Today, evaluate the published world through the server: rehearsal eval <world_version_id> --profile <agent_id>."
+    }
+  ]
+}
