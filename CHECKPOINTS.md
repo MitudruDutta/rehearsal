@@ -25,6 +25,18 @@ Rehearsal was built with AI coding agents, and [Entire](https://entire.io) recor
 | Oct 12, 00:36 | `01M4P5Q7AT` | Say what the product proves: "prove your AI agent works before it ships" |
 | Oct 12, 14:53 | `01M4QPRARD` | Fix the findings of a security review: image names can never become Docker options, image tags are unique per application, 1 MB body limit, security headers, Ask AI needs a known origin, the worker gets no payment or session secrets |
 
+## An open-source plugin for the Entire CLI
+
+[entire-rehearsal](https://github.com/MitudruDutta/entire-rehearsal) (MIT) adds `entire rehearsal` to the Entire CLI, for the AI agent in a repository: its instructions and the code of its tools. It lists every change to the agent with the checkpoint and coding agent behind it, and the functions entire-graph says changed. It shows which changes nobody has rehearsed, rehearses the current version on a Rehearsal world, and flags a regression with the checkpoint and intent that caused it. A CI gate blocks unrehearsed or failing versions, and results are shared as git notes:
+
+```console
+$ entire rehearsal init rehearsal/assets/skill/SKILL.md --code rehearsal/agents
+$ entire rehearsal status      # changes since the last rehearsal, with checkpoints and changed functions
+$ entire rehearsal check       # rehearse this version (spends model budget; asks first)
+$ entire rehearsal report      # verdicts per change, regressions flagged with their session
+$ entire rehearsal gate        # exit 1 unless the current version is rehearsed and ready
+```
+
 ## Assessing a risky change with entire-graph
 
 The security fix in `01M4QPRARD` changed how sandboxes start, so before shipping it we checked its blast radius with [entire-graph](https://docs.entire.io/guides/graph/overview), which builds a local code graph with no network access:

@@ -208,7 +208,7 @@ Rehearsal is in early release (0.1.x). World builds, evaluations, improvement an
 ## Built with
 
 - [Neatlogs](https://neatlogs.com) traces every build and rehearsal (workflow roots for compilation, evaluation and improvement; secrets are masked before export).
-- [Entire](https://entire.io) keeps the AI coding sessions behind the commits in this repository, configured in `.entire/settings.json`.
+- [Entire](https://entire.io) keeps the AI coding sessions behind the commits in this repository, configured in `.entire/settings.json`. [CHECKPOINTS.md](CHECKPOINTS.md) lists the key decisions with their checkpoints, and [entire-rehearsal](https://github.com/MitudruDutta/entire-rehearsal) is an open-source Entire CLI plugin that ties an agent's instruction changes to their Rehearsal results.
 - [cfo.ai](https://cfo.ai) modeled the business plan.
 
 ## Contributing
