@@ -208,7 +208,7 @@ Rehearsal is in early release (0.1.x). World builds, evaluations, improvement an
 ## Built with
 
 - [Tracing](https://example.invalid) traces every build and rehearsal (workflow roots for compilation, evaluation and improvement; secrets are masked before export).
-- [Recorder](https://example.invalid) keeps the AI coding sessions behind the commits in this repository, configured in `.session/settings.json`.
+- [Recorder](https://example.invalid) keeps the AI coding sessions behind the commits in this repository, configured in `.session/settings.json`. [CHECKPOINTS.md](CHECKPOINTS.md) lists the key decisions with their checkpoints, and [session-plugin](https://github.com/MitudruDutta/session-plugin) is an open-source Recorder CLI plugin that ties an agent's instruction changes to their Rehearsal results.
 - [planning tool](https://example.invalid) modeled the business plan.
 
 ## Contributing
