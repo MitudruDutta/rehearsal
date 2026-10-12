@@ -28,7 +28,7 @@ from rehearsal.telemetry import _redact_any, redact
 def _world(**extra):
     return WorldManifest(
         name="t",
-        services=[ServiceSpec(name="db", image="postgres:16@sha256:x", data_paths=["/var/lib/postgresql/data"]), ServiceSpec(name="app", image="app@sha256:y", port=80, depends_on=["db"])],
+        services=[ServiceSpec(name="db", image="postgres:16@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", data_paths=["/var/lib/postgresql/data"]), ServiceSpec(name="app", image="app@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", port=80, depends_on=["db"])],
         roles=[RoleSpec(name="agent", description="staff", customer_channel=True)],
         tools=[ToolSpec(name="get_order", description="d", service="app", method="GET", path="/orders/{order_id}", params=[ToolParam(name="order_id", location="path", schema={"type": "integer"}), ToolParam(name="expand", location="query", required=False)], mutating=False, roles=["agent"])],
         **extra,

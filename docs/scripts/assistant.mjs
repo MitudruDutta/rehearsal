@@ -567,8 +567,8 @@ export function createAssistant(config = settings()) {
     }
     if (req.method === "GET" && path === "/health") return json(res, 200, health(), cors);
     if (req.method === "POST" && path === "/ask") {
-      // a page of another site may not spend this site's model budget
-      if (origin && !known) return json(res, 403, { error: "This site may not ask." });
+      // only pages of the listed sites may spend this site's model budget; a request with no Origin (a script) may not
+      if (!known) return json(res, 403, { error: "This site may not ask." });
       return void ask(req, res, cors).catch((error) => {
         console.error("[assistant]", error);
         if (!res.headersSent) json(res, 500, { error: "The assistant failed. Ask again." }, cors);

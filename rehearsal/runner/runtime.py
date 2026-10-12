@@ -32,7 +32,7 @@ from typing import Any
 import httpx
 
 from ..config import settings
-from ..core.contracts import ServiceSpec, WorldManifest, render_template
+from ..core.contracts import ServiceSpec, WorldManifest, image_ref, render_template
 
 PROVIDERS_DIR = Path(__file__).resolve().parent.parent / "providers"
 PROVIDER_PORT = 9000
@@ -90,10 +90,11 @@ def build_service_image(service: ServiceSpec, source_dir: Path, world_key: str) 
 
 
 def image_volumes(image: str) -> list[str]:
-    proc = _run(["docker", "image", "inspect", "--format", "{{json .Config.Volumes}}", image], check=False)
+    image = image_ref(image)
+    proc = _run(["docker", "image", "inspect", "--format", "{{json .Config.Volumes}}", "--", image], check=False)
     if proc.returncode != 0:
-        _run(["docker", "pull", "-q", image], timeout=1800)
-        proc = _run(["docker", "image", "inspect", "--format", "{{json .Config.Volumes}}", image])
+        _run(["docker", "pull", "-q", "--", image], timeout=1800)
+        proc = _run(["docker", "image", "inspect", "--format", "{{json .Config.Volumes}}", "--", image])
     vols = json.loads(proc.stdout.strip() or "null") or {}
     return sorted(vols)
 
@@ -101,7 +102,7 @@ def image_volumes(image: str) -> list[str]:
 def inspect_image(image: str) -> dict[str, Any]:
     """Default command, entrypoint, env, ports, volumes, user, and workdir of an image."""
     image_volumes(image)  # pulls when missing
-    cfg = json.loads(_run(["docker", "image", "inspect", "--format", "{{json .Config}}", image]).stdout)
+    cfg = json.loads(_run(["docker", "image", "inspect", "--format", "{{json .Config}}", "--", image]).stdout)
     return {k: cfg.get(k) for k in ("Cmd", "Entrypoint", "Env", "ExposedPorts", "Volumes", "User", "WorkingDir", "Healthcheck")}
 
 
@@ -279,10 +280,11 @@ class WorldInstance:
         for k, v in svc.env.items():
             args += ["-e", f"{k}={render_template(v, scopes)}"]
         if svc.user:
-            args += ["--user", svc.user]
+            args.append(f"--user={svc.user}")
         if svc.entrypoint is not None:
-            args += ["--entrypoint", svc.entrypoint[0] if svc.entrypoint else ""]
-        args.append(self.record.images[svc.name])
+            args.append(f"--entrypoint={svc.entrypoint[0] if svc.entrypoint else ''}")
+        # "--" ends the options: whatever the image string holds, docker reads it as the image
+        args += ["--", image_ref(self.record.images[svc.name])]
         if svc.entrypoint and len(svc.entrypoint) > 1:
             args += svc.entrypoint[1:]
         if svc.command:

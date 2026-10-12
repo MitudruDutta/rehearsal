@@ -94,7 +94,7 @@ async def test_small_upload_reuses_authenticated_principal(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_webhook_stream_is_bounded_without_auth(monkeypatch):
-    monkeypatch.setattr(limits, "WEBHOOK_BODY_LIMIT", 3)
+    monkeypatch.setattr(limits, "BODY_LIMIT", 3)
     status, consumed, _ = await invoke(monkeypatch, authenticated=False, chunks=(b"abcd",), path="/v1/billing/webhook")
     assert status == 413
 
@@ -102,11 +102,20 @@ async def test_webhook_stream_is_bounded_without_auth(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("length", [None, 4])
 async def test_root_path_webhook_body_is_bounded(monkeypatch, length):
-    monkeypatch.setattr(limits, "WEBHOOK_BODY_LIMIT", 3)
+    monkeypatch.setattr(limits, "BODY_LIMIT", 3)
     status, consumed, _ = await invoke(
         monkeypatch, authenticated=False, length=length, chunks=(b"abcd",),
         root_path="/proxy", path="/proxy/v1/billing/webhook",
     )
+    assert status == 413
+    assert consumed == ([b"abcd"] if length is None else [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("length", [None, 4])
+async def test_json_bodies_are_bounded_before_sign_in(monkeypatch, length):
+    monkeypatch.setattr(limits, "BODY_LIMIT", 3)
+    status, consumed, _ = await invoke(monkeypatch, authenticated=False, length=length, chunks=(b"abcd",), path="/v1/auth/login")
     assert status == 413
     assert consumed == ([b"abcd"] if length is None else [])
 

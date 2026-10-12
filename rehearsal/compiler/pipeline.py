@@ -26,6 +26,7 @@ from typing import Any, Callable
 from pydantic import ValidationError
 
 from ..core.contracts import (
+    DIGEST_PINNED,
     CapabilityReport,
     DependencySpec,
     RoleSpec,
@@ -347,7 +348,8 @@ class Compiler:
         return self._inst
 
     def world_key(self) -> str:
-        return hashlib.sha256(self.app.name.encode()).hexdigest()[:10]
+        # built image tags must not collide across workspaces: names repeat, application ids do not
+        return hashlib.sha256(f"{self.app.provenance.get('application_id', '')}:{self.app.name}".encode()).hexdigest()[:16]
 
     def variables(self) -> dict[str, Any]:
         return dict(self.ck.get("seed", {}).get("vars", {}))
@@ -456,7 +458,9 @@ class Compiler:
         problems = []
         supplied = set(self.app.images.values())
         for s in m.services:
-            if s.image and s.image not in supplied and "@sha256:" not in s.image:
+            if s.image and s.image.startswith("rh-img-"):
+                problems.append(f"service {s.name}: rh-img-* images are built by this server; use build or a registry image")
+            elif s.image and s.image not in supplied and not DIGEST_PINNED.search(s.image):
                 problems.append(f"service {s.name}: image {s.image} is neither owner-supplied nor digest-pinned")
         if not m.state_probes:
             problems.append("declare a state probe for the primary database; the oracle needs read-only access to application state")

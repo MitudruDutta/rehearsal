@@ -1,4 +1,4 @@
-"""Reject oversized bodies before multipart parsing can spool them to disk."""
+"""Reject oversized bodies before they are read: source uploads up to 500 MB, every other request up to 1 MB."""
 
 from fastapi import HTTPException, Request
 from starlette._utils import get_route_path
@@ -9,7 +9,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from . import auth
 
 UPLOAD_BODY_LIMIT = 501 * 1024 * 1024
-WEBHOOK_BODY_LIMIT = 1 << 20
+BODY_LIMIT = 1 << 20  # JSON bodies, the payment webhook, sign-in and sign-up
 
 class RequestBodyLimit:
     def __init__(self, app: ASGIApp):
@@ -19,8 +19,7 @@ class RequestBodyLimit:
         path = get_route_path(scope).rstrip("/") if scope["type"] == "http" else ""
         upload = (scope["type"] == "http" and scope.get("method") == "POST"
                   and path.startswith("/v1/applications/") and path.endswith("/source"))
-        webhook = scope["type"] == "http" and path == "/v1/billing/webhook"
-        if not upload and not webhook:
+        if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         request = Request(scope)
@@ -32,7 +31,7 @@ class RequestBodyLimit:
             except HTTPException as exc:
                 await JSONResponse({"detail": exc.detail}, status_code=exc.status_code)(scope, receive, send)
                 return
-        limit = UPLOAD_BODY_LIMIT if upload else WEBHOOK_BODY_LIMIT  # file cap plus multipart framing
+        limit = UPLOAD_BODY_LIMIT if upload else BODY_LIMIT  # file cap plus multipart framing
         length = request.headers.get("content-length")
         if length is not None:
             try:

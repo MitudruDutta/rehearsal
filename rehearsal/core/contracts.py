@@ -15,6 +15,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 SLUG = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 TEMPLATE = re.compile(r"\{\{\s*([a-z_]+)\.([A-Za-z0-9_]+)\s*\}\}")
+# [registry[:port]/]name[:tag][@sha256:digest]. It starts with a letter or digit, so it can never be read as an option
+# on a docker command line.
+IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(?::[0-9]+)?(?:/[a-z0-9][a-z0-9._-]*)*(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?(?:@sha256:[a-f0-9]{64})?$")
+DIGEST_PINNED = re.compile(r"@sha256:[a-f0-9]{64}$")
+USER = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*(?::[A-Za-z0-9_][A-Za-z0-9_.-]*)?$")
 
 
 class Strict(BaseModel):
@@ -24,6 +29,12 @@ class Strict(BaseModel):
 def _slug(value: str) -> str:
     if not SLUG.match(value):
         raise ValueError(f"{value!r} must match {SLUG.pattern}")
+    return value
+
+
+def image_ref(value: str) -> str:
+    if len(value) > 512 or not IMAGE_REF.match(value):
+        raise ValueError(f"{value[:80]!r} is not an image reference like registry/name:tag@sha256:<digest>")
     return value
 
 
@@ -69,13 +80,25 @@ class ServiceSpec(Strict):
     def _slug_name(cls, v: str) -> str:
         return _slug(v)
 
+    @field_validator("image")
+    @classmethod
+    def _image(cls, v: str | None) -> str | None:
+        return None if v is None else image_ref(v)
+
+    @field_validator("user")
+    @classmethod
+    def _user(cls, v: str | None) -> str | None:
+        if v is not None and not USER.match(v):
+            raise ValueError("user must be a name or uid, optionally with :group")
+        return v
+
     @model_validator(mode="after")
     def _source(self) -> "ServiceSpec":
         if (self.build is None) == (self.image is None):
             raise ValueError("exactly one of build or image is required")
         for p in self.data_paths:
-            if not p.startswith("/") or p == "/":
-                raise ValueError("data_paths must be absolute container directories other than /")
+            if not p.startswith("/") or p == "/" or any(ch in p for ch in ":,\n"):
+                raise ValueError("data_paths must be absolute container directories other than /, without : or ,")
         if self.oneshot and self.port:
             raise ValueError("oneshot services do not expose ports")
         if self.volumes_from and self.data_paths:
