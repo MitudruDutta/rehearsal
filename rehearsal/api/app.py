@@ -23,12 +23,12 @@ import yaml
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator
 from sqlalchemy import func, select, text
 
 from .. import billing
 from ..config import settings
-from ..core.contracts import AgentProfile, ScenarioSpec
+from ..core.contracts import AgentProfile, ScenarioSpec, image_ref
 from ..db import queue
 from ..db.events import emit, serialize
 from ..db.models import (
@@ -275,6 +275,16 @@ class ApplicationIn(BaseModel):
     policies: str = ""
     notes: str = ""
     connection_mode: Literal["source"] = "source"
+
+    @field_validator("images")
+    @classmethod
+    def _images(cls, v: dict[str, str]) -> dict[str, str]:
+        for name, ref in v.items():
+            if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", name):
+                raise ValueError(f"image name {name[:40]!r} must be letters, digits, ., _ or -")
+            if image_ref(ref).startswith("rh-img-"):
+                raise ValueError("rh-img-* names are images this server built; give a registry image")
+        return v
 
 
 @app.post("/v1/applications", status_code=201)

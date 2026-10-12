@@ -8,6 +8,63 @@
 # With a domain, add `--profile public`: Caddy serves https://$REHEARSAL_DOMAIN with an automatic certificate.
 # The worker controls the host Docker daemon to run sandboxes. Run this stack on a
 # dedicated runner VM; for arbitrary third-party repositories use per-job VM isolation.
+# Settings the worker needs: the database, models and their keys, tracing, and the limits it enforces. It never
+# gets the session secret, the payment keys or the sign-in settings, so code that escapes a sandbox finds none of them.
+x-worker-env: &worker_env
+  REHEARSAL_DATABASE_URL: ${REHEARSAL_DATABASE_URL:?set REHEARSAL_DATABASE_URL to your cloud database (see deploy.env.example)}
+  REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-}
+  REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-}
+  REHEARSAL_MODEL_PARTICIPANT: ${REHEARSAL_MODEL_PARTICIPANT:-}
+  REHEARSAL_MODEL_IMPROVER: ${REHEARSAL_MODEL_IMPROVER:-}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+  XAI_API_KEY: ${XAI_API_KEY:-}
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+  FIREWORKS_API_KEY: ${FIREWORKS_API_KEY:-}
+  CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+  NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+  LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
+  NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+  NEATLOGS_API_KEY: ${NEATLOGS_API_KEY:-}
+  LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+  # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.
+  REHEARSAL_MAX_ACTIVE_BUILDS: ${REHEARSAL_MAX_ACTIVE_BUILDS:-2}
+  REHEARSAL_MAX_ACTIVE_RUNS: ${REHEARSAL_MAX_ACTIVE_RUNS:-2}
+  REHEARSAL_DB_POOL_SIZE: ${REHEARSAL_DB_POOL_SIZE:-10}
+  REHEARSAL_DB_MAX_OVERFLOW: ${REHEARSAL_DB_MAX_OVERFLOW:-20}
+  REHEARSAL_RUN_PARALLEL: ${REHEARSAL_RUN_PARALLEL:-4}
+  REHEARSAL_BUILD_PARALLEL: ${REHEARSAL_BUILD_PARALLEL:-4}
+  # Plans and payments. Leave REHEARSAL_PLANS=off on a private server.
+  REHEARSAL_PLANS: ${REHEARSAL_PLANS:-off}
+  REHEARSAL_ADMIN_EMAILS: ${REHEARSAL_ADMIN_EMAILS:-}
+  REHEARSAL_QUIET_HOURS_UTC: ${REHEARSAL_QUIET_HOURS_UTC:-18:00-02:00}
+  REHEARSAL_MONTHLY_ALLOWANCE_USD: ${REHEARSAL_MONTHLY_ALLOWANCE_USD:-0}
+
+# The API and migrations get everything the worker does, plus sign-in, payments and the public address.
+x-env: &env
+  <<: *worker_env
+  REHEARSAL_SESSION_SECRET: ${REHEARSAL_SESSION_SECRET:?set a random session secret}
+  REHEARSAL_SIGNUP: ${REHEARSAL_SIGNUP:-open}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  REHEARSAL_PUBLIC_URL: https://${REHEARSAL_DOMAIN:-localhost}
+  REHEARSAL_DOCS_URL: ${REHEARSAL_DOCS_URL:-}
+  DODO_PAYMENTS_API_KEY: ${DODO_PAYMENTS_API_KEY:-}
+  DODO_PAYMENTS_WEBHOOK_KEY: ${DODO_PAYMENTS_WEBHOOK_KEY:-}
+  DODO_PAYMENTS_ENVIRONMENT: ${DODO_PAYMENTS_ENVIRONMENT:-test_mode}
+  DODO_PRODUCT_PRO_MONTHLY: ${DODO_PRODUCT_PRO_MONTHLY:-}
+  DODO_PRODUCT_PRO_YEARLY: ${DODO_PRODUCT_PRO_YEARLY:-}
+  DODO_PRODUCT_TEAM_MONTHLY: ${DODO_PRODUCT_TEAM_MONTHLY:-}
+  DODO_PRODUCT_TEAM_YEARLY: ${DODO_PRODUCT_TEAM_YEARLY:-}
+  DODO_PRODUCT_EPISODES_1000: ${DODO_PRODUCT_EPISODES_1000:-}
+  DODO_PRODUCT_BUILD_1: ${DODO_PRODUCT_BUILD_1:-}
+  # only Caddy (same compose network) reaches the API, so trust its X-Forwarded-Proto for Secure cookies
+  FORWARDED_ALLOW_IPS: "*"
+
 services:
   postgres:  # only with --profile localdb; the default is the cloud database in REHEARSAL_DATABASE_URL
     profiles: ["localdb"]
@@ -22,56 +79,7 @@ services:
     command: ["mkdir -p /var/lib/rehearsal/artifacts && chown rehearsal:rehearsal /var/lib/rehearsal/artifacts && chmod 2775 /var/lib/rehearsal/artifacts && exec rehearsal migrate"]
     user: root
     volumes: ["/var/lib/rehearsal:/var/lib/rehearsal"]
-    environment: &env
-      REHEARSAL_DATABASE_URL: ${REHEARSAL_DATABASE_URL:?set REHEARSAL_DATABASE_URL to your cloud database (see deploy.env.example)}
-      REHEARSAL_SESSION_SECRET: ${REHEARSAL_SESSION_SECRET:?set a random session secret}
-      REHEARSAL_MODEL_COMPILER: ${REHEARSAL_MODEL_COMPILER:-}
-      REHEARSAL_MODEL_AGENT: ${REHEARSAL_MODEL_AGENT:-}
-      REHEARSAL_MODEL_PARTICIPANT: ${REHEARSAL_MODEL_PARTICIPANT:-}
-      REHEARSAL_MODEL_IMPROVER: ${REHEARSAL_MODEL_IMPROVER:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
-      XAI_API_KEY: ${XAI_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
-      FIREWORKS_API_KEY: ${FIREWORKS_API_KEY:-}
-      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
-      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
-      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      NEATLOGS_API_KEY: ${NEATLOGS_API_KEY:-}
-      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
-      REHEARSAL_SIGNUP: ${REHEARSAL_SIGNUP:-open}
-      # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.
-      REHEARSAL_MAX_ACTIVE_BUILDS: ${REHEARSAL_MAX_ACTIVE_BUILDS:-2}
-      REHEARSAL_MAX_ACTIVE_RUNS: ${REHEARSAL_MAX_ACTIVE_RUNS:-2}
-      REHEARSAL_DB_POOL_SIZE: ${REHEARSAL_DB_POOL_SIZE:-10}
-      REHEARSAL_DB_MAX_OVERFLOW: ${REHEARSAL_DB_MAX_OVERFLOW:-20}
-      REHEARSAL_RUN_PARALLEL: ${REHEARSAL_RUN_PARALLEL:-4}
-      REHEARSAL_BUILD_PARALLEL: ${REHEARSAL_BUILD_PARALLEL:-4}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      # Plans and payments. Leave REHEARSAL_PLANS=off on a private server.
-      REHEARSAL_PLANS: ${REHEARSAL_PLANS:-off}
-      REHEARSAL_ADMIN_EMAILS: ${REHEARSAL_ADMIN_EMAILS:-}
-      REHEARSAL_PUBLIC_URL: https://${REHEARSAL_DOMAIN:-localhost}
-      REHEARSAL_DOCS_URL: ${REHEARSAL_DOCS_URL:-}
-      REHEARSAL_QUIET_HOURS_UTC: ${REHEARSAL_QUIET_HOURS_UTC:-18:00-02:00}
-      DODO_PAYMENTS_API_KEY: ${DODO_PAYMENTS_API_KEY:-}
-      DODO_PAYMENTS_WEBHOOK_KEY: ${DODO_PAYMENTS_WEBHOOK_KEY:-}
-      DODO_PAYMENTS_ENVIRONMENT: ${DODO_PAYMENTS_ENVIRONMENT:-test_mode}
-      DODO_PRODUCT_PRO_MONTHLY: ${DODO_PRODUCT_PRO_MONTHLY:-}
-      DODO_PRODUCT_PRO_YEARLY: ${DODO_PRODUCT_PRO_YEARLY:-}
-      DODO_PRODUCT_TEAM_MONTHLY: ${DODO_PRODUCT_TEAM_MONTHLY:-}
-      DODO_PRODUCT_TEAM_YEARLY: ${DODO_PRODUCT_TEAM_YEARLY:-}
-      REHEARSAL_MONTHLY_ALLOWANCE_USD: ${REHEARSAL_MONTHLY_ALLOWANCE_USD:-0}
-      DODO_PRODUCT_EPISODES_1000: ${DODO_PRODUCT_EPISODES_1000:-}
-      DODO_PRODUCT_BUILD_1: ${DODO_PRODUCT_BUILD_1:-}
-      # only Caddy (same compose network) reaches the API, so trust its X-Forwarded-Proto for Secure cookies
-      FORWARDED_ALLOW_IPS: "*"
+    environment: *env
     depends_on: { postgres: { condition: service_healthy, required: false } }  # waits only when --profile localdb runs it
 
   api:
@@ -90,7 +98,7 @@ services:
     # Compose escapes $$ so the container's own ID reaches the runner, including scaled workers.
     command: ["umask 0002; REHEARSAL_WORKER_CONTAINER=$$HOSTNAME exec rehearsal worker"]
     environment:
-      <<: *env
+      <<: *worker_env
       REHEARSAL_DATA_DIR: /var/lib/rehearsal
     # Snapshots are bind-mounted into helper containers by path, so the data
     # directory must have the same path on the host and in the worker.
