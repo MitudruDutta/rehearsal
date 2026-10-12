@@ -43,11 +43,11 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 ## How it works
 
 ```mermaid
-flowchart LR
-    A["Your application<br/>repository + images"] --> B["World Compiler"]
-    B --> C["Practice world<br/>sandbox, fictional data, jobs"]
-    C --> D["Episodes<br/>your agent, simulated customer, injected faults"]
-    D --> E["Read-only checks<br/>on the app's database"]
+flowchart TD
+    A["Your application: repository + images"] --> B["World Compiler"]
+    B --> C["Practice world: sandbox, fictional data, jobs"]
+    C --> D["Episodes: your agent, simulated customer, injected faults"]
+    D --> E["Read-only checks on the app's database"]
     E --> F["Readiness verdict"]
     F --> G["Improve the agent"]
     G -->|"held-out jobs"| D
