@@ -1,175 +1,220 @@
+<div align="center">
+
+<a href="https://rehearsalkit.xyz">
+  <img src="web/public/brand/rehearsal-icon.svg" alt="Rehearsal logo" width="88" height="88">
+</a>
+
 # Rehearsal
 
-Turn an authorized application into an executable practice environment for AI agents.
+**Prove your AI agent works before it ships.**
 
-Rehearsal starts your real application in an isolated Docker sandbox with fictional data, writes jobs for an agent to do, and decides each outcome with read-only checks against the application's own database. No model grades the result.
+Rehearsal runs your agent on a working copy of your real application, with fictional data, and decides every outcome by reading the application's own database. No model grades the result.
 
-The Python package contains a FastAPI control plane, PostgreSQL job queue, Docker sandbox runner, world compiler, episode engine, deterministic evaluator, improvement worker, and SDK/CLI. The Next.js console exports static files served by the API. Training jobs and standalone bundle replay are not implemented in this release.
+[![PyPI](https://img.shields.io/pypi/v/rehearsal-kit?label=rehearsal-kit&color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
+[![Python](https://img.shields.io/pypi/pyversions/rehearsal-kit?color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
+[![Tests](https://github.com/MitudruDutta/rehearsal/actions/workflows/tests.yml/badge.svg)](https://github.com/MitudruDutta/rehearsal/actions/workflows/tests.yml)
+[![Docs](https://img.shields.io/badge/docs-docs.rehearsalkit.xyz-2b59d9)](https://docs.rehearsalkit.xyz)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](#license)
 
-## Requirements
+[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Self-hosting](#self-hosting) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
 
-- Python 3.11–3.13
-- Docker with Compose, with the daemon running
-- Node 22 or newer and pnpm 10, only to build the console from source
-- A key for a model provider: OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, Nebius, NVIDIA or OpenRouter. A LiteLLM proxy and local or custom OpenAI-compatible endpoints also work.
+<img src=".github/assets/rehearsal-hero.webp" alt="The Rehearsal landing page, replaying a real World Compiler build of Gitea" width="900">
 
-The server and worker are supported on Linux. The CLI and SDK client run anywhere. See [Windows](#windows) for what differs there.
+</div>
 
-## Quick start
+## Why Rehearsal
 
-Run every command from the repository root. The application reads `.env` from the working directory; existing shell variables take precedence.
+An AI agent can tell you it finished the job while the records say otherwise. Most evaluations ask another model whether the transcript looks right, and a confident agent can talk its way to a pass.
 
-```bash
-# 1. Install
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[server,telemetry,dev]'
+Rehearsal tests the agent where it will actually work: on your application, through the same tools, with a customer who changes their mind and requests that fail on purpose. Pass or fail comes from read-only checks against the application's database, so "refund issued" only counts if the refund is there, exactly once.
 
-# 2. Configure
-cp .env.example .env
-python -c "import secrets; print(secrets.token_hex(32))"    # use the output as REHEARSAL_SESSION_SECRET
-# Edit .env: set REHEARSAL_SESSION_SECRET and the key for your model provider (for example OPENAI_API_KEY).
+## Features
 
-# 3. Build the console (once, and again after changes under web/)
-cd web && pnpm install --frozen-lockfile && pnpm build && cd ..
+- **World Compiler.** Point it at a repository and its published container images. It reads the source, starts the application in an isolated sandbox, seeds fictional data, chooses the tools each role may use, and writes jobs it proves can be passed and failed.
+- **Database-verified outcomes.** Every episode ends with read-only checks on the application's own records: goal reached, no duplicate side effects, claims that match the data.
+- **Simulated customers.** Customers revise their request mid-task, so an agent that finishes the old request gets caught.
+- **Failures on purpose.** Requests time out after the change already went through, so blind retries show up as duplicates.
+- **Readiness verdict.** Ready to pilot, or not yet, with every measure linked to the episodes behind it.
+- **Improve, then compare.** The improvement agent proposes the next agent version from failed training jobs. Compare both versions on held-out jobs neither has seen.
+- **Bring your own agent.** Describe an agent with instructions and a model, or drive episodes from your own code in any language through the episode API.
+- **Every step traced.** Builds, rehearsals and improvements are traced with [Neatlogs](https://neatlogs.com), down to each model call, tool call and check.
+- **Any model provider.** OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, Nebius, NVIDIA, OpenRouter, a LiteLLM proxy, or any OpenAI-compatible endpoint, with fallback chains and spend caps.
 
-# 4. Database, admin key, and a console login
-rehearsal up                                             # PostgreSQL in Docker on 127.0.0.1:5433, then migrations
-rehearsal bootstrap                                      # prints the project id and the admin API key, shown once
-export REHEARSAL_URL=http://127.0.0.1:7800                # this server: the CLI's default is the hosted service
-export REHEARSAL_API_KEY=rh_...
-rehearsal users add you@example.com --project prj_...    # asks for a password of 10 or more characters
+## How it works
 
-# 5. Run, in two terminals with the environment activated
-rehearsal serve                                          # API and console on http://127.0.0.1:7800
-rehearsal worker                                         # builds and evaluations; needs Docker
+```mermaid
+flowchart LR
+    A["Your application<br/>repository + images"] --> B["World Compiler"]
+    B --> C["Practice world<br/>sandbox, fictional data, jobs"]
+    C --> D["Episodes<br/>your agent, simulated customer, injected faults"]
+    D --> E["Read-only checks<br/>on the app's database"]
+    E --> F["Readiness verdict"]
+    F --> G["Improve the agent"]
+    G -->|"held-out jobs"| D
 ```
 
-Open http://127.0.0.1:7800 and sign in with the account from step 4. The console needs a person's account; an API key does not sign in to it. `rehearsal users add` creates that login and attaches the person to the bootstrap project, so the console and the CLI see the same data. Sign-up is open by default: an account made on the sign-in page starts a new organisation of its own. Set `REHEARSAL_SIGNUP=closed` to turn that off.
+1. **Build a practice world.** The World Compiler turns an application into a versioned, resettable world. Each episode starts from the same snapshot.
+2. **Rehearse the agent.** Your agent works through jobs while a simulated customer talks to it and faults are injected.
+3. **Verify and improve.** Checks decide each outcome. Failures feed the next agent version, which is compared on jobs it has never seen.
 
-Keep API keys in `.env`, which is ignored by git. Do not leave `REHEARSAL_SESSION_SECRET` at the example value: it signs the console's session cookies.
+## Quickstart
 
-Without pnpm installed, `npx --yes pnpm@10.33.0` works in place of `pnpm`. The Dockerfile builds the console automatically.
-
-## First world and evaluation
+Install the client (the `rehearsal` CLI and the Python SDK). It runs on any OS with Python 3.11 or newer.
 
 ```bash
-rehearsal apps import-catalog                        # eight pinned open-source applications
-rehearsal apps list                                  # note an application id
-rehearsal build APP_ID --watch                       # compiles a practice world; spends model budget
-rehearsal worlds list                                # note the published world version id
-rehearsal worlds scenarios WV_ID
-rehearsal profiles create support-agent              # add --prompt-file FILE for your own instructions
+pip install rehearsal-kit
+rehearsal login            # opens the console in your browser; approve the code shown
+```
+
+Build a world and evaluate an agent on the hosted service at [rehearsalkit.xyz](https://rehearsalkit.xyz):
+
+```bash
+rehearsal apps import-catalog                            # pinned open-source apps: Gitea, Chatwoot, Vikunja, WordPress, ...
+rehearsal apps list                                      # note an application id
+rehearsal build APP_ID --watch                           # compile a practice world (spends model budget)
+rehearsal worlds list                                    # note the published world version id
+rehearsal profiles create support-agent                  # add --prompt-file FILE for your own instructions
 rehearsal eval WV_ID --profile PROFILE_ID --split dev --watch
-rehearsal runs episodes RUN_ID
-rehearsal runs episode EPISODE_ID                    # actions, messages, and which checks failed
-rehearsal improve PROFILE_ID RUN_ID                  # proposes the next agent version from train and dev failures
+rehearsal runs episode EPISODE_ID                        # actions, messages, and which checks failed
+rehearsal improve PROFILE_ID RUN_ID                      # propose the next agent version
 rehearsal eval WV_ID --profile NEW_PROFILE_ID --split holdout --watch
-rehearsal compare RUN_A RUN_B                        # two runs on the same world version
+rehearsal compare RUN_A RUN_B
 ```
 
-To add your own application, pin its source commit and its published images:
+Add your own application by pinning its source commit and images:
 
 ```bash
 rehearsal apps add my-app --git https://github.com/you/app --commit <full commit sha> \
   --image web=registry.example.com/app@sha256:<digest> --policies-file policies.md
 ```
 
-Other commands:
+<details>
+<summary><b>Use it from Python</b></summary>
 
-| Command | Purpose |
-|---|---|
-| `rehearsal jobs show\|watch\|pause\|resume\|stop\|retry JOB_ID` | Inspect and control a job. `retry` continues a failed job from its last checkpoint |
-| `rehearsal worlds validate WV_ID` | Re-check every job of a published world |
-| `rehearsal worlds bundle WV_ID` | Export a world bundle; fetch it with `rehearsal artifacts list` and `download` |
-| `rehearsal export RUN_ID` | Export verified trajectories as a dataset |
-| `rehearsal prices` | Model prices and their sources for the configured chains |
-| `rehearsal mcp` | MCP server for AI assistants; needs `pip install -e '.[mcp]'` |
-| `rehearsal skill install` | Install the agent skill into `~/.claude/skills` |
-| `rehearsal openapi` | Print the OpenAPI document |
+```python
+from rehearsal.sdk import Rehearsal
 
-`rehearsal --help` lists everything. `rehearsal train` and `rehearsal run-bundle` exist but report that they are not implemented.
-
-If no model provider is configured, a build fails in its first phase with `inspector: model unavailable`. Set the key, then `rehearsal jobs retry JOB_ID`.
-
-A Python client is in `rehearsal.sdk`; see [PACKAGE.md](PACKAGE.md). To drive episodes with your own agent, see [examples/agents/langgraph_react.py](examples/agents/langgraph_react.py).
-
-## Configuration
-
-`.env.example` documents the available settings. The main ones:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `REHEARSAL_SESSION_SECRET` | a built-in development value; set your own | Signs console session cookies |
-| `REHEARSAL_DATABASE_URL` | local PostgreSQL on port 5433 | Control-plane database; the default matches `rehearsal up` |
-| `REHEARSAL_DATA_DIR` | `./var` | Source checkouts, snapshots, artifacts |
-| `REHEARSAL_SOURCE_ROOTS` | `./examples` | Directories the worker may read local sources from |
-| `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | Model fallback chains, written `provider:model[,provider:model...]` |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and other provider keys | none | One key for each provider the chains name |
-| `NEATLOGS_API_KEY` | none | Enables tracing; everything runs without it |
-| `REHEARSAL_SIGNUP` | `open` | Anyone can create a workspace from the console. `closed` turns that off |
-| `REHEARSAL_MAX_ACTIVE_BUILDS`, `REHEARSAL_MAX_ACTIVE_RUNS` | `0` (no limit) | Jobs one workspace may run at once |
-| `REHEARSAL_RUN_PARALLEL`, `REHEARSAL_BUILD_PARALLEL` | `4` | Evaluation shards per run; scenarios validated at once in a build |
-| `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |
-| `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `https://rehearsalkit.xyz`, none | Used by the CLI and SDK client; set `REHEARSAL_URL` for a server of your own |
-
-The [self-hosting pages](docs/content/self-hosting/) of the documentation site cover installing with Docker Compose, upgrades, and troubleshooting.
-
-The worker controls Docker and executes application source; use a dedicated runner. Restrict local sources with `REHEARSAL_SOURCE_ROOTS`. Admin keys have full access; scoped keys require `read`/`write` for ordinary operations, `evaluator` for private evaluation data, and `agent` for external-agent observations/actions. Evaluator mutations also require `write`.
-
-## Console development
-
-```bash
-cd web
-pnpm dev        # http://localhost:3000, proxying /v1 and /downloads to the API on port 7800
+rh = Rehearsal()  # your sign-in, or REHEARSAL_URL and REHEARSAL_API_KEY in CI
+app = rh.applications.create(
+    "my-app",
+    {"kind": "git", "url": "https://github.com/you/app", "commit": "<sha>"},
+    images={"web": "registry.example.com/app@sha256:<digest>"},
+)
+build = rh.worlds.build(app["id"])
+rh.jobs.wait(build["job_id"])
 ```
 
-`pnpm build` writes the static export to `web/out` and copies it to `rehearsal/api/static`, where the API serves it.
+To drive episodes with your own agent, read `rh.external.observation(episode_id)` and send tool calls with `rh.external.act(...)`. See [examples/agents/langgraph_react.py](examples/agents/langgraph_react.py) and [PACKAGE.md](PACKAGE.md).
 
-## Tests
+</details>
+
+<details>
+<summary><b>Use it from your AI assistant</b></summary>
+
+Install the plugin for Claude Code (Codex works the same way with `codex plugin ...`):
 
 ```bash
-# Unit tests: no services needed
-NEATLOGS_API_KEY='' PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/unit --confcutdir=tests/unit -p no:cacheprovider -p pytest_asyncio.plugin -q
-
-# Integration tests: need `rehearsal up` running and, for the sandbox test, Docker
-python -m pytest tests/integration
-
-# Console typecheck
-cd web && ./node_modules/.bin/tsc --noEmit --incremental false
+claude plugin marketplace add MitudruDutta/rehearsal
+claude plugin install rehearsal@rehearsal
 ```
 
-The integration tests use a separate `rehearsal_test` database. The sandbox test starts a real Gitea container and pulls its image on the first run.
-
-## Deploy on one host
-
-`infra/compose.full.yaml` defines the complete stack: PostgreSQL, migrations, the API with the console, and workers.
+Or add only the MCP server:
 
 ```bash
-cp infra/deploy.env.example infra/deploy.env      # fill in the password, session secret, and keys
+claude mcp add rehearsal -- uvx --from "rehearsal-kit[mcp]" rehearsal mcp
+```
+
+Then ask your assistant to build a world, run an evaluation, or explain a failed episode.
+
+</details>
+
+## Self-hosting
+
+The server, workers and sandboxes run on Linux with Docker. The CLI and SDK run anywhere.
+
+**Requirements:** Python 3.11–3.13, Docker with Compose, PostgreSQL (local or managed, Supabase recommended), and a key for at least one model provider. Node 22 and pnpm 10 are needed only to build the console from source.
+
+### Docker Compose
+
+`infra/compose.full.yaml` runs the complete stack: migrations, the API with the console, workers, and optional HTTPS through Caddy.
+
+```bash
+cp infra/deploy.env.example infra/deploy.env      # database URL, session secret, model keys
 docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d
 docker compose -f infra/compose.full.yaml --env-file infra/deploy.env exec api rehearsal bootstrap
 docker compose -f infra/compose.full.yaml --env-file infra/deploy.env up -d --scale worker=6
 ```
 
-Add `--profile public` with `REHEARSAL_DOMAIN` set to serve HTTPS through Caddy. The worker mounts the host's Docker socket, so run this stack on a dedicated machine. For arbitrary third-party repositories, use per-job VM isolation.
+Add `--profile public` with `REHEARSAL_DOMAIN` set to serve HTTPS. The worker controls the host's Docker socket and runs application source, so use a dedicated machine. For arbitrary third-party repositories, use per-job VM isolation.
 
-## Windows
+### From source
 
-The API, the database, and both integration test suites run on Windows with Docker Desktop. A complete world build on Windows is untested; use Linux or WSL2 if one fails.
+```bash
+python -m venv .venv && source .venv/bin/activate
+python -m pip install -e '.[server,telemetry,dev]'
+cp .env.example .env                                     # set REHEARSAL_SESSION_SECRET and a provider key
+(cd web && pnpm install --frozen-lockfile && pnpm build) # build the console once
 
-- Activate with `.\.venv\Scripts\Activate.ps1`, copy the settings with `Copy-Item .env.example .env`, and set variables with `$env:REHEARSAL_API_KEY = "rh_..."`.
-- Run `git config --global core.longpaths true` before the first build. Source checkouts sit under a long directory name, and without this setting a build fails with `Filename too long`.
-- Build the console from Git Bash. The build script uses `rm` and `cp`, which PowerShell and `cmd` do not provide.
-- Run the test commands above from Git Bash as well. The unit tests that create symbolic links need Developer Mode or an elevated shell; without it they fail with `WinError 1314`.
+rehearsal up                                             # PostgreSQL in Docker on 127.0.0.1:5433, then migrations
+rehearsal bootstrap                                      # prints the project id and an admin API key, shown once
+export REHEARSAL_URL=http://127.0.0.1:7800 REHEARSAL_API_KEY=rh_...
+rehearsal users add you@example.com --project prj_...    # a console login, password of 10+ characters
 
-## Tracing and development provenance
+rehearsal serve                                          # API and console on http://127.0.0.1:7800
+rehearsal worker                                         # builds and evaluations, in a second terminal
+```
 
-Neatlogs uses the OpenAI-compatible client wrapper, with separate workflow roots for compilation, evaluation, and improvement. Workers initialize tracing once and flush on shutdown. The endpoint is `https://ingest.neatlogs.com`; keys are read from the environment. Secret masking applies before trace export.
+Generate the session secret with `python -c "import secrets; print(secrets.token_hex(32))"`. Keep keys in `.env`, which git ignores.
 
-Entire is configured in `.entire/settings.json` with automatic session pushing disabled and checkpoints stored as git refs. `.claude/settings.json` connects Claude Code's hooks to the `entire` CLI; each hook does nothing when the CLI is not installed. For Codex, approve the installed hooks through `/hooks`. No Entire checkpoints are recorded in this repository yet.
+The [self-hosting guide](https://docs.rehearsalkit.xyz/self-hosting) covers requirements, Docker Compose, upgrades, Windows and troubleshooting.
 
-## Documentation
+## Configuration
 
-- [docs/](docs/): the documentation site: quickstarts, guides, reference, and self-hosting.
-- [PACKAGE.md](PACKAGE.md): the package description shown on PyPI, with client and SDK usage.
+Settings come from the environment, or from `.env` in the working directory. The main ones:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REHEARSAL_DATABASE_URL` | local PostgreSQL on port 5433 | Control-plane database |
+| `REHEARSAL_SESSION_SECRET` | development value | Signs console session cookies; set your own |
+| `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | Model chains, `provider:model[,provider:model...]` |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ... | none | One key for each provider the chains name |
+| `NEATLOGS_API_KEY` | none | Turns on tracing; everything runs without it |
+| `REHEARSAL_SIGNUP` | `open` | `closed` stops new workspaces from the sign-in page |
+| `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |
+| `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `https://rehearsalkit.xyz`, none | Where the CLI and SDK connect |
+
+Every setting, with its default, is in the [configuration reference](https://docs.rehearsalkit.xyz/reference/configuration). `rehearsal prices` shows the price the server uses for each configured model.
+
+## Development
+
+```bash
+# Unit tests, no services needed
+python -m pytest tests/unit -q
+
+# Integration tests: need `rehearsal up` and, for the sandbox test, Docker
+python -m pytest tests/integration
+
+# Console: dev server on http://localhost:3000, proxying the API on port 7800
+cd web && pnpm dev
+cd web && pnpm typecheck
+```
+
+`pnpm build` writes the console's static export to `web/out` and copies it to `rehearsal/api/static`, where the API serves it. The documentation site lives in [docs/](docs/).
+
+## Status
+
+Rehearsal is in early release (0.1.x). World builds, evaluations, improvement and comparison work end to end. `rehearsal train` and `rehearsal run-bundle` exist but report that they are not implemented yet. A world build takes one to three hours and spends model budget; every job has a spend cap.
+
+## Built with
+
+- [Neatlogs](https://neatlogs.com) traces every build and rehearsal (workflow roots for compilation, evaluation and improvement; secrets are masked before export).
+- [Entire](https://entire.io) keeps the AI coding sessions behind the commits in this repository, configured in `.entire/settings.json`.
+- [cfo.ai](https://cfo.ai) modeled the business plan.
+
+## Contributing
+
+Issues and pull requests are welcome. Run the unit tests and the console typecheck before opening a pull request, and keep secrets out of commits: `.env` and `infra/deploy.env` are ignored by git.
+
+## License
+
+MIT. See the `license` field in [pyproject.toml](pyproject.toml).
