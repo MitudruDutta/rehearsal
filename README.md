@@ -14,7 +14,7 @@ Rehearsal runs your agent on a working copy of your real application, with ficti
 [![Python](https://img.shields.io/pypi/pyversions/rehearsal-kit?color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
 [![Tests](https://github.com/MitudruDutta/rehearsal/actions/workflows/tests.yml/badge.svg)](https://github.com/MitudruDutta/rehearsal/actions/workflows/tests.yml)
 [![Docs](https://img.shields.io/badge/docs-docs.rehearsalkit.xyz-2b59d9)](https://docs.rehearsalkit.xyz)
-[![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](#license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](LICENSE)
 
 [Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Self-hosting](#self-hosting) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
 
@@ -217,4 +217,4 @@ Issues and pull requests are welcome. Run the unit tests and the console typeche
 
 ## License
 
-MIT. See the `license` field in [pyproject.toml](pyproject.toml).
+MIT. See [LICENSE](LICENSE).
