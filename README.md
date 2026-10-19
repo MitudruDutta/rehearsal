@@ -16,7 +16,7 @@ Rehearsal runs your agent on a working copy of your real application, with ficti
 [![Docs](https://img.shields.io/badge/docs-docs.rehearsalkit.xyz-2b59d9)](https://docs.rehearsalkit.xyz)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](LICENSE)
 
-[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Self-hosting](#self-hosting) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
+[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Self-hosting](#self-hosting) · [Planning docs](#planning-docs) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
 
 <img src=".github/assets/rehearsal-hero.webp" alt="The Rehearsal landing page, replaying a real World Compiler build of Gitea" width="900">
 
@@ -200,6 +200,18 @@ cd web && pnpm typecheck
 ```
 
 `pnpm build` writes the console's static export to `web/out` and copies it to `rehearsal/api/static`, where the API serves it. The documentation site lives in [docs/](docs/).
+
+## Planning docs
+
+Rehearsal was planned before it was built, in three documents that build on each other:
+
+| Document | What it settles |
+|---|---|
+| [Scope](docs/scope.md) | The problem, who it is for, the decisions from the planning interview, what is in and out of scope, and how success is measured |
+| [Product requirements](docs/prd.md) | Users, journeys, numbered functional and non-functional requirements, acceptance criteria, and release status |
+| [Technical specification](docs/spec.md) | Architecture, data model, the World Compiler, job validation, sandboxing, scoring, the job queue, interfaces, spending, deployment, and testing |
+
+[CHECKPOINTS.md](CHECKPOINTS.md) records how the build followed them: each key decision with the Entire checkpoint of the session that made it.
 
 ## Status
 
