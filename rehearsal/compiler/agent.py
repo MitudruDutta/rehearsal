@@ -110,7 +110,7 @@ def run_agent(
         if step == max_steps - 3:
             messages.append({"role": "user", "content": f"Step limit reached. Call {submit.name} now with your best result; no other tools are available."})
         try:
-            reply = chat(chain, messages, check=check, tools=[submit.schema()] if final else schemas, tool_choice="required" if final else None, temperature=temperature, max_tokens=16_000)
+            reply = chat(chain, messages, check=check, tools=[submit.schema()] if final else schemas, tool_choice="required" if final else None, temperature=temperature, max_tokens=16_000, role=f"compiler.{role.removesuffix('_repair')}")
         except LLMError as exc:
             raise CompilerAgentError(f"{role}: model unavailable: {exc}", run) from exc
         run.cost_usd += reply.cost_usd

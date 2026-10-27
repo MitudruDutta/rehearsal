@@ -250,7 +250,9 @@ def report(chains: dict[str, str]) -> list[dict[str, Any]]:
     rows = []
     for purpose, chain in chains.items():
         for entry in [e.strip() for e in chain.split(",") if e.strip()]:
+            entry, _, flag = entry.partition("#")  # the reasoning switch (#think, #nothink) is not part of the model's name
             provider, _, model = entry.partition(":")
             q = billing_quote(provider, model)
-            rows.append({"purpose": purpose, "provider": provider, "model": model, "billing": asdict(q) if q else None, "market": market(model)})
+            rows.append({"purpose": purpose, "provider": provider, "model": model, "thinking": {"think": True, "nothink": False}.get(flag),
+                         "billing": asdict(q) if q else None, "market": market(model)})
     return rows

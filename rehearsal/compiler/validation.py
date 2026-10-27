@@ -249,7 +249,7 @@ def live_audit(instance: WorldInstance, manifest: WorldManifest, base_snapshot: 
     }
     evidence = {"ending": out["ending"], "failed_checks": out["failed_checks"], "run": out["trail"][-80:]}
     try:
-        verdict, reply = chat_json(auditor_chain, [{"role": "system", "content": AUDITOR}, {"role": "user", "content": f"Job:\n{json.dumps(job, default=str)[:24000]}\n\nRun:\n{json.dumps(evidence, default=str)[:30000]}"}], max_tokens=1200, check=check)
+        verdict, reply = chat_json(auditor_chain, [{"role": "system", "content": AUDITOR}, {"role": "user", "content": f"Job:\n{json.dumps(job, default=str)[:24000]}\n\nRun:\n{json.dumps(evidence, default=str)[:30000]}"}], max_tokens=1200, check=check, role="compiler.auditor")
     except LLMError as exc:
         return {**out, "cause": "inconclusive", "evidence": f"audit unavailable: {exc}"[:300]}
     if add_cost:

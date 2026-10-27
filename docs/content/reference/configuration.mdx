@@ -48,20 +48,22 @@ A person who only uses a server needs the first section. The rest is for the per
 
 | Setting | Default | What it changes |
 |---|---|---|
-| `REHEARSAL_MODEL_COMPILER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | The model chain that builds worlds. |
-| `REHEARSAL_MODEL_AGENT` | the same chain | The model chain for agents that have no model of their own. |
-| `REHEARSAL_MODEL_PARTICIPANT` | smaller models from Groq, OpenAI, then Google | The model chain that plays the simulated customer. |
-| `REHEARSAL_MODEL_IMPROVER` | the compiler's chain | The model chain that proposes a better agent. |
+| `REHEARSAL_MODEL_COMPILER` | Nemotron 3 Super, thinking on, then Ultra | The model chain for the World Compiler's tool-heavy roles: inspecting the source, building the runtime, seeding data, writing tools. |
+| `REHEARSAL_MODEL_REASONER` | Nemotron 3 Ultra, thinking on, then Super | The model chain for the World Compiler's hardest roles: designing jobs, judging failed validations, and repairing a runtime that will not start. |
+| `REHEARSAL_MODEL_AGENT` | Nemotron 3 Super, thinking on, then Ultra | The model chain for agents that have no model of their own. |
+| `REHEARSAL_MODEL_PARTICIPANT` | Nemotron 3 Nano, thinking off, then Super | The model chain that plays the simulated customer. |
+| `REHEARSAL_MODEL_IMPROVER` | the reasoner's chain | The model chain that proposes a better agent. |
 | `REHEARSAL_PRICES` | `{}` | Prices for models whose provider reports none: JSON of `provider:model` to `[input, output]` in US dollars for a million tokens. |
 | `REHEARSAL_PRICING_FILE` | `pricing.yaml` | A file of the same prices, each with its source and date. |
 
 ### Model chains
 
 A chain is a list of `provider:model`, separated by commas. The server tries them in order, and moves to the
-next when a provider fails or has no key. An empty setting means the default.
+next when a provider fails or has no key. An empty setting means the default. An entry may end in `#think` or
+`#nothink` to switch a reasoning model's thinking on or off for that entry only; NVIDIA Nemotron models read it.
 
 ```dotenv
-REHEARSAL_MODEL_COMPILER=anthropic:claude-sonnet-4-5,openai:gpt-5-mini,google:gemini-2.5-flash
+REHEARSAL_MODEL_PARTICIPANT=nebius:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B#nothink,groq:openai/gpt-oss-20b
 ```
 
 ### Providers

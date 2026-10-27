@@ -23,15 +23,16 @@ def _load_dotenv(path: Path) -> None:
 
 @dataclass(frozen=True)
 class Settings:
-    database_url: str
+    database_url: str = field(repr=False)  # holds the database password
     data_dir: Path
-    session_secret: str
+    session_secret: str = field(repr=False)
     source_roots: tuple[Path, ...]
     model_compiler: str
     model_agent: str
     model_participant: str
     model_improver: str
-    kaggle_api_token: str | None
+    model_reasoner: str  # the World Compiler's hardest roles: designing jobs, judging and repairing them
+    kaggle_api_token: str | None = field(repr=False)
     google_client_id: str | None = None  # enables "Sign in with Google" in the console
     signup: str = "open"  # anyone can create an organisation and get an admin key from the console; "closed" turns that off
     lease_seconds: int = 60
@@ -47,8 +48,8 @@ class Settings:
     quiet_hours_utc: str = "18:00-02:00"  # when free-plan evaluations may start (HH:MM-HH:MM, UTC; may cross midnight)
     public_url: str = "http://localhost:7800"  # where browsers reach this server (checkout return links)
     docs_url: str = ""  # the documentation site; /docs redirects there (else to the API reference at /api/docs)
-    dodo_api_key: str | None = None
-    dodo_webhook_key: str | None = None
+    dodo_api_key: str | None = field(default=None, repr=False)
+    dodo_webhook_key: str | None = field(default=None, repr=False)
     dodo_environment: str = "test_mode"  # test_mode | live_mode
     dodo_products: dict = field(default_factory=dict)  # item (pro_monthly, ..., episodes_1000, build_1) -> Dodo product id
     container_memory: str = "1g"
@@ -90,7 +91,12 @@ def settings() -> Settings:
     quiet = env("REHEARSAL_QUIET_HOURS_UTC", "18:00-02:00")
     if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d", quiet):
         raise ValueError(f"REHEARSAL_QUIET_HOURS_UTC must look like 18:00-02:00, not {quiet!r}")
-    default_chain = "groq:openai/gpt-oss-120b,openai:gpt-5-mini,anthropic:claude-haiku-4-5,google:gemini-2.5-flash,openrouter:openai/gpt-oss-120b"
+    # NVIDIA Nemotron on Nebius Token Factory, routed by role: Ultra reasons where mistakes are expensive, Super does the
+    # heavy tool work, Nano with thinking off plays the customer, whose replies are short and must be fast.
+    ultra, super_, nano = ("nebius:nvidia/Nemotron-3-Ultra-550b-a55b", "nebius:nvidia/nemotron-3-super-120b-a12b",
+                           "nebius:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
+    default_reasoner = f"{ultra}#think,{super_}#think"
+    default_chain = f"{super_}#think,{ultra}#think"
     return Settings(
         database_url=env(
             "REHEARSAL_DATABASE_URL", "postgresql+psycopg://rehearsal:rehearsal@127.0.0.1:5433/rehearsal"
@@ -100,8 +106,9 @@ def settings() -> Settings:
         source_roots=roots,
         model_compiler=env("REHEARSAL_MODEL_COMPILER") or default_chain,
         model_agent=env("REHEARSAL_MODEL_AGENT") or default_chain,
-        model_participant=env("REHEARSAL_MODEL_PARTICIPANT") or "groq:openai/gpt-oss-20b,openai:gpt-5-nano,google:gemini-2.5-flash",
-        model_improver=env("REHEARSAL_MODEL_IMPROVER") or env("REHEARSAL_MODEL_COMPILER") or default_chain,
+        model_participant=env("REHEARSAL_MODEL_PARTICIPANT") or f"{nano}#nothink,{super_}#nothink",
+        model_improver=env("REHEARSAL_MODEL_IMPROVER") or env("REHEARSAL_MODEL_REASONER") or default_reasoner,
+        model_reasoner=env("REHEARSAL_MODEL_REASONER") or default_reasoner,
         kaggle_api_token=env("KAGGLE_API_TOKEN") or None,
         google_client_id=env("GOOGLE_CLIENT_ID") or None,
         signup=env("REHEARSAL_SIGNUP", "open"),

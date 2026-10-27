@@ -92,7 +92,8 @@ the database is never idle.
 ## A model provider key
 
 The World Compiler, the simulated customer and the agents you describe with instructions all call a language
-model. Set one provider key or more.
+model. By default they all run on **NVIDIA Nemotron** open models through **Nebius Token Factory**, so one key is
+enough: `NEBIUS_API_KEY`. Any other provider below works too.
 
 | Provider | Key |
 |---|---|
@@ -112,16 +113,23 @@ model. Set one provider key or more.
 | A LiteLLM proxy | `LITELLM_API_KEY` and `LITELLM_BASE_URL` |
 | A model server of your own (vLLM, Ollama) | see [Configuration](/reference/configuration#providers) |
 
-Which model does what is set by three **model chains**: `REHEARSAL_MODEL_COMPILER`, `REHEARSAL_MODEL_AGENT` and
-`REHEARSAL_MODEL_PARTICIPANT`. A chain is a list of `provider:model`, tried in order, and a provider without a
-key is skipped:
+Which model does what is set by **model chains**, one per role. A chain is a list of `provider:model`, tried in
+order, and a provider without a key is skipped. An entry may end in `#think` or `#nothink` to switch a reasoning
+model's thinking on or off for that entry only.
+
+| Role | Setting | Default |
+|---|---|---|
+| World Compiler: inspect, build, seed, write tools | `REHEARSAL_MODEL_COMPILER` | Nemotron 3 Super, thinking on |
+| World Compiler: design, judge and repair jobs | `REHEARSAL_MODEL_REASONER` | Nemotron 3 Ultra, thinking on |
+| Agents without a model of their own | `REHEARSAL_MODEL_AGENT` | Nemotron 3 Super, thinking on |
+| The simulated customer | `REHEARSAL_MODEL_PARTICIPANT` | Nemotron 3 Nano, thinking off |
+| Proposing a better agent | `REHEARSAL_MODEL_IMPROVER` | the reasoner's chain |
 
 ```text
-REHEARSAL_MODEL_COMPILER=anthropic:claude-sonnet-4-5,openai:gpt-5-mini,google:gemini-2.5-flash
+REHEARSAL_MODEL_PARTICIPANT=nebius:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B#nothink,groq:openai/gpt-oss-20b
 ```
 
-Left empty, the chains try Groq, OpenAI, Anthropic, Google, then OpenRouter, so one key from that list is enough to
-start. A job starts only when the server knows the price of its models: run `rehearsal prices` to see them.
+A job starts only when the server knows the price of its models: run `rehearsal prices` to see them.
 
 Without a key for the models in the chains, a build fails in its first phase with `inspector: model unavailable`.
 

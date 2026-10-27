@@ -553,13 +553,14 @@ def _main(argv: list[str] | None = None) -> None:
         from ..config import settings as cfg
 
         c = cfg()
-        rows = pricing.report({"compiler": c.model_compiler, "agent": c.model_agent, "participant": c.model_participant})
+        rows = pricing.report({"compiler": c.model_compiler, "reasoner": c.model_reasoner, "agent": c.model_agent, "participant": c.model_participant, "improver": c.model_improver})
         for r in rows:
             b = r["billing"]
             m = r["market"]
             charged = f"${b['input_per_m']:.3f}/${b['output_per_m']:.3f} per 1M ({b['source']}, {b['as_of']})" if b else "unknown (add it to pricing.yaml)"
             ref = f"{m['hosts']} hosts, input ${m['input_per_m']['min']:.3f}-{m['input_per_m']['max']:.3f}, output ${m['output_per_m']['min']:.3f}-{m['output_per_m']['max']:.3f}" if m else "no market listing"
-            print(f"{r['purpose']:<12} {r['provider']}:{r['model']}\n  charged at: {charged}\n  market:     {ref}")
+            mode = {True: " (thinking on)", False: " (thinking off)"}.get(r.get("thinking"), "")
+            print(f"{r['purpose']:<12} {r['provider']}:{r['model']}{mode}\n  charged at: {charged}\n  market:     {ref}")
     elif args.cmd == "export-example":
         from .examples import export_example
 

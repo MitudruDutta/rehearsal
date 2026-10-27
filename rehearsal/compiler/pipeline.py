@@ -171,6 +171,11 @@ class BuildFailed(Exception):
     pass
 
 
+# Roles whose mistakes are the most expensive run on the reasoner chain: designing jobs (a bad job poisons every
+# evaluation), judging failed validations, and repairing a runtime that would not start. The rest is tool-heavy work.
+REASONING_ROLES = {"scenario_designer", "validation_investigator", "builder_repair"}
+
+
 class Compiler:
     def __init__(
         self,
@@ -179,6 +184,7 @@ class Compiler:
         checkpoint: dict[str, Any],
         workdir: Path,
         chain: str,
+        reasoner: str | None = None,
         log: Callable[[str, str, dict[str, Any]], None],
         save: Callable[[dict[str, Any]], None],
         heartbeat: Callable[[], None],
@@ -192,6 +198,7 @@ class Compiler:
         # Scenarios are written and validated in parallel lanes (threads): checkpoint changes and spend go through this lock.
         self._lock = threading.RLock()
         self.chain = chain
+        self.reasoner = reasoner or chain
         self.log = log
         self._save = save
         self.heartbeat = heartbeat
@@ -297,7 +304,8 @@ class Compiler:
                 f"Rejected arguments:\n{dumps(last['args'])[:40000]}"
             )
         kwargs["submit"] = Tool(submit.name, submit.description, submit.parameters, remembering)
-        run = run_agent(chain=self.chain, log=self.log, check=self.heartbeat, add_cost=self.add_cost, **kwargs)
+        chain = self.reasoner if role in REASONING_ROLES else self.chain
+        run = run_agent(chain=chain, log=self.log, check=self.heartbeat, add_cost=self.add_cost, **kwargs)
         self.heartbeat()
         return run.result
 
@@ -1022,7 +1030,7 @@ class Compiler:
         for round_ in range(3):
             sc = ScenarioSpec.model_validate(self._locked(lambda: self.ck["scenarios"][sid]))
             self.heartbeat()
-            live = live_audit(inst, manifest, base, variables, sc, agent_chain=settings().model_agent, auditor_chain=self.chain, check=self.heartbeat, add_cost=self.add_cost)
+            live = live_audit(inst, manifest, base, variables, sc, agent_chain=settings().model_agent, auditor_chain=self.reasoner, check=self.heartbeat, add_cost=self.add_cost)
             report.live = live
             verdict = "passed by a live agent" if live["passed"] else f"live agent failed; cause: {live['cause']}"
             self.log("compiler.validation", f"{sid}: {verdict}{'. ' + live.get('evidence', '')[:300] if not live['passed'] else ''}", {"scenario": sid, "ok": live["cause"] not in UNFAIR, "live": live["cause"] or "passed"})
@@ -1123,7 +1131,7 @@ class Compiler:
             "secrets": self.ck["secrets"],
             "vars": self.variables(),
             "images": inst.record.images,
-            "provenance": {**self.app.provenance, "images": inst.record.images, "compiler_chain": self.chain, "prompt_version": PROMPT_VERSION},
+            "provenance": {**self.app.provenance, "images": inst.record.images, "compiler_chain": self.chain, "reasoner_chain": self.reasoner, "prompt_version": PROMPT_VERSION},
             "inspection": self.ck["inspection"],
         }
         self.destroy(inst)

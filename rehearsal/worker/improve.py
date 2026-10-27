@@ -83,7 +83,7 @@ def handle(ctx: JobContext) -> dict[str, Any]:
     )[:120_000]
     ctx.check()
     try:
-        data, reply = chat_json(settings().model_improver, [{"role": "system", "content": system}, {"role": "user", "content": user}], check=ctx.check)
+        data, reply = chat_json(settings().model_improver, [{"role": "system", "content": system}, {"role": "user", "content": user}], check=ctx.check, role="improver")
     except LLMError as exc:
         reply = getattr(exc, "reply", None)
         if reply is not None:

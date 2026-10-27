@@ -66,6 +66,8 @@ def _run_one(worker_id: str, kinds: list[str] | None = None) -> bool:
     try:
         with JobContext(job, worker_id) as ctx:
             result = _handler(job.kind)(ctx)
+        if isinstance(result, dict) and ctx.models:
+            result = {**result, "models": ctx.models}
         with session() as s:
             row = queue.owned(s, job.id, worker_id, job.attempts)
             queue.finish(s, row, status="succeeded", result=result)  # type: ignore[arg-type]

@@ -2,8 +2,14 @@
 
 A chain is ``provider:model[,provider:model...]``. Rate limits, credit errors,
 server errors, and timeouts move to the next entry; the reply records which
-provider/model actually answered so traces and evaluations stay attributable.
+provider/model actually answered so evaluations stay attributable.
 Provider keys are read server-side only.
+
+An entry may end in ``#think`` or ``#nothink`` to switch a reasoning model's
+thinking on or off for that entry only (sent as ``chat_template_kwargs``, the
+switch NVIDIA Nemotron models read), so a fast role skips the reasoning tokens.
+
+While a job runs, ``usage`` collects calls, tokens, cost and latency per role.
 """
 
 from __future__ import annotations
@@ -13,7 +19,9 @@ import logging
 import math
 import os
 import re
+import threading
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -72,6 +80,8 @@ class LLMReply:
     attempts: list[str] = field(default_factory=list)
     raw_tool_calls: list[dict[str, Any]] = field(default_factory=list)  # provider metadata (e.g. thought signatures)
     cost_source: str = "unknown"  # where the price came from: provider-reported, a price list, or an override
+    thinking: bool | None = None  # the reasoning switch sent with the call (None: the model's default)
+    latency_ms: int = 0
 
     def assistant_message(self) -> dict[str, Any]:
         msg: dict[str, Any] = {"role": "assistant", "content": self.content or ""}
@@ -89,19 +99,46 @@ class LLMReply:
         return msg
 
 
-def parse_chain(chain: str) -> list[tuple[str, str]]:
+THINKING = {"think": True, "nothink": False}
+
+
+def parse_chain(chain: str) -> list[tuple[str, str, bool | None]]:
+    """``provider:model[#think|#nothink]`` entries as (provider, model, thinking)."""
     entries = []
     for part in chain.split(","):
         part = part.strip()
         if not part:
             continue
+        part, hashed, flag = part.partition("#")
         provider, sep, model = part.partition(":")
-        if not sep or provider not in PROVIDERS:
+        if not sep or provider not in PROVIDERS or not model:
             raise LLMError(f"bad model entry {part!r}; expected provider:model with provider in {sorted(PROVIDERS)}")
-        entries.append((provider, model))
+        if hashed and flag not in THINKING:
+            raise LLMError(f"bad reasoning switch #{flag} in {part!r}; use #think or #nothink")
+        entries.append((provider, model, THINKING[flag] if hashed else None))
     if not entries:
         raise LLMError("empty model chain")
     return entries
+
+
+usage: ContextVar[dict[str, dict[str, Any]] | None] = ContextVar("model_usage", default=None)
+_usage_lock = threading.Lock()
+
+
+def _record(role: str | None, reply: "LLMReply") -> None:
+    """Adds one answered call to the running job's per-role usage (compiler lanes share one dict across threads)."""
+    acc = usage.get()
+    if acc is None or not role:
+        return
+    with _usage_lock:
+        row = acc.setdefault(role, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0, "latency_ms": 0, "models": {}})
+        row["calls"] += 1
+        row["prompt_tokens"] += reply.prompt_tokens
+        row["completion_tokens"] += reply.completion_tokens
+        row["cost_usd"] = round(row["cost_usd"] + reply.cost_usd, 6)
+        row["latency_ms"] += reply.latency_ms
+        name = f"{reply.provider}:{reply.model}" + ("" if reply.thinking is None else "#think" if reply.thinking else "#nothink")
+        row["models"][name] = row["models"].get(name, 0) + 1
 
 
 _clients: dict[str, Any] = {}
@@ -221,13 +258,16 @@ def chat(
     max_tokens: int = 4096,
     response_json: bool = False,
     check: Callable[[], None] | None = None,
+    role: str | None = None,
 ) -> LLMReply:
+    """Asks the first entry of the chain that answers. ``role`` names the caller in the job's usage report."""
     attempts: list[str] = []
     entries = parse_chain(chain)
     for round_ in range(6):
         reply, limited, waits = _try_chain(entries, messages, tools, tool_choice, temperature, max_tokens, response_json, attempts, check=check)
         if reply is not None:
             reply.attempts = attempts
+            _record(role, reply)
             return reply
         if not limited:
             break
@@ -239,7 +279,7 @@ def chat(
 
 
 def _try_chain(
-    entries: list[tuple[str, str]],
+    entries: list[tuple[str, str, bool | None]],
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None,
     tool_choice: str | None,
@@ -252,7 +292,7 @@ def _try_chain(
     """One pass over the chain: (reply, every failure was a rate limit/timeout, retry hints)."""
     only_limits = True
     waits: list[float | None] = []
-    for provider, model in entries:
+    for provider, model, thinking in entries:
         if _billing_blocked.get(provider, 0) > time.time():
             only_limits = False
             continue
@@ -276,8 +316,14 @@ def _try_chain(
                 kwargs["tool_choice"] = tool_choice or "auto"
             if response_json and not tools:
                 kwargs["response_format"] = {"type": "json_object"}
+            extra: dict[str, Any] = {}
             if provider == "openrouter":
-                kwargs["extra_body"] = {"usage": {"include": True}}
+                extra["usage"] = {"include": True}
+            if thinking is not None:
+                extra["chat_template_kwargs"] = {"enable_thinking": thinking}
+            if extra:
+                kwargs["extra_body"] = extra
+            started = time.perf_counter()
             try:
                 resp = client.chat.completions.create(**kwargs)
             except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError, openai.InternalServerError) as exc:
@@ -331,6 +377,8 @@ def _try_chain(
                 cost_usd=cost,
                 cost_source=source,
                 raw_tool_calls=[tc.model_dump(exclude_none=True) for tc in choice.tool_calls or []],
+                thinking=thinking,
+                latency_ms=int((time.perf_counter() - started) * 1000),
             )
             return reply, False, waits
     return None, only_limits, waits
@@ -343,9 +391,10 @@ def chat_json(
     temperature: float = 0.2,
     max_tokens: int = 8192,
     check: Callable[[], None] | None = None,
+    role: str | None = None,
 ) -> tuple[Any, LLMReply]:
     """Tolerates fenced JSON; parse failures retain usage in ``LLMError.reply``."""
-    reply = chat(chain, messages, temperature=temperature, max_tokens=max_tokens, response_json=True, check=check)
+    reply = chat(chain, messages, temperature=temperature, max_tokens=max_tokens, response_json=True, check=check, role=role)
     text = reply.content.strip()
     m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
     if m:

@@ -181,7 +181,7 @@ class LLMPolicy:
         actor.tools = tools
         engine.check()
         try:
-            reply = chat(self.chain, actor.transcript, tools=tools, temperature=self.profile.temperature, max_tokens=2048, check=engine.check)
+            reply = chat(self.chain, actor.transcript, tools=tools, temperature=self.profile.temperature, max_tokens=2048, check=engine.check, role="agent")
         except LLMError as exc:
             engine.environment_error = f"model unavailable: {exc}"[:500]
             return None

@@ -7,6 +7,7 @@ import threading
 from typing import Any
 
 from .. import pricing
+from ..agents import llm
 from ..config import settings
 from ..db import queue
 from ..db.events import emit
@@ -34,6 +35,7 @@ class JobContext:
         self._stop: BaseException | None = None
         self._halt = threading.Event()
         self._thread = threading.Thread(target=self._beat, daemon=True)
+        self.models: dict[str, dict[str, Any]] = {}  # model calls, tokens, cost and latency per role (llm.usage)
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -42,12 +44,14 @@ class JobContext:
         self._thread.start()
         self._price_token = pricing.require_known_prices.set(
             self.budget is not None or cfg.plans or cfg.monthly_allowance_usd > 0)
+        self._usage_token = llm.usage.set(self.models)
         return self
 
     def __exit__(self, *exc: Any) -> None:
         self._halt.set()
         self._thread.join(timeout=5)
         pricing.require_known_prices.reset(self._price_token)
+        llm.usage.reset(self._usage_token)
 
     def _heartbeat(self) -> None:
         with session() as s:

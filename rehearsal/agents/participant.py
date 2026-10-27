@@ -36,6 +36,7 @@ def reply(spec: ParticipantSpec, goal_instruction: str, history: list[tuple[str,
             check=check,
             temperature=0.4,
             max_tokens=400,
+            role="customer",
         )
     except LLMError:
         return FALLBACK, 0.0, 0

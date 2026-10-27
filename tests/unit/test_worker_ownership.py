@@ -60,7 +60,7 @@ def worker(request, monkeypatch):
     monkeypatch.setattr(main.queue, "owned", Mock(side_effect=owned))
     monkeypatch.setattr(main.queue, "release_shard", Mock(return_value=False))  # no other shard is working on the run
     monkeypatch.setattr(main.queue, "finish", Mock(side_effect=finish))
-    monkeypatch.setattr(main, "JobContext", Mock(side_effect=lambda *args: nullcontext()))
+    monkeypatch.setattr(main, "JobContext", Mock(side_effect=lambda *args: nullcontext(SimpleNamespace(models={}))))
     state.handler = Mock(return_value={"ok": True})
     monkeypatch.setattr(main, "_handler", Mock(return_value=state.handler))
     monkeypatch.setattr(events, "emit", Mock())

@@ -176,7 +176,7 @@ Settings come from the environment, or from `.env` in the working directory. The
 |---|---|---|
 | `REHEARSAL_DATABASE_URL` | local PostgreSQL on port 5433 | Control-plane database |
 | `REHEARSAL_SESSION_SECRET` | development value | Signs console session cookies; set your own |
-| `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | Model chains, `provider:model[,provider:model...]` |
+| `REHEARSAL_MODEL_COMPILER`, `_REASONER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | NVIDIA Nemotron on Nebius Token Factory, routed by role | Model chains, `provider:model[#think\|#nothink][,...]` |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ... | none | One key for each provider the chains name |
 | `REHEARSAL_SIGNUP` | `open` | `closed` stops new workspaces from the sign-in page |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |

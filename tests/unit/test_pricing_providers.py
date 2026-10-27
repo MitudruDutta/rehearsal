@@ -34,10 +34,11 @@ def test_every_provider_has_a_price_source():
 
 def test_empty_chain_setting_means_the_default(monkeypatch):
     monkeypatch.setenv("REHEARSAL_ENV_FILE", "/dev/null")
-    monkeypatch.setenv("REHEARSAL_MODEL_COMPILER", "")
-    monkeypatch.setenv("REHEARSAL_MODEL_PARTICIPANT", "")
+    for role in ("COMPILER", "AGENT", "PARTICIPANT", "IMPROVER", "REASONER"):
+        monkeypatch.setenv(f"REHEARSAL_MODEL_{role}", "")
     settings.cache_clear()
     s = settings()
     settings.cache_clear()
-    assert s.model_compiler.startswith("groq:") and "anthropic:" in s.model_compiler
-    assert s.model_participant.startswith("groq:")
+    assert s.model_compiler.startswith("nebius:nvidia/nemotron-3-super") and "Nemotron-3-Ultra" in s.model_compiler
+    assert s.model_participant.startswith("nebius:nvidia/NVIDIA-Nemotron-3-Nano") and s.model_participant.endswith("#nothink")
+    assert s.model_reasoner.startswith("nebius:nvidia/Nemotron-3-Ultra") and s.model_improver == s.model_reasoner

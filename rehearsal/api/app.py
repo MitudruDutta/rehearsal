@@ -1380,7 +1380,7 @@ def model_pricing(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
     from .. import pricing
 
     cfg = settings()
-    return pricing.report({"compiler": cfg.model_compiler, "agent": cfg.model_agent, "participant": cfg.model_participant, "improver": cfg.model_improver})
+    return pricing.report({"compiler": cfg.model_compiler, "reasoner": cfg.model_reasoner, "agent": cfg.model_agent, "participant": cfg.model_participant, "improver": cfg.model_improver})
 
 
 # --------------------------------------------------------------------------- keys & credentials
