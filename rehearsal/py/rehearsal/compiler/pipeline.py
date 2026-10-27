@@ -820,12 +820,19 @@ class Compiler:
                 failing = failing_service(error)
                 before = next((x for x in self.ck["runtime"].get("services", []) if x.get("name") == failing), None)
 
-                def accept_repair(args: dict[str, Any], failing: str | None = failing, before: Any = before) -> dict[str, Any]:
+                def accept_repair(args: dict[str, Any], failing: str | None = failing, before: Any = before, old: dict[str, Any] = self.ck["runtime"]) -> dict[str, Any]:
                     rt = self._accept_runtime(args)
                     after = next((x for x in rt.get("services", []) if x.get("name") == failing), None)
                     if before is not None and after is not None and _same_service(before, after):
-                        raise Rejected(f"service {failing} is the one that failed, and it is unchanged; change it to fix the error "
-                                       f"(the first line of the error says why it failed)")
+                        was = {x.get("name"): x for x in old.get("services", [])}
+                        changed = [x["name"] for x in rt.get("services", []) if x.get("name") != failing and (x.get("name") not in was or not _same_service(was[x["name"]], x))]
+                        raise Rejected(
+                            f"service {failing} is the one that failed, and it is unchanged; change it to fix the error (the first line of the "
+                            "error says why it failed)."
+                            + (f" You changed {', '.join(changed)}, but each service runs in its own container with its own environment and "
+                               f"files: a setting or file given to {', '.join(changed)} does not reach {failing}. Give {failing} what the fix "
+                               "needs itself (the same environment variables, volumes_from to share another service's data, or a different "
+                               "command)." if changed else ""))
                     return rt
 
                 submit = Tool("submit_runtime", "Submit the corrected runtime section.", params({"runtime": {"type": "object"}}), accept_repair)

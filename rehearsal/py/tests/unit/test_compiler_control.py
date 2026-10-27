@@ -372,13 +372,19 @@ def test_a_repair_that_leaves_the_failing_service_unchanged_is_refused(tmp_path,
             kw["submit"].fn(unchanged)
         except pipeline.Rejected as exc:
             outcomes.append(str(exc))
+        elsewhere = {"runtime": {"services": [worker, {**web, "env": {"INSTALL_LOCK": "true"}}, db], "state_probes": probes}}
+        try:  # the Gitea build's slip: the setting went to another service, which does not share the failing one's environment
+            kw["submit"].fn(elsewhere)
+        except pipeline.Rejected as exc:
+            outcomes.append(str(exc))
         fixed = {**worker, "command": ["celery", "worker", "--concurrency", "2"]}
         return kw["submit"].fn({"runtime": {"services": [fixed, web, db], "state_probes": probes}})
 
     monkeypatch.setattr(c, "agent", agent)
     with pytest.raises(pipeline.BuildFailed):
         c.phase_materialize()
-    assert "service worker is the one that failed, and it is unchanged" in outcomes[0]
+    assert "service worker is the one that failed, and it is unchanged" in outcomes[0] and "You changed" not in outcomes[0]
+    assert "You changed web" in outcomes[1] and "does not reach worker" in outcomes[1]
 
 
 def test_a_host_check_refusal_sends_the_build_back_to_the_runtime_with_the_real_host_names(tmp_path, monkeypatch):
