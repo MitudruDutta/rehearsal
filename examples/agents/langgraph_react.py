@@ -76,7 +76,8 @@ class Seat:
 
         tools = [tool_for(t) for t in turn.get("tools", [])]
         graph = react_agent(self.llm, tools)
-        out = graph.invoke({"messages": self.messages}, {"recursion_limit": 6})
+        # LangGraph runs a reply's tool calls in parallel; one at a time, the first call is the one that acts
+        out = graph.invoke({"messages": self.messages}, {"recursion_limit": 6, "max_concurrency": 1})
         self.messages = list(out["messages"])
         if acted:
             return acted[0]
