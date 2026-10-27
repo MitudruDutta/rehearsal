@@ -46,7 +46,7 @@ export function Stuck({ stuck, phase, status, guard, onPause }: {
             {kinds.map(([kind, k]) => (
               <li key={kind} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex items-baseline justify-between gap-4">
-                  <span className="font-medium">{explainRejection(kind)}</span>
+                  <span><span className="font-medium">{explainRejection(kind)}</span><span className="mt-0.5 block font-mono text-xs text-muted-foreground">{kind}</span></span>
                   <span className="shrink-0 tabular-nums text-sm text-muted-foreground">{k.count}×{k.role ? `, ${k.role}` : ""}</span>
                 </div>
                 {k.last && (

@@ -691,3 +691,12 @@ def test_an_api_that_answers_404_everywhere_its_spec_lists_is_a_runtime_problem(
     assert why and "GET /api/v1/version answered 404" in why and "{owner}" not in why
     status["code"] = 401  # served, just not signed in
     assert c._api_not_served(inst, "gitea", spec) is None
+
+
+def test_an_object_closed_early_with_more_of_it_after_is_read():
+    """From the Gitea build's inspector: the report object was closed one } too early and its "state" key followed."""
+    from rehearsal.compiler.agent import _unstring
+
+    text = '{"services": {"web": {"health": "/api/healthz"}}}, "state": {"db": "sqlite"}}'
+    report = _unstring({"report": text}, {"properties": {"report": {"type": "object"}}})["report"]
+    assert report == {"services": {"web": {"health": "/api/healthz"}}, "state": {"db": "sqlite"}}

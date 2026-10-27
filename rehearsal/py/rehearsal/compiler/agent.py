@@ -126,6 +126,10 @@ def _reclose(text: str, limit: int = 20) -> str:
             elif exc.msg.startswith("Expecting ',' delimiter") and text[exc.pos:exc.pos + 1] in ("]", "}"):
                 # a list closed while an object in it is still open (or the reverse): close the inner one first
                 text = text[:exc.pos] + ("}" if text[exc.pos] == "]" else "]") + text[exc.pos:]
+            elif exc.msg.startswith("Extra data") and text[:exc.pos].rstrip()[-1:] in ("}", "]") and text[exc.pos:].lstrip().startswith(","):
+                # the outer object was closed early and more of it follows: drop the closer that ended it too soon
+                end = len(text[:exc.pos].rstrip()) - 1
+                text = text[:end] + text[end + 1:]
             elif exc.msg.startswith("Expecting ',' delimiter") and text[exc.pos:exc.pos + 1] == ":" and (extra := text.rfind("}", 0, comma)) >= 0 \
                     and not text[extra + 1:comma].strip():
                 # "key": value where a list expects an item: one } too many closed its object early, just before the comma
