@@ -67,7 +67,7 @@ export function Agents() {
           <CardContent>
             <form onSubmit={create} className="grid gap-4">
               <div className="grid gap-2"><Label htmlFor="pn">Name</Label><Input id="pn" value={name} onChange={(e) => setName(e.target.value)} required placeholder="support-agent" /></div>
-              <div className="grid gap-2"><Label htmlFor="pm">Model chain (optional)</Label><Input id="pm" value={model} onChange={(e) => setModel(e.target.value)} placeholder="modal:deepseek-ai/DeepSeek-V4.1-Flash" /></div>
+              {!byUrl && <div className="grid gap-2"><Label htmlFor="pm">Model chain (optional)</Label><Input id="pm" value={model} onChange={(e) => setModel(e.target.value)} placeholder="nebius:nvidia/nemotron-3-super-120b-a12b" /></div>}
               <div className="grid gap-2"><Label htmlFor="pp">Instructions</Label><Textarea id="pp" rows={7} value={prompt} onChange={(e) => setPrompt(e.target.value)} /></div>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={external} onCheckedChange={(v) => { setExternal(v === true); if (v === true) setByUrl(false); }} /> My own agent sends actions through the API</label>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={byUrl} onCheckedChange={(v) => { setByUrl(v === true); if (v === true) setExternal(false); }} /> My own agent runs at a URL</label>
