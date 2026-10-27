@@ -1,0 +1,50 @@
+{
+  "name": "rehearsal-kit",
+  "version": "0.1.2",
+  "description": "Rehearse AI agents on a sandboxed copy of your own application before they reach production. The TypeScript edition of rehearsal-kit: SDK, `rehearsal` CLI and MCP server.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "rehearsal": "./dist/sdk/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./sdk": {
+      "types": "./dist/sdk/index.d.ts",
+      "import": "./dist/sdk/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/sdk/mcp.d.ts",
+      "import": "./dist/sdk/mcp.js"
+    }
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "assets": "node scripts/sync-assets.mjs",
+    "build": "node scripts/sync-assets.mjs && tsc -p tsconfig.json && node scripts/mark-executable.mjs",
+    "test": "pnpm build && node --test test/*.test.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
