@@ -29,7 +29,7 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20"
   },
   "scripts": {
     "assets": "node scripts/sync-assets.mjs",

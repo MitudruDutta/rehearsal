@@ -18,7 +18,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { Rehearsal, type Json } from "./client.js";
+import { Rehearsal, VERSION, type Json } from "./client.js";
 
 export const INSTRUCTIONS =
   "Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who " +
@@ -55,7 +55,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function buildServer(client?: Rehearsal): McpServer {
   const get = client ? () => client : lazyClient();
   const link = (path: string) => `${get().baseUrl}${path}`;
-  const mcp = new McpServer({ name: "rehearsal", version: "0.1.2" }, { instructions: INSTRUCTIONS });
+  const mcp = new McpServer({ name: "rehearsal", version: VERSION }, { instructions: INSTRUCTIONS });
   const tool = <S extends z.ZodRawShape>(name: string, description: string, shape: S, fn: (args: z.infer<z.ZodObject<S>>) => Promise<unknown>) =>
     mcp.registerTool(name, { description, inputSchema: shape }, (async (args: any) => {
       const result = await fn(args);

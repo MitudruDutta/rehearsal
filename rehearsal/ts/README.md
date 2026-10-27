@@ -13,7 +13,7 @@ npm install rehearsal-kit      # or: pnpm add rehearsal-kit / bun add rehearsal-
 npx rehearsal-kit --help       # the `rehearsal` command, without installing
 ```
 
-Node.js 18.17 or newer. The package is the client: it talks to a Rehearsal server, the hosted service at https://rehearsalkit.xyz or one of your own. Running a server is the Python package, `pip install "rehearsal-kit[server]"`.
+Node.js 20 or newer. The package is the client: it talks to a Rehearsal server, the hosted service at https://rehearsalkit.xyz or one of your own. Running a server is the Python package, `pip install "rehearsal-kit[server]"`.
 
 ## Use Rehearsal
 

@@ -1,6 +1,6 @@
 """Release gates for rehearsal-kit.
 
-    python check-release.py --version-only   # before building: version, tag, PyPI, changelog, agent plugin
+    python check-release.py --version-only   # before building: version, tag, PyPI, changelog, agent plugin, npm package
     python check-release.py                  # after `python -m build`: the tag again, plus archive contents
 
 The version gate is strict for a published GitHub Release (GITHUB_EVENT_NAME=release). On a manual dry run it
@@ -82,6 +82,12 @@ def version_problems(root: Path) -> list[str]:
         if plugin_version != version:
             problems.append(f"agent-plugin/plugin.json version {plugin_version} must equal {version}; "
                             "set it and run scripts/build_agent_plugin.py")
+
+    npm = root / "rehearsal" / "ts" / "package.json"
+    if npm.is_file():
+        npm_version = json.loads(npm.read_text()).get("version")
+        if npm_version != version:
+            problems.append(f"rehearsal/ts/package.json version {npm_version} must equal {version}; both packages are released together")
     return problems
 
 

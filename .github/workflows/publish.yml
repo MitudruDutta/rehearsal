@@ -1,4 +1,4 @@
-name: Build and publish Python package
+name: Build and publish packages (PyPI and npm)
 
 # Publishing happens only from a published GitHub Release whose tag is v<version from pyproject.toml>. Before any
 # upload, every gate below must pass on that exact commit:
@@ -7,6 +7,7 @@ name: Build and publish Python package
 #      the agent plugin carries the same version, and the commit is on main
 #   3. the distributions: built, metadata strict-checked, required resources present, installable with client
 #      dependencies only on every supported Python, and the installed MCP server answers over stdio
+#   4. the npm package (rehearsal/ts): same version, built, tested, packed, and its installed CLI and MCP server run
 # After the upload, the published package is installed from PyPI and must report the new version.
 # A manual run (workflow_dispatch) runs every gate and builds, but never uploads.
 
@@ -135,6 +136,66 @@ jobs:
           python -m venv sdist-smoke
           sdist-smoke/bin/python -m pip install dist/*.tar.gz
           sdist-smoke/bin/rehearsal --version
+
+  npm-build:
+    name: Build and verify the npm package
+    needs: [tests, version]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Build, test and pack
+        run: |
+          npm install --global pnpm@10.33.0
+          pnpm --dir rehearsal/ts install --frozen-lockfile
+          pnpm --dir rehearsal/ts test
+          mkdir -p npm-dist && cd rehearsal/ts && npm pack --pack-destination ../../npm-dist
+      - name: Installed package runs (CLI, SDK and MCP server)
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir npm-smoke && cd npm-smoke && npm init -y > /dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/npm-dist/rehearsal-kit-*.tgz
+          version="$(node -p 'require("rehearsal-kit/package.json").version')"
+          test "$(npx rehearsal --version)" = "rehearsal-kit ${version}"
+          npx rehearsal --help > /dev/null
+          npx rehearsal skill print > /dev/null
+          node --input-type=module -e 'const m = await import("rehearsal-kit"); const s = await import("rehearsal-kit/mcp"); if (!m.Rehearsal || !s.buildServer) process.exit(1)'
+      - name: Save the verified package
+        uses: actions/upload-artifact@v6
+        with:
+          name: npm-package
+          path: npm-dist/*.tgz
+          if-no-files-found: error
+
+  publish-npm:
+    name: Publish to npm
+    if: github.event_name == 'release'
+    needs: [tests, version, npm-build, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/rehearsal-kit
+    permissions:
+      id-token: write  # npm trusted publishing, with provenance
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: npm-package
+          path: npm-dist/
+      - name: Publish using npm trusted publishing
+        run: npm publish npm-dist/*.tgz --access public --provenance
 
   publish:
     name: Publish to PyPI

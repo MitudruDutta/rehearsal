@@ -13,7 +13,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { DEFAULT_URL, Rehearsal, RehearsalError, configPath, env, saveLogin, savedLogin, type Json } from "./client.js";
+import { DEFAULT_URL, Rehearsal, RehearsalError, VERSION, configPath, env, saveLogin, savedLogin, type Json } from "./client.js";
 import { assetsDir, exportExample } from "./examples.js";
 import { UNFINISHED, run as runGate } from "./gate.js";
 
@@ -46,14 +46,6 @@ function watchLine(ev: Json): string {
 
 async function watch(stream: AsyncGenerator<Json>): Promise<void> {
   for await (const ev of stream) console.log(watchLine(ev));
-}
-
-function version(): string {
-  try {
-    return JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
-  } catch {
-    return "unknown";
-  }
 }
 
 const server = (explicit?: string | null) => (explicit || env("REHEARSAL_URL") || savedLogin().url || DEFAULT_URL).replace(/\/+$/, "");
@@ -484,7 +476,7 @@ export function parse(argv: string[]): { name: string; args: Json } {
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   try {
     if (!argv.length || argv[0] === "--help" || argv[0] === "-h") { process.stdout.write(helpText()); return argv.length ? 0 : 2; }
-    if (argv[0] === "--version") { console.log(`rehearsal-kit ${version()}`); return 0; }
+    if (argv[0] === "--version") { console.log(`rehearsal-kit ${VERSION}`); return 0; }
     const { name, args } = parse(argv);
     const code = await COMMANDS[name].run(args);
     return typeof code === "number" ? code : 0;

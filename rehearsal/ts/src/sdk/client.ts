@@ -11,6 +11,9 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
+/** This package's version, from its package.json (kept equal to the Python package's by the release checks). */
+export const VERSION: string = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
+
 export const DEFAULT_URL = "https://rehearsalkit.xyz"; // the hosted service; a server of your own: `rehearsal login --url ...` or REHEARSAL_URL
 
 // API payloads are documented in the server's OpenAPI reference (/api/docs); results are plain JSON objects.

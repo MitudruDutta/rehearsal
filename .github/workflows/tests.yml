@@ -61,6 +61,29 @@ jobs:
       - name: Agent plugin files match their sources
         run: python scripts/build_agent_plugin.py --check
 
+  typescript:
+    name: TypeScript package on Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        node: ["20", "22", "24"]  # every version package.json's engines field advertises that is still supported
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Install pnpm and dependencies
+        run: |
+          npm install --global pnpm@10.33.0
+          pnpm --dir rehearsal/ts install --frozen-lockfile
+      - name: Build and test (includes parity with the Python CLI and MCP server)
+        run: pnpm --dir rehearsal/ts test
+
   console:
     name: Console type check and build
     runs-on: ubuntu-24.04
