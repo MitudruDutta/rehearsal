@@ -354,3 +354,24 @@ def test_a_stopping_worker_hands_its_job_back_without_using_an_attempt(db):
     assert shown["models"]["compiler.adapter"]["calls"] == 2  # usage by role while the job has no result yet
     with session() as s:
         queue.finish(s, s.get(Job, job_id), status="cancelled")
+
+
+def test_an_agent_given_by_url_keeps_its_key_sealed(db, monkeypatch):
+    from rehearsal.agents.endpoint import unseal
+    from rehearsal.db.models import Credential
+
+    monkeypatch.setattr("rehearsal.agents.endpoint.url_problem", lambda url: None if url.startswith("https://agent.example.test") else "private")
+    _, key = bootstrap("Test", "endpoint")
+    h = {"Authorization": f"Bearer {key}"}
+    client = TestClient(app)
+    r = client.post("/v1/agent-profiles", headers=h, json={"name": "mine", "endpoint": {"url": "https://agent.example.test/v1", "model": "m", "api_key": "sk-secret-9"}})
+    assert r.status_code == 201, r.text
+    assert "sk-secret-9" not in r.text and "sk-secret-9" not in client.get("/v1/agent-profiles", headers=h).text
+    ep = r.json()["spec"]["endpoint"]
+    assert ep["url"] == "https://agent.example.test/v1" and ep["credential_id"]
+    with session() as s:
+        cred = s.get(Credential, ep["credential_id"])
+        assert cred.kind == "agent_endpoint" and unseal(cred.encrypted_value) == "sk-secret-9"
+    assert "sk-secret-9" not in client.get("/v1/credentials", headers=h).text
+    refused = client.post("/v1/agent-profiles", headers=h, json={"name": "inside", "endpoint": {"url": "https://10.0.0.1/v1"}})
+    assert refused.status_code == 422 and "private" in refused.text

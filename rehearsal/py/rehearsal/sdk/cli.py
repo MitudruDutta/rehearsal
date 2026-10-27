@@ -287,6 +287,9 @@ def _main(argv: list[str] | None = None) -> None:
     pc.add_argument("--prompt-file")
     pc.add_argument("--model")
     pc.add_argument("--external", action="store_true", help="actions come from your own agent through the API")
+    pc.add_argument("--endpoint", help="test your own agent by its URL: an OpenAI-compatible endpoint that answers with tool calls")
+    pc.add_argument("--endpoint-model", default="", help="the model name your endpoint expects, if any")
+    pc.add_argument("--endpoint-key-env", help="the environment variable holding your endpoint's API key (stored sealed on the server)")
 
     ev = cmd("eval", "evaluate agent profiles on a world version")
     ev.add_argument("wv_id")
@@ -531,6 +534,11 @@ def _main(argv: list[str] | None = None) -> None:
             extra: dict[str, Any] = {"driver": "external"} if args.external else {}
             if args.model:
                 extra["model"] = args.model
+            if args.endpoint:
+                key = os.environ.get(args.endpoint_key_env, "") if args.endpoint_key_env else ""
+                if args.endpoint_key_env and not key:
+                    raise SystemExit(f"{args.endpoint_key_env} is not set in this shell")
+                extra["endpoint"] = {"url": args.endpoint, "model": args.endpoint_model, **({"api_key": key} if key else {})}
             _print(c.profiles.create(args.name, prompt, **extra))
     elif args.cmd == "eval":
         c = _client()

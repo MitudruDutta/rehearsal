@@ -134,10 +134,16 @@ def build_server(client: Rehearsal | None = None) -> Any:
                  "created_by": p.get("created_by")} for p in c.get("/v1/agent-profiles")]
 
     @mcp.tool()
-    def create_agent(name: str, instructions: str = "", model: str | None = None, bring_your_own: bool = False) -> dict[str, Any]:
+    def create_agent(name: str, instructions: str = "", model: str | None = None, bring_your_own: bool = False, endpoint_url: str | None = None,
+                     endpoint_model: str = "") -> dict[str, Any]:
         """Create an agent profile. instructions is its system prompt (empty uses the platform default). With
-        bring_your_own=True, Rehearsal does not run a model for it: your own agent acts through waiting_turns and take_action."""
-        p = c.post("/v1/agent-profiles", {"name": name, "system_prompt": instructions, "model": model, "driver": "external" if bring_your_own else "llm"})
+        bring_your_own=True, Rehearsal does not run a model for it: your own agent acts through waiting_turns and take_action.
+        With endpoint_url, each turn goes to your own agent at that OpenAI-compatible URL (https, public); an API key for it
+        is set with `rehearsal profiles create --endpoint-key-env` or on the console, never here."""
+        body: dict[str, Any] = {"name": name, "system_prompt": instructions, "model": model, "driver": "external" if bring_your_own else "llm"}
+        if endpoint_url:
+            body["endpoint"] = {"url": endpoint_url, "model": endpoint_model}
+        p = c.post("/v1/agent-profiles", body)
         return {"id": p["id"], "name": p["name"], "version": p["version"]}
 
     @mcp.tool()

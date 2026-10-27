@@ -105,6 +105,7 @@ OpenAI-compatible address. When a provider's source has no price for a model, ad
 
 | Setting | Default | What it changes |
 |---|---|---|
+| `REHEARSAL_ALLOW_PRIVATE_AGENT_URLS` | off | `on` lets agent profiles name an endpoint on a private network or over plain http. Leave it off on any server others use: workers would call whatever address a profile names. |
 | `REHEARSAL_RUN_PARALLEL` | `4` | Into how many parts a run is cut. Each part needs one free worker and one sandbox. |
 | `REHEARSAL_BUILD_PARALLEL` | `4` | How many jobs a build writes and validates at once. Each one being validated runs its own copy of the world. |
 | `REHEARSAL_MAX_ACTIVE_BUILDS` | `0`, no limit | Builds that one project may have in progress. |

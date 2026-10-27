@@ -251,12 +251,21 @@ export const COMMANDS: Record<string, Cmd> = {
   profiles: {
     summary: "list and create agent profiles (agent versions)",
     actions: { list: { summary: "agent profiles and versions" },
-               create: { summary: "create an agent profile", args: ["name"], opts: { "prompt-file": { type: "string" }, model: { type: "string" }, external: { type: "boolean", help: "actions come from your own agent through the API" } } } },
+               create: { summary: "create an agent profile", args: ["name"], opts: { "prompt-file": { type: "string" }, model: { type: "string" }, external: { type: "boolean", help: "actions come from your own agent through the API" },
+                                                                                       endpoint: { type: "string", help: "test your own agent by its URL: an OpenAI-compatible endpoint that answers with tool calls" },
+                                                                                       "endpoint-model": { type: "string", default: "", help: "the model name your endpoint expects, if any" },
+                                                                                       "endpoint-key-env": { type: "string", help: "the environment variable holding your endpoint's API key (stored sealed on the server)" } } } },
     run: async (a) => {
       const c = client();
       if (a.sub === "list") return print((await c.profiles.list()).map((p) => pick(p, "id", "name", "version", "created_by")));
       const prompt = a["prompt-file"] ? readFileSync(a["prompt-file"], "utf8") : "";
-      return print(await c.profiles.create(a.name, prompt, { ...(a.external ? { driver: "external" } : {}), ...(a.model ? { model: a.model } : {}) }));
+      let endpoint: Json | undefined;
+      if (a.endpoint) {
+        const key = a["endpoint-key-env"] ? process.env[a["endpoint-key-env"]] ?? "" : "";
+        if (a["endpoint-key-env"] && !key) fail(`${a["endpoint-key-env"]} is not set in this shell`);
+        endpoint = { url: a.endpoint, model: a["endpoint-model"], ...(key ? { api_key: key } : {}) };
+      }
+      return print(await c.profiles.create(a.name, prompt, { ...(a.external ? { driver: "external" } : {}), ...(a.model ? { model: a.model } : {}), ...(endpoint ? { endpoint } : {}) }));
     },
   },
   eval: {

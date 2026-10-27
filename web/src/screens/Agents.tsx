@@ -23,10 +23,16 @@ export function Agents() {
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [model, setModel] = useState("");
   const [external, setExternal] = useState(false);
+  const [byUrl, setByUrl] = useState(false);
+  const [endpoint, setEndpoint] = useState({ url: "", model: "", api_key: "" });
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await post("/v1/agent-profiles", { name, system_prompt: prompt, model: model || null, driver: external ? "external" : "llm" });
+      await post("/v1/agent-profiles", {
+        name, system_prompt: prompt, model: model || null, driver: external ? "external" : "llm",
+        ...(byUrl ? { endpoint: { url: endpoint.url, model: endpoint.model, api_key: endpoint.api_key || null } } : {}),
+      });
+      setEndpoint({ url: "", model: "", api_key: "" });
       toast.success(`${name} created`);
       setName("");
       profiles.reload();
@@ -48,7 +54,7 @@ export function Agents() {
                 {profiles.data?.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell><div className="flex items-center gap-2"><ActorAvatar id={p.name} className="size-7" /><div><div className="font-medium">{p.name} <span className="text-muted-foreground">v{p.version}</span></div><div className="font-mono text-xs text-muted-foreground">{p.id}</div></div></div></TableCell>
-                    <TableCell>{p.created_by === "improver" ? <Tone tone="info"><Sparkles className="size-3" /> improvement agent</Tone> : <Tone tone="plain">you</Tone>}{p.spec?.driver === "external" && <div className="mt-1 text-xs text-muted-foreground">your own agent over the API</div>}</TableCell>
+                    <TableCell>{p.created_by === "improver" ? <Tone tone="info"><Sparkles className="size-3" /> improvement agent</Tone> : <Tone tone="plain">you</Tone>}{p.spec?.driver === "external" && <div className="mt-1 text-xs text-muted-foreground">your own agent over the API</div>}{p.spec?.endpoint && <div className="mt-1 truncate text-xs text-muted-foreground">your own agent at {p.spec.endpoint.url}</div>}</TableCell>
                     <TableCell className="max-w-md text-sm text-muted-foreground">{p.rationale || "–"}</TableCell>
                   </TableRow>
                 ))}
@@ -63,7 +69,16 @@ export function Agents() {
               <div className="grid gap-2"><Label htmlFor="pn">Name</Label><Input id="pn" value={name} onChange={(e) => setName(e.target.value)} required placeholder="support-agent" /></div>
               <div className="grid gap-2"><Label htmlFor="pm">Model chain (optional)</Label><Input id="pm" value={model} onChange={(e) => setModel(e.target.value)} placeholder="modal:deepseek-ai/DeepSeek-V4.1-Flash" /></div>
               <div className="grid gap-2"><Label htmlFor="pp">Instructions</Label><Textarea id="pp" rows={7} value={prompt} onChange={(e) => setPrompt(e.target.value)} /></div>
-              <label className="flex items-center gap-2 text-sm"><Checkbox checked={external} onCheckedChange={(v) => setExternal(v === true)} /> My own agent sends actions through the API</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={external} onCheckedChange={(v) => { setExternal(v === true); if (v === true) setByUrl(false); }} /> My own agent sends actions through the API</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={byUrl} onCheckedChange={(v) => { setByUrl(v === true); if (v === true) setExternal(false); }} /> My own agent runs at a URL</label>
+              {byUrl && (
+                <div className="grid gap-3 rounded-lg border p-3">
+                  <p className="text-sm text-muted-foreground">Each turn, Rehearsal sends your agent the conversation and the offered tools as an OpenAI-compatible chat request, and expects one tool call back. The URL must be https and reachable from the internet. Its calls cost you nothing here.</p>
+                  <div className="grid gap-2"><Label htmlFor="eu">Endpoint URL</Label><Input id="eu" type="url" required value={endpoint.url} onChange={(e) => setEndpoint({ ...endpoint, url: e.target.value })} placeholder="https://agent.example.com/v1" /></div>
+                  <div className="grid gap-2"><Label htmlFor="em">Model name it expects (optional)</Label><Input id="em" value={endpoint.model} onChange={(e) => setEndpoint({ ...endpoint, model: e.target.value })} placeholder="support-agent" /></div>
+                  <div className="grid gap-2"><Label htmlFor="ek">API key (optional, stored encrypted)</Label><Input id="ek" type="password" autoComplete="off" value={endpoint.api_key} onChange={(e) => setEndpoint({ ...endpoint, api_key: e.target.value })} /></div>
+                </div>
+              )}
               <Button type="submit" disabled={!name}>Create profile</Button>
             </form>
           </CardContent>

@@ -125,10 +125,14 @@ export function buildServer(client?: Rehearsal): McpServer {
     (await get().get<Json[]>("/v1/agent-profiles")).map((p) => ({ id: p.id, name: p.name, version: p.version, driver: p.spec?.driver ?? "llm", created_by: p.created_by })));
 
   tool("create_agent", "Create an agent profile. instructions is its system prompt (empty uses the platform default). With " +
-       "bring_your_own=True, Rehearsal does not run a model for it: your own agent acts through waiting_turns and take_action.",
-       { name: z.string(), instructions: z.string().default(""), model: z.string().optional(), bring_your_own: z.boolean().default(false) },
-       async ({ name, instructions, model, bring_your_own }) => {
-    const p = await get().post("/v1/agent-profiles", { name, system_prompt: instructions, model: model ?? null, driver: bring_your_own ? "external" : "llm" });
+       "bring_your_own=True, Rehearsal does not run a model for it: your own agent acts through waiting_turns and take_action. " +
+       "With endpoint_url, each turn goes to your own agent at that OpenAI-compatible URL (https, public); an API key for it " +
+       "is set with `rehearsal profiles create --endpoint-key-env` or on the console, never here.",
+       { name: z.string(), instructions: z.string().default(""), model: z.string().optional(), bring_your_own: z.boolean().default(false),
+         endpoint_url: z.string().optional(), endpoint_model: z.string().default("") },
+       async ({ name, instructions, model, bring_your_own, endpoint_url, endpoint_model }) => {
+    const p = await get().post("/v1/agent-profiles", { name, system_prompt: instructions, model: model ?? null, driver: bring_your_own ? "external" : "llm",
+                                                       ...(endpoint_url ? { endpoint: { url: endpoint_url, model: endpoint_model } } : {}) });
     return { id: p.id, name: p.name, version: p.version };
   });
 

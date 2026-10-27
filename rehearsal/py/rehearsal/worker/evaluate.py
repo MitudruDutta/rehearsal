@@ -212,7 +212,7 @@ def run_episode(ctx: JobContext, inst: WorldInstance, manifest: WorldManifest, w
         policy=(
             ExternalPolicy(profile, recorder.poll_external, recorder.publish, timeout_s=float(ctx.payload.get("external_turn_timeout_s", 600)))
             if profile.driver == "external"
-            else LLMPolicy(profile, settings().model_agent)
+            else LLMPolicy(profile, settings().model_agent, endpoint_key=_endpoint_key(ctx, profile))
         ),
         participant_mode="llm",
         check=ctx.check,
@@ -411,3 +411,17 @@ def _agg(eps: list[Episode]) -> dict[str, Any]:
         "cost_usd": round(sum(e.cost_usd or 0 for e in eps), 4),
         "tokens": sum(e.tokens or 0 for e in eps),
     }
+
+
+def _endpoint_key(ctx: JobContext, profile: AgentProfile) -> str | None:
+    """The sealed API key of the user's own agent, from the workspace credential its profile names."""
+    if not profile.endpoint or not profile.endpoint.credential_id:
+        return None
+    from ..agents.endpoint import unseal
+    from ..db.models import Credential
+
+    with session() as s:
+        cred = s.get(Credential, profile.endpoint.credential_id)
+        if cred is None or cred.project_id != ctx.project_id or not cred.encrypted_value:
+            return None
+        return unseal(cred.encrypted_value)

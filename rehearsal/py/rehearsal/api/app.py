@@ -696,6 +696,12 @@ def revalidate(wv_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
 # --------------------------------------------------------------------------- agent profiles
 
 
+class EndpointIn(BaseModel):
+    url: str = Field(max_length=500)
+    model: str = Field(default="", max_length=200)
+    api_key: str | None = Field(default=None, max_length=4000, repr=False)  # stored sealed as a workspace credential, never returned
+
+
 class ProfileIn(BaseModel):
     name: str
     system_prompt: str = ""
@@ -704,6 +710,7 @@ class ProfileIn(BaseModel):
     temperature: float = 0.2
     max_turns_per_actor: int = 25
     driver: Literal["llm", "external"] = "llm"
+    endpoint: EndpointIn | None = None  # test any agent by its URL: an OpenAI-compatible endpoint that answers with tool calls
 
 
 @app.post("/v1/agent-profiles", status_code=201)
@@ -711,7 +718,21 @@ def create_profile(body: ProfileIn, p: Principal = Depends(principal)) -> dict[s
     with session() as s:
         s.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"profile-version:{p.project_id}:{body.name}"})
         version = (s.scalar(select(func.max(AgentProfileRow.version)).where(AgentProfileRow.project_id == p.project_id, AgentProfileRow.name == body.name)) or 0) + 1
-        spec = AgentProfile(version=version, **body.model_dump())
+        fields = body.model_dump(exclude={"endpoint"})
+        if body.endpoint:
+            from ..agents.endpoint import seal, url_problem
+
+            if problem := url_problem(body.endpoint.url):
+                raise HTTPException(422, problem)
+            credential_id = None
+            if body.endpoint.api_key:
+                cred = Credential(project_id=p.project_id, name=f"{body.name} v{version} agent endpoint key", kind="agent_endpoint",
+                                  encrypted_value=seal(body.endpoint.api_key))
+                s.add(cred)
+                s.flush()
+                credential_id = cred.id
+            fields["endpoint"] = {"url": body.endpoint.url, "model": body.endpoint.model, "credential_id": credential_id}
+        spec = AgentProfile(version=version, **fields)
         row = AgentProfileRow(project_id=p.project_id, name=body.name, version=version, spec=spec.model_dump())
         s.add(row)
         s.flush()

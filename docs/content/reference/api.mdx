@@ -432,6 +432,7 @@ Request body, as JSON:
 | `temperature` | number | `0.2` | The model's sampling temperature. |
 | `max_turns_per_actor` | integer | `25` | How many turns each actor may take in an episode. |
 | `driver` | one of `llm`, `external` | `"llm"` | `llm`: Rehearsal runs a model with these instructions. `external`: your own agent sends the actions. |
+| `endpoint` | object | none | Your own agent's OpenAI-compatible endpoint: `url` (https, public), `model` (optional), `api_key` (optional, stored encrypted, never returned). Each turn goes to it instead of a model. |
 
 **Answers** `201`.
 

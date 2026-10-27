@@ -31,6 +31,7 @@ from ..evaluator.probes import Prober
 from ..runner.gateway import Gateway, GatewayResult
 from ..runner.runtime import WorldInstance
 from . import participant as participant_mod
+from .endpoint import EndpointError, chat_endpoint
 from .llm import LLMError, ToolCall, chat
 
 CUSTOMER = "customer"
@@ -147,9 +148,10 @@ class ScriptedPolicy:
 
 
 class LLMPolicy:
-    def __init__(self, profile: AgentProfile, chain: str):
+    def __init__(self, profile: AgentProfile, chain: str, endpoint_key: str | None = None):
         self.profile = profile
         self.chain = profile.model or chain
+        self.endpoint_key = endpoint_key  # the API key of the user's own agent, when the profile names one
 
     def system_prompt(self, engine: "Engine", actor: ActorState) -> str:
         spec = engine.actor_spec(actor.id)
@@ -181,9 +183,15 @@ class LLMPolicy:
         actor.tools = tools
         engine.check()
         try:
-            reply = chat(self.chain, actor.transcript, tools=tools, temperature=self.profile.temperature, max_tokens=2048, check=engine.check, role="agent")
-        except LLMError as exc:
-            engine.environment_error = f"model unavailable: {exc}"[:500]
+            if self.profile.endpoint:
+                ep = self.profile.endpoint
+                reply = chat_endpoint(ep.url, ep.model, self.endpoint_key, actor.transcript, tools=tools, temperature=self.profile.temperature,
+                                      max_tokens=2048, check=engine.check, role="agent")
+            else:
+                reply = chat(self.chain, actor.transcript, tools=tools, temperature=self.profile.temperature, max_tokens=2048, check=engine.check, role="agent")
+        except (LLMError, EndpointError) as exc:
+            # the agent never got a turn: not the agent's mistake, so the episode is not scored against it
+            engine.environment_error = (f"agent endpoint unavailable: {exc}" if self.profile.endpoint else f"model unavailable: {exc}")[:500]
             return None
         engine.state.cost_usd += reply.cost_usd
         engine.state.tokens += reply.prompt_tokens + reply.completion_tokens

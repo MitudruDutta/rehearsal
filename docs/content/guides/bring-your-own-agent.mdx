@@ -168,6 +168,23 @@ arguments.
 
 The repository has a complete example with a LangGraph ReAct agent: `examples/agents/langgraph_react.py`.
 
+## Or give Rehearsal your agent's URL
+
+If your agent already answers OpenAI-compatible chat requests (many agent frameworks and gateways can serve one), you
+do not need to write a loop. Give the profile your agent's URL, and Rehearsal calls it on every turn: it sends the
+conversation so far and the offered tools, and expects one tool call back. Rehearsal pays nothing for those calls.
+
+```bash
+export MY_AGENT_KEY=...          # if your endpoint needs a key
+rehearsal profiles create my-agent --endpoint https://agent.example.com/v1 --endpoint-model my-agent --endpoint-key-env MY_AGENT_KEY
+rehearsal eval <wv_id> --profile <profile_id> --split dev --repeats 1
+```
+
+On the console, choose **My own agent runs at a URL** when you create a profile. The URL must use https and be reachable
+from the internet: an address on a private network is refused. The key is stored encrypted as a workspace credential and
+is never shown again; the profile keeps only a reference to it. If your agent does not answer, the episode is marked as
+an environment problem and is not scored against the agent.
+
 ## The loop over HTTP
 
 Every request carries `Authorization: Bearer <your_key>`.

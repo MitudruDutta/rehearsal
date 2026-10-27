@@ -364,7 +364,7 @@ List and create agent profiles (agent versions).
 | Action | What it does |
 |---|---|
 | `rehearsal profiles list` | Agent profiles and versions |
-| `rehearsal profiles create <name> [--prompt-file <prompt_file>] [--model <model>] [--external]` | Create an agent profile |
+| `rehearsal profiles create <name> [--prompt-file <prompt_file>] [--model <model>] [--external] [--endpoint <endpoint>] [--endpoint-model <endpoint_model>] [--endpoint-key-env <endpoint_key_env>]` | Create an agent profile |
 
 Arguments of `rehearsal profiles create`:
 
@@ -374,6 +374,9 @@ Arguments of `rehearsal profiles create`:
 | `--prompt-file <prompt_file>` |  | A text file with the agent's instructions (its system prompt). Without it, the platform default. |
 | `--model <model>` |  | Model chain for this agent, in place of the server's default. |
 | `--external` |  | Actions come from your own agent through the API. |
+| `--endpoint <endpoint>` |  | Test your own agent by its URL: an OpenAI-compatible endpoint that answers with tool calls. |
+| `--endpoint-model <endpoint_model>` |  | The model name your endpoint expects, if any. |
+| `--endpoint-key-env <endpoint_key_env>` |  | The environment variable holding your endpoint's API key (stored sealed on the server) |
 
 ```bash
 rehearsal profiles create support-agent --prompt-file instructions.txt
