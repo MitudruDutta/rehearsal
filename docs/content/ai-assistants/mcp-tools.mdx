@@ -1,6 +1,6 @@
 ---
 title: MCP tool reference
-description: The 18 tools of the Rehearsal MCP server. For each one, its arguments, what it returns, and whether it spends money.
+description: The 19 tools of the Rehearsal MCP server. For each one, its arguments, what it returns, and whether it spends money.
 generated: true
 ---
 
@@ -12,7 +12,7 @@ access of that key and nothing more. To install the tools, see [AI assistants](/
 
 ## Tools that spend money
 
-4 of the 18 tools start work that spends model budget from the workspace's monthly allowance. The
+4 of the 19 tools start work that spends model budget from the workspace's monthly allowance. The
 assistant must say what it will start and what it will cost, and wait for a clear yes. Every other tool is free.
 
 | Tool | Typical cost | Typical time |
@@ -29,7 +29,7 @@ stop whatever the assistant decides: see [What costs money](/get-started/what-co
 
 The server gives every assistant these instructions when it connects:
 
-> Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who changes their mind, and injected faults; results are checked against the application's own database. Typical flow: list_applications or add_application -> build_world (1-3 hours; check with job_status) -> list_worlds -> list_agents or create_agent -> run_evaluation -> run_results -> episode_details for failures -> improve_agent -> run_evaluation again on the holdout split -> compare_runs. Builds and evaluations spend model money from the workspace's monthly allowance: say what you are about to start and ask the user before build_world, run_evaluation, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with it, then loop: waiting_turns -> read the new messages -> take_action with one of the offered tools.
+> Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who changes their mind, and injected faults; results are checked against the application's own database. Typical flow: list_applications or add_application -> build_world (1-3 hours; check with job_status) -> list_worlds -> list_agents or create_agent -> run_evaluation -> run_results -> episode_details for failures -> fix_agent (rounds of improve and rehearse, proven on held-out jobs; or improve_agent for one proposal) -> job_status. Builds and evaluations spend model money from the workspace's monthly allowance: say what you are about to start and ask the user before build_world, run_evaluation, fix_agent, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with it, then loop: waiting_turns -> read the new messages -> take_action with one of the offered tools.
 
 ## Errors
 
@@ -121,7 +121,7 @@ job_status(job_id)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
-| `job_id` | string | required | From `build_world`, `run_evaluation`, `improve_agent` or `recheck_world`. |
+| `job_id` | string | required | From `build_world`, `run_evaluation`, `fix_agent`, `improve_agent` or `recheck_world`. |
 
 **Returns:** `id`, `kind`, `status` (`queued`, `running`, `paused`, `succeeded`, `failed` or `cancelled`), `attempts`, `spent_usd`, `completed_steps`, `result`, and `error` (shortened) when the job failed.
 
@@ -282,6 +282,25 @@ episode_details(episode_id)
 **Returns:** `scenario`, `goals` (the request and its revisions), `status`, `ending`, `verified`, `environment_error`, `failed_checks` (each with `check`, `observed`, `wanted`), `duplicate_effects`, `false_completion`, `actions`, the last 30 `messages`, and a console link.
 
 **The same from elsewhere:** CLI [`rehearsal runs episode`](/reference/cli#rehearsal-runs); Python `rh.runs.episode(episode_id)`.
+
+### fix_agent
+
+Fix an agent end to end: each round proposes a new version from failed train and dev episodes, rehearses it, and keeps it only if it verifies more episodes without new rule violations. The best version is then compared with the original on held-out jobs. Spends money from the allowance: say the episode count and ask first. Follow it with job_status; the finished job's result lists every round and the held-out comparison.
+
+```python
+fix_agent(agent_id, run_id, rounds=3, repeats=1)
+```
+
+| Argument | Type | Default | Meaning |
+|---|---|---|---|
+| `agent_id` | string | required | The agent to fix. It must be run by Rehearsal, not brought by you. |
+| `run_id` | string | required | A finished run with finished train or dev episodes of that agent. |
+| `rounds` | integer | `3` | Proposals to try, 1 to 5. The loop stops early when every train and dev job passes. |
+| `repeats` | integer | `1` | Attempts at each job in every rehearsal, 1 to 5. |
+
+**Returns:** `job_id`, `episodes` (how many the loop can run at most) and a console link to the loop. When the job succeeds, its `result` has `original`, `best`, every round (version, reason, score, kept or not) and `holdout`: the original and the best version on held-out jobs.
+
+**The same from elsewhere:** CLI [`rehearsal autofix`](/reference/cli#rehearsal-autofix); Python `rh.profiles.autofix(profile_id, run_id)`.
 
 ### improve_agent
 

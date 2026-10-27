@@ -22,10 +22,10 @@ INSTRUCTIONS = (
     "Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who "
     "changes their mind, and injected faults; results are checked against the application's own database. Typical flow: "
     "list_applications or add_application -> build_world (1-3 hours; check with job_status) -> list_worlds -> list_agents "
-    "or create_agent -> run_evaluation -> run_results -> episode_details for failures -> improve_agent -> run_evaluation "
-    "again on the holdout split -> compare_runs. Builds and evaluations spend model money from the workspace's monthly "
-    "allowance: say what you are about to start and ask the user before build_world, run_evaluation, improve_agent and "
-    "recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with "
+    "or create_agent -> run_evaluation -> run_results -> episode_details for failures -> fix_agent (rounds of improve and "
+    "rehearse, proven on held-out jobs; or improve_agent for one proposal) -> job_status. Builds and evaluations spend "
+    "model money from the workspace's monthly allowance: say what you are about to start and ask the user before "
+    "build_world, run_evaluation, fix_agent, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with "
     "it, then loop: waiting_turns -> read the new messages -> take_action with one of the offered tools."
 )
 
@@ -180,6 +180,15 @@ def build_server(client: Rehearsal | None = None) -> Any:
         """Propose the next version of an agent from its failed train and dev episodes in a run. Ask first. Then
         evaluate both versions on the holdout split and compare_runs before keeping the new one."""
         return c.post("/v1/improvements", {"profile_id": agent_id, "run_id": run_id})
+
+    @mcp.tool()
+    def fix_agent(agent_id: str, run_id: str, rounds: int = 3, repeats: int = 1) -> dict[str, Any]:
+        """Fix an agent end to end: each round proposes a new version from failed train and dev episodes, rehearses it,
+        and keeps it only if it verifies more episodes without new rule violations. The best version is then compared
+        with the original on held-out jobs. Spends money from the allowance: say the episode count and ask first.
+        Follow it with job_status; the finished job's result lists every round and the held-out comparison."""
+        res = c.post("/v1/autofix", {"profile_id": agent_id, "run_id": run_id, "rounds": rounds, "repeats": repeats})
+        return {**res, "console": link(f"/app/fix/?job={res['job_id']}")}
 
     @mcp.tool()
     def compare_runs(run_a: str, run_b: str | None = None) -> dict[str, Any]:

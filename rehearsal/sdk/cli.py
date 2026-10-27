@@ -309,6 +309,13 @@ def _main(argv: list[str] | None = None) -> None:
     imp.add_argument("profile_id")
     imp.add_argument("run_id")
 
+    fix = cmd("autofix", "fix an agent in rounds, keep only versions that verify more, prove the best on held-out jobs")
+    fix.add_argument("profile_id")
+    fix.add_argument("run_id", help="a finished run with train/dev episodes for this agent")
+    fix.add_argument("--rounds", type=int, default=3, help="1 to 5 (default 3)")
+    fix.add_argument("--repeats", type=int, default=1, help="episodes per job in each rehearsal, 1 to 5 (default 1)")
+    fix.add_argument("--watch", action="store_true")
+
     exp = cmd("export", "export verified trajectories as a dataset")
     exp.add_argument("run_ids", nargs="+")
     exp.add_argument("--split", action="append", default=[])
@@ -342,7 +349,7 @@ def _main(argv: list[str] | None = None) -> None:
     groups = [
         ("Start", ["login", "whoami", "logout"]),
         ("Applications and worlds", ["apps", "build", "worlds", "jobs"]),
-        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve"]),
+        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve", "autofix"]),
         ("Data", ["export", "artifacts", "export-example", "export-replay"]),
         ("AI assistants", ["mcp", "skill"]),
         ("Run your own server", ["serve", "worker", "up", "migrate", "bootstrap", "users", "openapi", "prices"]),
@@ -521,6 +528,13 @@ def _main(argv: list[str] | None = None) -> None:
         _print(_client().evaluations.compare(args.run_a, args.run_b))
     elif args.cmd == "improve":
         _print(_client().post("/v1/improvements", {"profile_id": args.profile_id, "run_id": args.run_id}))
+    elif args.cmd == "autofix":
+        c = _client()
+        res = c.profiles.autofix(args.profile_id, args.run_id, rounds=args.rounds, repeats=args.repeats)
+        _print(res)
+        if args.watch:
+            _watch(c.jobs.events(res["job_id"]))
+            _print((c.jobs.get(res["job_id"]).get("result")) or {})
     elif args.cmd == "export":
         _print(_client().post("/v1/dataset-exports", {"run_ids": args.run_ids, "splits": args.split or ["train"]}))
     elif args.cmd == "train":

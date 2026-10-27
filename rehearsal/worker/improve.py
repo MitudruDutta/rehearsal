@@ -45,11 +45,17 @@ def _episode_digest(s: Any, ep: Episode, sc: Scenario) -> dict[str, Any]:
 
 
 def handle(ctx: JobContext) -> dict[str, Any]:
-    p = ctx.payload
+    return propose(ctx, ctx.payload["profile_id"], ctx.payload["run_id"])
+
+
+def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Proposes the next version of a profile from its failed train/dev episodes in a run. ``rejected`` lists earlier
+    proposals that did not help (their rationale and score), so the agent tries something else instead of repeating
+    them. Returns the new profile's id and version, or a message when there is nothing to fix."""
     with session() as s:
         ctx.owned(s)
-        prof_row = s.get(AgentProfileRow, p["profile_id"])
-        run = s.get(Run, p["run_id"])
+        prof_row = s.get(AgentProfileRow, profile_id)
+        run = s.get(Run, run_id)
         assert prof_row is not None and run is not None
         profile = AgentProfile.model_validate(prof_row.spec)
         rows = s.execute(
@@ -69,7 +75,8 @@ def handle(ctx: JobContext) -> dict[str, Any]:
         "shown, without overfitting to specific record IDs, names, or scenario wording (those will differ in held-out evaluation). "
         "You may change only the system prompt and per-tool guidance. Describe general behaviours: verify state after uncertain "
         "outcomes before retrying, re-read the latest customer request before acting, confirm the target record, avoid unnecessary "
-        "customer contacts, never claim completion without checking. Keep the {actor_id}, {role}, and {instructions} placeholders in "
+        "customer contacts, never claim completion without checking. If earlier attempts that did not help are listed, change "
+        "your approach rather than restating them. Keep the {actor_id}, {role}, and {instructions} placeholders in "
         "the system prompt. Return JSON: {\"system_prompt\": str, \"tool_guidance\": {tool: str}, \"rationale\": str}."
     )
     user = json.dumps(
@@ -78,6 +85,7 @@ def handle(ctx: JobContext) -> dict[str, Any]:
             "episodes_succeeded": successes,
             "failed_episodes": failures,
             "tools_seen": tool_names,
+            **({"earlier_attempts_that_did_not_help": rejected} if rejected else {}),
         },
         default=str,
     )[:120_000]
@@ -115,3 +123,13 @@ def handle(ctx: JobContext) -> dict[str, Any]:
         s.flush()
         emit(s, project_id=ctx.project_id, stream=ctx.job_id, type="profile.proposed", summary=f"{profile.name} v{version} proposed from {len(failures)} failed train/dev episodes", data={"profile_id": row.id, "rationale": row.rationale[:1000]})
         return {"profile_id": row.id, "version": version, "failures_used": len(failures), "rationale": row.rationale[:500]}
+
+
+def score(run_id: str, profile_id: str, splits: tuple[str, ...]) -> dict[str, Any]:
+    """One profile's results in a run on the given splits (jobs withdrawn as unfair are left out)."""
+    from .evaluate import _agg
+
+    with session() as s:
+        eps = list(s.scalars(select(Episode).join(Scenario, Scenario.id == Episode.scenario_id)
+                             .where(Episode.run_id == run_id, Episode.profile_id == profile_id, Scenario.split.in_(splits), Scenario.status == "approved")))
+    return _agg(eps)

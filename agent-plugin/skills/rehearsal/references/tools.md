@@ -102,6 +102,11 @@ Python: `from rehearsal.sdk import Rehearsal; rh = Rehearsal()` reads `REHEARSAL
   - `UNKNOWN`: timed out; the outcome is unknown, and the write may have happened.
 - CLI: `rehearsal runs episode EP_ID`.
 
+### `fix_agent(agent_id, run_id, rounds=3, repeats=1)` (spends)
+- Returns `job_id`, `episodes` (the most the loop can run) and a console link. On success, `result` has `original`, `best`, `rounds` (each: `version`, `rationale`, `score`, `accepted`) and `holdout` (`original` and `best` scores on held-out jobs; null when no version beat the original).
+- Refused for a bring-your-own agent, an unfinished run, or a run without finished train/dev episodes of the agent.
+- CLI: `rehearsal autofix PROFILE_ID RUN_ID --rounds 3 --watch`.
+
 ### `improve_agent(agent_id, run_id)` (spends a little)
 - Returns a job. On success, `result` has the new `profile_id`, `version` and `rationale`. It uses only failed `train`/`dev` episodes of approved jobs.
 - CLI: `rehearsal improve PROFILE_ID RUN_ID`.

@@ -125,6 +125,11 @@ class Profiles(_Resource):
     def list(self) -> list[dict[str, Any]]:
         return self.c.get("/v1/agent-profiles")
 
+    def autofix(self, profile_id: str, run_id: str, rounds: int = 3, repeats: int = 1) -> dict[str, Any]:
+        """Starts the fix loop: propose a version, rehearse it on train and dev, keep it only if it verifies more, and
+        prove the best one against the original on held-out jobs. Returns the job; its result has every round."""
+        return self.c.post("/v1/autofix", {"profile_id": profile_id, "run_id": run_id, "rounds": rounds, "repeats": repeats})
+
 
 class Evaluations(_Resource):
     def create(self, world_version_id: str, profile_ids: list[str], splits: list[str] | None = None, repeats: int | None = None, **fields: Any) -> dict[str, Any]:

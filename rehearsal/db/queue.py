@@ -263,6 +263,9 @@ def _fail_owner(s: Session, job: Job, status: str = "failed") -> None:
         row = s.get(Run, job.payload.get("run_id"))
         if row is not None and row.status != "finished":
             row.status, row.finished_at = status, now()
+    elif job.kind == "autofix":
+        for row in s.scalars(select(Run).where(Run.job_id == job.id, Run.status != "finished")):
+            row.status, row.finished_at = status, now()
     elif job.kind == "training":
         row = s.get(TrainingJob, job.payload.get("training_job_id"))
         if row is not None and row.status != "succeeded":

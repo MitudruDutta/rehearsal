@@ -1,15 +1,16 @@
 ---
 title: Improve an agent
-description: Let Rehearsal propose a better version of an agent from its failures, then check the new version on jobs it has never seen.
+description: Let Rehearsal fix an agent in rounds, keep only versions that verify more, and prove the best one on jobs it has never seen.
 audience: Agent developers
-last_reviewed: 2026-10-11
-time: 1 minute for the proposal, then one run
-cost: Under $0.10 for the proposal, then the cost of a run
+last_reviewed: 2026-10-27
+time: 10 to 40 minutes for the fix loop, or 1 minute for a single proposal
+cost: About $0.02 per episode the loop runs, or under $0.10 for a single proposal
 needs: a finished run with train or dev episodes
 ---
 
-The improvement step reads how an agent failed and writes the next version of its instructions. You then prove
-the new version on the `holdout` jobs before you keep it.
+The improvement step reads how an agent failed and writes the next version of its instructions. The fix loop
+repeats that step for you: it rehearses every new version, keeps only the ones that verify more, and proves the
+best one on the `holdout` jobs. You can also run a single proposal and check it yourself.
 
 ## What it reads, and what it may change
 
@@ -28,7 +29,64 @@ the new version on the `holdout` jobs before you keep it.
 - Read the failures first: see [Read results](/guides/read-results). If every failure is an environment error or an
   unfair job, there is nothing to learn. Do not run the improvement.
 
-## Steps
+## Fix it in rounds
+
+Each round of the fix loop does three things:
+
+1. **Propose.** The improvement step writes a new version from the failures of the best version so far. It also
+   sees the ideas that earlier rounds tried and that did not help, so it tries something else.
+2. **Rehearse.** The new version runs every `train` and `dev` job, with the default stress layer on.
+3. **Keep or discard.** The version is kept only when it verifies more episodes **and** adds no rule violation and
+   no false completion. A tie is not kept.
+
+After the last round, or as soon as every `train` and `dev` job passes, the original and the best version run side by
+side on the `holdout` jobs. No round has seen those jobs, so that comparison is the result to trust. When no version
+beat the original, there is nothing to prove and the loop ends without the `holdout` run.
+
+<Cost amount="about $0.02 per episode">
+
+The loop runs at most rounds × (`train` and `dev` jobs) + 2 × (`holdout` jobs) episodes, times the repeats. The
+answer to the request shows that number. It often runs fewer, because it stops early when every job passes.
+
+</Cost>
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Open the finished run and choose **Fix my agent** with the agent's name. The console opens the loop: each round, its
+reason, its score next to the best so far, the change to the instructions, and at the end the `holdout` result.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal autofix <profile_id> <run_id> --rounds 3 --watch
+```
+
+The command prints the job and the most episodes it can run, prints each round as it ends, then prints the result.
+
+</Tab>
+<Tab value="Python">
+
+```python
+job = rh.profiles.autofix(profile_id, run_id, rounds=3)
+done = rh.jobs.wait(job["job_id"])
+print(done["result"]["best"], done["result"]["holdout"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to fix the agent from the run. It tells you the episode count, calls `fix_agent` after you agree,
+then `job_status` until the loop is done.
+
+</Tab>
+</Ways>
+
+The loop runs inside one job, on one sandbox, and saves each step. If a worker restarts, the loop continues from the
+round where it stopped. Stopping the job fails the loop's own runs, and keeps every version made so far.
+
+## One proposal, checked by hand
 
 <Steps>
 <Step>
@@ -131,8 +189,9 @@ on new work. Build a new world version to get fresh jobs.
 
 ## A bring-your-own agent
 
-Rehearsal cannot change code that you run. For a bring-your-own agent, the improvement step still proposes new
-instructions. Treat them as a suggestion, and apply them in your own agent.
+Rehearsal cannot change code that you run, and it cannot rehearse your agent without you. The fix loop is not
+available for a bring-your-own agent. The single improvement step still proposes new instructions. Treat them as a
+suggestion, and apply them in your own agent.
 
 ## Improve by hand
 

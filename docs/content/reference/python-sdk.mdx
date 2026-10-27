@@ -248,6 +248,18 @@ The agent profiles, every version.
 
 Calls `GET /v1/agent-profiles`.
 
+### rh.profiles.autofix
+
+```python
+rh.profiles.autofix(profile_id, run_id, rounds=3, repeats=1)
+```
+
+Starts the fix loop on a finished run: rounds of propose and rehearse on train and dev, then the best version against the original on held-out jobs. Returns `job_id` and `episodes`; the finished job's `result` has every round.
+
+Starts the fix loop: propose a version, rehearse it on train and dev, keep it only if it verifies more, and prove the best one against the original on held-out jobs. Returns the job; its result has every round.
+
+Calls `POST /v1/autofix`.
+
 ## rh.evaluations
 
 ### rh.evaluations.create

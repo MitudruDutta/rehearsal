@@ -44,7 +44,7 @@ One database holds control flow (jobs) and domain state, so there is one source 
 | `rehearsal/api/` | REST API, live event streams, auth, request limits, static console |
 | `rehearsal/billing.py`, `rehearsal/pricing.py` | Plans and Dodo Payments; model price catalog and spend caps |
 | `rehearsal/redaction.py` | Secret masking for everything stored or shown |
-| `rehearsal/sdk/` | Python client, CLI (28 commands), MCP server (18 tools) |
+| `rehearsal/sdk/` | Python client, CLI (29 commands), MCP server (19 tools) |
 | `web/` | Console (Next.js static export, served by the API) |
 | `docs/` | Documentation site (Fumadocs) and these planning documents |
 | `infra/` | Docker Compose stack, Caddy, AWS CloudFormation |

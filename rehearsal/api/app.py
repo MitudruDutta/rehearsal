@@ -956,6 +956,42 @@ def improve(body: ImproveIn, p: Principal = Depends(principal)) -> dict[str, Any
         return {"job_id": job.id}
 
 
+class AutofixIn(BaseModel):
+    profile_id: str
+    run_id: str  # a finished run with this agent's train/dev episodes: the starting score and the failures to fix
+    rounds: int = Field(default=3, ge=1, le=5)
+    repeats: int = Field(default=1, ge=1, le=5)
+
+
+@app.post("/v1/autofix", status_code=202)
+def autofix(body: AutofixIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Fix-my-agent: propose, rehearse and keep only versions that verify more, then prove the best on held-out jobs."""
+    with session() as s:
+        prof = _get(s, AgentProfileRow, body.profile_id, p)
+        run = _get(s, Run, body.run_id, p)
+        if run.status != "finished":
+            raise HTTPException(409, "the run has not finished yet")
+        if (prof.spec or {}).get("driver") == "external":
+            raise HTTPException(422, "a bring-your-own agent's instructions live in your code, so Rehearsal cannot rewrite them")
+        wv = s.get(WorldVersion, run.world_version_id)
+        if wv is None or wv.status != "published":
+            raise HTTPException(409, "the run's world version is not published")
+        practiced = s.scalar(select(func.count()).select_from(Episode).join(Scenario, Scenario.id == Episode.scenario_id).where(
+            Episode.run_id == run.id, Episode.profile_id == prof.id, Episode.status == "finished", Scenario.split.in_(["train", "dev"])))
+        if not practiced:
+            raise HTTPException(422, "the run has no finished train or dev episodes for this agent; run an evaluation on train and dev first")
+        jobs = dict(s.execute(select(Scenario.split, func.count()).where(Scenario.world_version_id == wv.id, Scenario.status == "approved").group_by(Scenario.split)).all())
+        n = body.repeats * (body.rounds * (jobs.get("train", 0) + jobs.get("dev", 0)) + 2 * jobs.get("holdout", 0))
+        _room(s, p.project_id, "autofix", settings().max_active_runs, "fix loops")
+        grant = billing.check_evaluation(s, p.project_id, n)
+        left = queue.allowance_left(s, p.project_id)
+        budget = n * billing.EPISODE_BUDGET_USD + body.rounds * billing.DEFAULT_BUDGET_USD["improvement"]
+        job = queue.enqueue(s, project_id=p.project_id, kind="autofix", max_attempts=5, not_before=grant.not_before,
+                            budget_usd=budget if left is None else min(budget, left),
+                            payload={**body.model_dump(), "world_version_id": wv.id, "default_stress": True})
+        return {"job_id": job.id, "episodes": n}
+
+
 class DatasetIn(BaseModel):
     run_ids: list[str] = Field(min_length=1)
     splits: list[Literal["train", "dev"]] = Field(default_factory=lambda: ["train"])

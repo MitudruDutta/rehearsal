@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Every rehearsal command, with its arguments and an example. The 28 commands, grouped by task.
+description: Every rehearsal command, with its arguments and an example. The 29 commands, grouped by task.
 generated: true
 ---
 
@@ -48,6 +48,7 @@ server's message and a hint: see [Errors](/reference/errors).
 | [`rehearsal runs`](#rehearsal-runs) | Follow runs and read their episodes |
 | [`rehearsal compare`](#rehearsal-compare) | Compare agents within a run, or two runs on one world version |
 | [`rehearsal improve`](#rehearsal-improve) | Propose a revised agent profile from train/dev failures |
+| [`rehearsal autofix`](#rehearsal-autofix) | Fix an agent in rounds, keep only versions that verify more, prove the best on held-out jobs |
 
 **Data**
 
@@ -517,6 +518,36 @@ rehearsal improve <profile_id> <run_id>
 ```
 
 The command prints a `job_id`. Follow it with `rehearsal jobs show <job_id>`.
+
+### rehearsal autofix
+
+Fix an agent in rounds, keep only versions that verify more, prove the best on held-out jobs.
+
+This spends model budget for every rehearsal: rounds × (train and dev jobs) plus two versions on the held-out jobs, times `--repeats`. The answer shows the episode count. A version is kept only if it verifies more episodes without a new rule violation or false completion. See [Improve an agent](/guides/improve-an-agent).
+
+<Cost>
+
+This command spends model budget.
+
+</Cost>
+
+```text
+rehearsal autofix <profile_id> <run_id> [--rounds <rounds>] [--repeats <repeats>] [--watch]
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `<profile_id>` | required | Agent profile id, from `rehearsal profiles list`. |
+| `<run_id>` | required | A finished run that has finished train or dev episodes of this agent. |
+| `--rounds <rounds>` | `3` | Proposals to try, 1 to 5. The loop stops early when every train and dev job passes. |
+| `--repeats <repeats>` | `1` | Attempts at each job in every rehearsal, 1 to 5. |
+| `--watch` |  | Stay attached, print each round, then print the result. |
+
+```bash
+rehearsal autofix <profile_id> <run_id> --rounds 3 --watch
+```
+
+The command prints a `job_id` and the most episodes the loop can run, then follows each round. The result names the best version and its held-out score next to the original's.
 
 ## Data
 

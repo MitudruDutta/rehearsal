@@ -44,7 +44,7 @@ def call(server, name, args):
 def test_assistant_sees_the_whole_workflow_as_tools():
     names = {t.name for t in asyncio.run(build_server(FakeClient()).list_tools())}
     assert {"workspace_status", "add_application", "build_world", "job_status", "run_evaluation", "run_results",
-            "episode_details", "improve_agent", "compare_runs", "waiting_turns", "take_action"} <= names
+            "episode_details", "fix_agent", "improve_agent", "compare_runs", "waiting_turns", "take_action"} <= names
 
 
 def test_bring_your_own_agent_gets_only_turns_that_wait_for_it_and_can_act():
@@ -62,3 +62,10 @@ def test_evaluation_returns_a_console_link_to_watch():
     out = call(build_server(client), "run_evaluation", {"world_version_id": "wv_1", "agent_ids": ["prof_1"]})
     assert out["watch"] == "https://rehearsal.example/app/run/?id=run_1"
     assert client.posts == [("/v1/evaluations", {"world_version_id": "wv_1", "profile_ids": ["prof_1"]})]  # server defaults: every job, twice
+
+
+def test_fix_agent_starts_the_loop_and_links_to_it():
+    client = FakeClient()
+    out = call(build_server(client), "fix_agent", {"agent_id": "prof_1", "run_id": "run_0", "rounds": 2})
+    assert out["console"] == "https://rehearsal.example/app/fix/?job=job_1" and out["episodes"] == 4
+    assert client.posts == [("/v1/autofix", {"profile_id": "prof_1", "run_id": "run_0", "rounds": 2, "repeats": 1})]

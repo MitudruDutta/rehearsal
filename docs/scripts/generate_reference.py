@@ -129,6 +129,10 @@ ARGUMENTS: dict[str, str] = {
     "compare run_a": "A run id.",
     "compare run_b": "A second run id on the same world version. Without it, the agents inside `run_a` are compared.",
     "improve run_id": "A finished run that has train or dev episodes of this agent.",
+    "autofix run_id": "A finished run that has finished train or dev episodes of this agent.",
+    "autofix --rounds": "Proposals to try, 1 to 5. The loop stops early when every train and dev job passes.",
+    "autofix --repeats": "Attempts at each job in every rehearsal, 1 to 5.",
+    "autofix --watch": "Stay attached, print each round, then print the result.",
     "export run_ids": "One or more run ids.",
     "export --split": "Which split to export. Repeat for several. Default: `train`.",
     "train --base-model": "Not used yet.",
@@ -151,6 +155,7 @@ NOTES: dict[str, str] = {
     "build": "A build spends model budget and takes 1 to 3 hours. See [Build a practice world](/guides/build-a-practice-world).",
     "eval": "An evaluation spends model budget for each episode. Without `--split` or `--repeats`, every approved job runs twice. See [Evaluate an agent](/guides/evaluate-an-agent).",
     "improve": "This spends a small amount of model budget. It reads only failed train and dev episodes. See [Improve an agent](/guides/improve-an-agent).",
+    "autofix": "This spends model budget for every rehearsal: rounds × (train and dev jobs) plus two versions on the held-out jobs, times `--repeats`. The answer shows the episode count. A version is kept only if it verifies more episodes without a new rule violation or false completion. See [Improve an agent](/guides/improve-an-agent).",
     "jobs": "`retry` restarts a failed or stopped job from its last saved step. Finished steps are not repeated.",
     "worlds": "`validate` spends model budget: it tries each job once with a live agent.",
     "train": "Not built yet. The command prints a message that says so and exits.",
@@ -164,7 +169,7 @@ NOTES: dict[str, str] = {
 
 SERVER_ONLY = {"serve", "worker", "up", "migrate", "bootstrap", "users", "openapi", "prices"}
 COMING_SOON = {"train", "run-bundle"}
-SPENDS = {"build", "eval", "improve"}
+SPENDS = {"build", "eval", "improve", "autofix"}
 
 
 def placeholder(name: str) -> str:
@@ -345,7 +350,7 @@ MCP_GROUPS: list[tuple[str, str, list[str]]] = [
     ("Worlds", "Build a practice world, follow the build, and see the worlds and their jobs.",
      ["build_world", "job_status", "control_job", "list_worlds", "list_scenarios", "recheck_world"]),
     ("Agents and evaluations", "Create agent versions, run them through jobs, read the results, and improve them.",
-     ["list_agents", "create_agent", "run_evaluation", "run_results", "episode_details", "improve_agent", "compare_runs"]),
+     ["list_agents", "create_agent", "run_evaluation", "run_results", "episode_details", "fix_agent", "improve_agent", "compare_runs"]),
     ("Bring your own agent", "Act as the agent under test: read each turn, then send one action.",
      ["waiting_turns", "take_action"]),
 ]
@@ -366,6 +371,7 @@ MCP_RETURNS: dict[str, str] = {
     "run_evaluation": "`run_id`, `job_id`, `episodes`, `shards`, and `watch`: a console link to the live run. On the free plan, `starts_at` when the run waits for quiet hours.",
     "run_results": "`status`, `summary` (scores for each agent), one line for each episode (`id`, `split`, `scenario`, `status`, `verified`, `ending`), and a console link.",
     "episode_details": "`scenario`, `goals` (the request and its revisions), `status`, `ending`, `verified`, `environment_error`, `failed_checks` (each with `check`, `observed`, `wanted`), `duplicate_effects`, `false_completion`, `actions`, the last 30 `messages`, and a console link.",
+    "fix_agent": "`job_id`, `episodes` (how many the loop can run at most) and a console link to the loop. When the job succeeds, its `result` has `original`, `best`, every round (version, reason, score, kept or not) and `holdout`: the original and the best version on held-out jobs.",
     "improve_agent": "A job. When it succeeds, its `result` names the new profile version and gives the reason for each change.",
     "compare_runs": "The scores of each agent, side by side.",
     "waiting_turns": "A list of episodes that wait for your action. Each has `episode_id`, `actor` (who you play), `new_messages` (since your last action) and `tools` (each with `name`, `description` and `parameters` as JSON Schema). An empty list means no turn is waiting.",
@@ -388,6 +394,7 @@ MCP_ELSEWHERE: dict[str, tuple[str | None, str | None]] = {
     "run_evaluation": ("rehearsal eval", "rh.evaluations.create(world_version_id, profile_ids)"),
     "run_results": ("rehearsal runs show", "rh.runs.get(run_id)"),
     "episode_details": ("rehearsal runs episode", "rh.runs.episode(episode_id)"),
+    "fix_agent": ("rehearsal autofix", "rh.profiles.autofix(profile_id, run_id)"),
     "improve_agent": ("rehearsal improve", 'rh.post("/v1/improvements", {...})'),
     "compare_runs": ("rehearsal compare", "rh.evaluations.compare(run_a, run_b)"),
     "waiting_turns": (None, "rh.external.observation(episode_id)"),
@@ -403,7 +410,7 @@ MCP_ARGUMENTS: dict[str, str] = {
     "build_world application_id": "From `list_applications`.",
     "build_world scenarios": "How many jobs to write. Fewer is faster and costs less.",
     "build_world budget_usd": "Model spend at which the build stops itself.",
-    "job_status job_id": "From `build_world`, `run_evaluation`, `improve_agent` or `recheck_world`.",
+    "job_status job_id": "From `build_world`, `run_evaluation`, `fix_agent`, `improve_agent` or `recheck_world`.",
     "control_job job_id": "The job to control.",
     "control_job command": "`pause`, `resume`, `stop` or `retry`.",
     "list_scenarios world_version_id": "From `list_worlds`.",
@@ -419,6 +426,10 @@ MCP_ARGUMENTS: dict[str, str] = {
     "run_evaluation budget_usd": "Model spend at which the run stops itself.",
     "run_results run_id": "From `run_evaluation`.",
     "episode_details episode_id": "From `run_results`.",
+    "fix_agent agent_id": "The agent to fix. It must be run by Rehearsal, not brought by you.",
+    "fix_agent run_id": "A finished run with finished train or dev episodes of that agent.",
+    "fix_agent rounds": "Proposals to try, 1 to 5. The loop stops early when every train and dev job passes.",
+    "fix_agent repeats": "Attempts at each job in every rehearsal, 1 to 5.",
     "improve_agent agent_id": "The agent to improve.",
     "improve_agent run_id": "A finished run with train or dev episodes of that agent.",
     "compare_runs run_a": "A run.",
@@ -873,7 +884,7 @@ API_GROUPS: list[tuple[str, str, Any]] = [
      lambda p: p.startswith(("/v1/worlds", "/v1/world-versions", "/v1/scenarios"))),
     ("Agent profiles", "Versions of the agents under test.", lambda p: p.startswith("/v1/agent-profiles")),
     ("Evaluations and runs", "Start a run, read it, control it and compare it. See [Evaluate an agent](/guides/evaluate-an-agent).",
-     lambda p: p.startswith(("/v1/evaluations", "/v1/runs", "/v1/compare", "/v1/improvements"))),
+     lambda p: p.startswith(("/v1/evaluations", "/v1/runs", "/v1/compare", "/v1/improvements", "/v1/autofix"))),
     ("Episodes", "One attempt by one agent at one job.", lambda p: p.startswith("/v1/episodes")),
     ("Usage and billing", "Model spend, the plan, and payments.", lambda p: p.startswith(("/v1/usage", "/v1/billing", "/v1/pricing", "/v1/dashboard"))),
     ("Keys", "Create, list and revoke API keys, and the references to credentials that a runner reads from its own environment.",
@@ -1307,6 +1318,7 @@ SDK_ABOUT: dict[str, str] = {
     "jobs.wait": "Asks every few seconds until the job has ended, and returns it. Raises `TimeoutError` after `timeout_s`.",
     "profiles.create": "Creates an agent profile. More fields go as keywords, for example `model=...` or `driver=\"external\"`.",
     "profiles.list": "The agent profiles, every version.",
+    "profiles.autofix": "Starts the fix loop on a finished run: rounds of propose and rehearse on train and dev, then the best version against the original on held-out jobs. Returns `job_id` and `episodes`; the finished job's `result` has every round.",
     "evaluations.create": "Starts a run. It spends model budget. Returns `run_id` and `episodes`.",
     "evaluations.compare": "Compares the agents in one run, or two runs on the same world version.",
     "runs.get": "One run, with its `status` and `summary`.",

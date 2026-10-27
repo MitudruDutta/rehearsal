@@ -63,6 +63,7 @@ Without MCP, use the CLI (`rehearsal ...`) or the Python SDK (`from rehearsal.sd
 |---|---|---|
 | `build_world` | $3-8 (stops itself at its budget) | 1-3 hours |
 | `run_evaluation` | about $0.02 per episode (jobs x agents x repeats) | 2-10 minutes |
+| `fix_agent` | rounds x (train + dev jobs) + 2 x holdout jobs, about $0.02 each, x repeats | 10-40 minutes |
 | `improve_agent` | under $0.10 | about 1 minute |
 | `recheck_world` | about $0.03 per job | 5-20 minutes |
 | Everything else | free | instant |
@@ -121,6 +122,7 @@ Rules:
 ## Workflow: Improve
 
 1. You need a finished run with `train` and/or `dev` episodes of the agent. `holdout` episodes are never used for improvement.
+   Prefer the fix loop: ask (say the most episodes it can run: rounds x train and dev jobs, plus 2 x holdout jobs), then `fix_agent(agent_id, run_id, rounds=3)`. Each round proposes a version, rehearses it on train and dev, and keeps it only if it verifies more episodes without new duplicates or rule violations; a rejected idea is shown to the next round. The best version then runs next to the original on holdout. Check `job_status`; the result has every round and the holdout scores. Report the holdout comparison, not the training score. Steps 2-5 below are the manual way.
 2. Ask, then `improve_agent(agent_id, run_id)`. It returns a job; check `job_status` until it succeeds. The result names the new profile version and the reason for each change.
 3. Show the user the rationale and the main changes. Rehearsal keeps them general: no record ids or job wording.
 4. Prove it: ask, then run the old and the new version together on `holdout`, with 2+ repeats.

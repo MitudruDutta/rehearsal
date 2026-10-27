@@ -137,3 +137,13 @@ def test_mcp_missing_optional_dependency_shows_install_hint(monkeypatch):
     with pytest.raises(SystemExit, match=r"pip install 'rehearsal-kit\[mcp\]'") as error:
         cli.main(["mcp"])
     assert "missing module: mcp" in str(error.value)
+
+
+def test_autofix_command_posts_the_loop_and_prints_the_job(api, monkeypatch, capsys):
+    client, responses, requests = api
+    responses.append(httpx.Response(202, json={"job_id": "job_1", "episodes": 8}))
+    monkeypatch.setattr(cli, "_client", lambda: client)
+    cli.main(["autofix", "prof_1", "run_0", "--rounds", "2"])
+    assert requests[0].url.path == "/v1/autofix"
+    assert json.loads(requests[0].content) == {"profile_id": "prof_1", "run_id": "run_0", "rounds": 2, "repeats": 1}
+    assert '"job_1"' in capsys.readouterr().out
