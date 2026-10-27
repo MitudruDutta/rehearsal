@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Project** | Rehearsal |
-| **Event** | Nebius x NVIDIA Global AI Hackathon, track "Coding and Agentic Engineering" |
+| **Models** | NVIDIA Nemotron on Nebius Token Factory |
 | **Document** | Scope (step 1 of 3: scope → [PRD](prd.md) → [spec](spec.md)) |
-| **Status** | Agreed 2026-10-09; revised 2026-10-27 for this event (decisions D8 to D10, scope items 8 and 9, criteria S7 and S8) |
+| **Status** | Agreed 2026-10-09; revised 2026-10-27 (decisions D8 to D10, scope items 8 and 9, criteria S7 and S8) |
 
 ## 1. Problem
 
@@ -56,10 +56,10 @@ The scope was set in a flipped-interaction session: the coding agent asked, the 
 5. **Improvement:** propose a better agent version from failures; compare versions on held-out jobs.
 6. **Interfaces:** web console, CLI and Python SDK, MCP server for AI assistants, documentation site.
 7. **Hosted service:** sign-in, workspaces, plans and payments, spending limits.
-8. **Fix loop:** rounds of improve and rehearse that keep only versions that verify more, then a held-out proof (added for this event).
-9. **Pull request checks:** a CLI command and a GitHub Action that rehearse an agent change next to `main` and fail on a regression (added for this event).
+8. **Fix loop:** rounds of improve and rehearse that keep only versions that verify more, then a held-out proof (added 2026-10-27).
+9. **Pull request checks:** a CLI command and a GitHub Action that rehearse an agent change next to `main` and fail on a regression (added 2026-10-27).
 
-## 6. Out of scope (for this event)
+## 6. Out of scope
 
 - Testing applications without source and images (closed SaaS such as Salesforce or Zendesk).
 - Browser-only worlds built from a URL.
@@ -70,7 +70,7 @@ The scope was set in a flipped-interaction session: the coding agent asked, the 
 
 ## 7. Constraints
 
-- **Time:** first built 2026-10-10 to 2026-10-19; extended for this event, with submission before 2026-10-30.
+- **Time:** first built 2026-10-10 to 2026-10-19; extended 2026-10-27 to 2026-10-30.
 - **Money:** no paid infrastructure; free cloud credits and capped model spend only.
 - **Honesty:** the product, the docs and the demo describe only what is built; planned work is labelled.
 - **Safety:** no production system is touched; application code runs only inside sandboxes.

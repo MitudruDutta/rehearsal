@@ -24,7 +24,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 4. Let a team improve an agent and prove the improvement on held-out jobs.
 5. Catch an agent change that makes things worse before it merges.
 
-**Non-goals** (see [scope §6](scope.md#6-out-of-scope-for-this-event)): closed SaaS applications, browser-only worlds, weight training, live-data drift, per-job VM isolation.
+**Non-goals** (see [scope §6](scope.md#6-out-of-scope)): closed SaaS applications, browser-only worlds, weight training, live-data drift, per-job VM isolation.
 
 ## 3. Users
 
@@ -169,7 +169,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | Area | Status |
 |---|---|
 | World Compiler, validation, evaluation, verdict, improvement, comparison | Shipped |
-| Fix loop, pull request checks, model usage by role | Shipped during the Nebius x NVIDIA hackathon |
+| Fix loop, pull request checks, model usage by role | Shipped (October 2026) |
 | CLI, SDK, MCP server, agent plugin, console, docs | Shipped (`rehearsal-kit` 0.1.2) |
 | Hosted service with plans and live payments | Shipped (rehearsalkit.xyz) |
 | Weight training, world bundle replay | Planned (`rehearsal train` and `rehearsal run-bundle` report "not implemented") |

@@ -16,7 +16,7 @@ Rehearsal is CI for AI agents. It runs your agent on a working copy of your real
 [![Docs](https://img.shields.io/badge/docs-docs.rehearsalkit.xyz-2b59d9)](https://docs.rehearsalkit.xyz)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](LICENSE)
 
-[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Nemotron on Nebius](#nebius-x-nvidia-global-ai-hackathon) · [Self-hosting](#self-hosting) · [Planning docs](#planning-docs) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
+[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Nemotron on Nebius](#built-on-nvidia-nemotron-and-nebius-token-factory) · [Self-hosting](#self-hosting) · [Planning docs](#planning-docs) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
 
 <img src=".github/assets/rehearsal-hero.webp" alt="The Rehearsal landing page, replaying a real World Compiler build of Gitea" width="900">
 
@@ -60,9 +60,9 @@ flowchart TD
 3. **Verify and fix.** Checks decide each outcome. The fix loop turns failures into better versions and keeps only the ones that verify more; the best one is proved on jobs it has never seen.
 4. **Guard every change.** A pull request that touches the agent is rehearsed next to `main` before it merges.
 
-## Nebius x NVIDIA Global AI Hackathon
+## Built on NVIDIA Nemotron and Nebius Token Factory
 
-Rehearsal is entered in the Coding and Agentic Engineering track. It existed before the hackathon; what changed during the submission period is listed below.
+Rehearsal existed before October 2026; what changed since is listed below.
 
 ### How Rehearsal uses NVIDIA Nemotron and Nebius Token Factory
 
@@ -81,7 +81,7 @@ Every model call in Rehearsal goes to an NVIDIA Nemotron open model served by [N
 - **Measured per role.** Every call records its role, model, tokens, time and cost. The console shows a "Models by role" table for each build, run and fix loop, and `rehearsal prices` shows the price used for each configured model.
 - **Tool calls on every size.** Tool calling works on Nemotron 3 Nano, Super and Ultra; the agent under test and the compiler roles depend on it.
 
-### What changed during the submission period
+### What changed in October 2026
 
 - **Nemotron on Nebius Token Factory became the default for every role.** Before, production ran on models behind a LiteLLM proxy and every World Compiler role shared one chain. Now each role has its own Nemotron chain with a reasoning switch, the hardest compiler roles run on Ultra, and usage is recorded per role.
 - **Fix my agent.** Before, the improvement step proposed one new version and left the checking to you. Now an `autofix` job runs rounds of propose, rehearse on train and dev, and keep only if better (more verified, no new rule violation or false completion), feeds rejected ideas to the next round, and proves the best version against the original on held-out jobs. It resumes from its checkpoint after a worker restart. API `POST /v1/autofix`, CLI `rehearsal autofix`, SDK `rh.profiles.autofix`, MCP tool `fix_agent`, and a console page with each round, its reason, its score, and the sentences it changed.
