@@ -247,6 +247,44 @@ curl -X POST https://rehearsal.example.com/v1/runs/<run_id>/commands \
 
 Episodes that a stopped run never started are not counted against your plan.
 
+## Turn an incident into a job
+
+When an agent gets something wrong in production, add it to the world so the same mistake is caught next time.
+Describe what was asked, what the agent did and what should have happened; a transcript is best. Rehearsal writes a
+job that puts an agent in the same situation, proves it can be passed and failed like every other job, and adds it to
+the dev split, so every later evaluation and every `rehearsal gate` includes it. It costs a few cents of model use.
+
+<Ways items={["Console", "CLI", "Python", "TypeScript"]}>
+<Tab value="Console">
+
+Open the world, choose the **Incidents** tab, describe what happened, and choose **Write the job**.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal worlds incident <wv_id> --file incident.txt --watch
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+job = rh.worlds.report_incident(wv_id, open("incident.txt").read())
+print(rh.jobs.wait(job["job_id"])["result"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const job = await rh.worlds.reportIncident(wvId, readFileSync("incident.txt", "utf8"));
+console.log((await rh.jobs.wait(job.job_id)).result);
+```
+
+</Tab>
+</Ways>
+
 ## When it is refused
 
 | Message | Meaning | Do this |
