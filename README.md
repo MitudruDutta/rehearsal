@@ -36,6 +36,7 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 - **Simulated customers.** Customers revise their request mid-task, so an agent that finishes the old request gets caught.
 - **Failures on purpose.** Requests time out after the change already went through, so blind retries show up as duplicates.
 - **Readiness verdict.** Ready to pilot, or not yet, with every measure linked to the episodes behind it.
+- **Why it failed, in plain words.** Every failed episode gets named causes read from the records ("acted on the old request", "did the same thing twice", "said done but was not"), with counts, the usual fix and the episodes behind each. The fix loop targets the most common ones.
 - **Fix my agent.** A loop that writes the next agent version from failed training jobs, rehearses it, and keeps it only if it verifies more episodes without breaking a rule. Rejected ideas are shown to the next round. The best version is then proved against the original on held-out jobs that no round has seen.
 - **Pull request checks.** `rehearsal gate` and a GitHub Action rehearse a changed agent next to the version on `main` and fail the check on a broken rule or any regression.
 - **Bring your own agent.** Describe an agent with instructions and a model, or drive episodes from your own code in any language through the episode API.
@@ -98,6 +99,7 @@ Jobs written from source code alone can drift from what users really do. So ever
 - **Pull request checks.** `rehearsal gate` and a GitHub Action (`action.yml`) rehearse a changed agent next to the version on `main` and fail on a broken rule or a regression, with a Markdown report in the job summary.
 - **Models by role** in the console, for builds, runs and fix loops.
 - **Grounded worlds.** A new research phase uses Tavily to base jobs on how real people use the application, with the sources on every job.
+- **Failure analysis.** Named causes for every failed episode, on the run page, in `rehearsal runs failures`, in the MCP `run_results` tool, in the CI gate's report, and as input to the fix loop (train and dev only).
 - **Cleanup.** Third-party tracing was removed; secret masking now lives in one module. Secret settings no longer appear in printed configuration. Next.js was upgraded to 16.4.2.
 
 ### Feedback on Nebius and NVIDIA tools

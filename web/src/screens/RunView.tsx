@@ -86,6 +86,44 @@ function EpisodeTabs({ episodeId }: { episodeId: string }) {
   );
 }
 
+/** Why episodes failed: named causes per agent, read from the verifier and the actions (evaluator/failures.py). */
+function FailureCauses({ runId, live }: { runId: string; live: boolean }) {
+  const failures = useResource<Record<string, any>>(`/v1/runs/${runId}/failures`, live ? 8000 : 0);
+  const agents = Object.entries(failures.data || {}).filter(([, a]) => a.failed > 0);
+  if (!agents.length) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Why episodes failed</CardTitle>
+        <CardDescription>Each failed episode is given its causes from the records: what the verifier found and what the agent did. An episode can have more than one. Setup problems are not counted.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-6">
+        {agents.map(([agent, a]) => (
+          <section key={agent} className="grid gap-3">
+            {agents.length > 1 && <h3 className="font-semibold">{agent} <span className="font-normal text-muted-foreground">{a.failed} failed episodes</span></h3>}
+            <ul className="grid gap-4">
+              {a.causes.map((c: any) => (
+                <li key={c.cause} className="grid gap-1.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">{c.label}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">{c.count} of {a.failed} failed episodes</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden><div className="h-full rounded-full bg-warning" style={{ width: `${Math.round(c.share * 100)}%` }} /></div>
+                  <p className="text-sm text-muted-foreground">{c.meaning}{c.checks.length ? ` Checks that failed: ${c.checks.join("; ")}.` : ""}</p>
+                  <p className="text-sm">Usually fixed by: {c.fix}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.episodes.map((id: string, i: number) => <Button key={id} size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => go(routes.run(runId, id))}>Episode {i + 1}</Button>)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function Intervene({ episodeId, goals }: { episodeId: string; goals: any[] }) {
   const [text, setText] = useState("");
   const [goal, setGoal] = useState(String(goals[goals.length - 1]?.version ?? 1));
@@ -233,6 +271,7 @@ export function RunView({ runId, episodeId }: { runId: string; episodeId?: strin
         {r?.summary?.profiles && Object.entries(r.summary.profiles).map(([name, s]: [string, any]) => (
           <section key={name} className="grid gap-3"><h2 className="text-lg font-semibold">{name}</h2><Scorecard agg={s.overall} /></section>
         ))}
+        <FailureCauses runId={runId} live={r?.status === "running"} />
         <Card>
           <CardHeader>
             <CardTitle>Episodes</CardTitle>

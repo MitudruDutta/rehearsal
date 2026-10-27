@@ -306,6 +306,18 @@ The episodes of a run.
 
 Calls `GET /v1/runs/<run_id>/episodes`.
 
+### rh.runs.failures
+
+```python
+rh.runs.failures(run_id)
+```
+
+Why episodes failed, per agent: named causes, each with its count, what it means, its usual fix, example episodes and the checks that failed. Needs evaluator access.
+
+Why episodes failed, per agent: named causes, each with its count, its usual fix and example episodes.
+
+Calls `GET /v1/runs/<run_id>/failures`.
+
 ### rh.runs.episode
 
 ```python

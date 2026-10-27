@@ -48,7 +48,7 @@ def verdict(summary: dict[str, Any], candidate: str, baseline: str | None = None
 
 
 def report(summary: dict[str, Any], candidate: str, baseline: str | None, passed: bool, checks: list[tuple[bool, str]],
-           run_link: str, note: str = "") -> str:
+           run_link: str, note: str = "", causes: list[dict[str, Any]] | None = None) -> str:
     cols = [(candidate, "this change")] + ([(baseline, "baseline")] if baseline else [])
     aggs = [(summary.get("profiles") or {}).get(key, {}).get("overall") or {} for key, _ in cols]
 
@@ -62,6 +62,9 @@ def report(summary: dict[str, Any], candidate: str, baseline: str | None, passed
              "| | " + " | ".join(f"`{key}` ({label})" for key, label in cols) + " |", "|---|" + "---|" * len(cols)]
     lines += [f"| {label} | " + " | ".join(cell(a, key) for a in aggs) + " |" for key, label in ROWS]
     lines += [""] + [f"- {'PASS' if ok else 'FAIL'}: {text}" for ok, text in checks]
+    if causes:
+        lines += ["", f"**Why `{candidate}` failed episodes**", ""]
+        lines += [f"- {c['label']}: {c['count']} episode{'s' if c['count'] != 1 else ''}. {c['fix']}" for c in causes[:3]]
     return "\n".join(lines + (["", note] if note else [])) + "\n"
 
 
@@ -121,7 +124,11 @@ def run(c: Any, args: Any) -> int:
         return UNFINISHED
     passed, checks = verdict(finished.get("summary") or {}, key(cand), key(base) if base else None,
                              min_success=args.min_success, max_violations=args.max_violations, tolerance=args.tolerance)
-    text = report(finished.get("summary") or {}, key(cand), key(base) if base else None, passed, checks, link, note)
+    try:  # named causes need a key with evaluator access; the verdict does not depend on them
+        causes = (c.get(f"/v1/runs/{run_id}/failures").get(key(cand)) or {}).get("causes")
+    except Exception:  # noqa: BLE001
+        causes = None
+    text = report(finished.get("summary") or {}, key(cand), key(base) if base else None, passed, checks, link, note, causes)
     print(text)
     if args.report:
         with open(args.report, "a", encoding="utf-8") as f:

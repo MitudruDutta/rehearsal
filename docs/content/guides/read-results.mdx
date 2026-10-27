@@ -116,6 +116,26 @@ The ending says how the episode stopped. It is the `termination` field.
 | `environment_error` | The environment failed. The episode is not scored |
 | `external_timeout` | Bring-your-own agent only: no action arrived within 10 minutes of a turn |
 
+## Why episodes failed
+
+Rehearsal gives each failed episode its causes, read from the records: what the checks found and what the agent did.
+No model decides them. One episode can have more than one cause, and episodes with a setup problem are not counted.
+
+| Cause | Found when |
+|---|---|
+| Broke a hard rule | A check that must never fail did fail |
+| Acted on the old request | The agent changed records for an earlier version of the customer's request |
+| Did the same thing twice | A change was made twice, usually a retry after a timeout |
+| Did not recover from a fault | A call failed or timed out on purpose, and the work was not finished correctly |
+| Said it was done when it was not | The agent claimed completion, and the records disagree |
+| Gave up or ran out of steps | The episode ended stalled, at its step limit or at its spend limit, with the request not met |
+| Kept making calls the application refused | Three or more calls were rejected |
+| Finished with the wrong records | None of the above, and the records do not match the request |
+
+The run page shows them under **Why episodes failed**, most common first, each with what usually fixes it and buttons
+to its episodes. From a terminal, `rehearsal runs failures <run_id>`; from Python, `rh.runs.failures(run_id)`. The
+fix loop reads the same causes, for `train` and `dev` jobs only, and the CI gate lists the top three in its report.
+
 ## One episode in full
 
 <Ways items={["Console", "CLI", "Python", "MCP"]}>

@@ -1,6 +1,6 @@
 ---
 title: REST API
-description: Every operation of the Rehearsal API, 73 in all, with the access it needs, its parameters and its request body.
+description: Every operation of the Rehearsal API, 74 in all, with the access it needs, its parameters and its request body.
 generated: true
 ---
 
@@ -78,6 +78,7 @@ Each operation below shows the least access it accepts. `admin` is accepted ever
 | [`POST /v1/evaluations`](#post-v1evaluations) | Starts a run: the agents attempt the jobs of a published world version |
 | [`GET /v1/runs`](#get-v1runs) | The runs of the project, newest first |
 | [`GET /v1/runs/{run_id}`](#get-v1runsrun_id) | One run: its status, its configuration and its summary of scores |
+| [`GET /v1/runs/{run_id}/failures`](#get-v1runsrun_idfailures) | Why episodes failed, per agent: named causes, how many episodes each, and which (see evaluator/failures.py) |
 | [`POST /v1/runs/{run_id}/commands`](#post-v1runsrun_idcommands) | A run is several shard jobs; the command goes to every shard it applies to |
 | [`GET /v1/runs/{run_id}/episodes`](#get-v1runsrun_idepisodes) | The episodes of a run, each with its job, split, agent, status, reward and ending |
 | [`GET /v1/compare`](#get-v1compare) | Compares profiles within one run, or two runs on the same pinned world version |
@@ -489,6 +490,18 @@ One run: its status, its configuration and its summary of scores.
 | `run_id` | the path | string | required |
 
 **Answers** `200` with The run, with `status` and `summary`. `summary.profiles` has one entry for each agent, named `name@vN`: see [Read results](/guides/read-results#the-summary).
+
+### GET /v1/runs/\{run_id\}/failures
+
+<Operation method="GET" path="/v1/runs/<run_id>/failures" access="evaluator" />
+
+Why episodes failed, per agent: named causes, how many episodes each, and which (see evaluator/failures.py).
+
+| Parameter | In | Type | Default |
+|---|---|---|---|
+| `run_id` | the path | string | required |
+
+**Answers** `200`.
 
 ### POST /v1/runs/\{run_id\}/commands
 

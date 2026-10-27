@@ -151,10 +151,12 @@ def build_server(client: Rehearsal | None = None) -> Any:
 
     @mcp.tool()
     def run_results(run_id: str) -> dict[str, Any]:
-        """Status and scores of an evaluation run, with one line per episode."""
+        """Status and scores of an evaluation run, one line per episode, and why episodes failed: named causes per
+        agent with their usual fix. Start from the causes when explaining a run."""
         run = c.get(f"/v1/runs/{run_id}")
         episodes = c.get(f"/v1/runs/{run_id}/episodes")
-        return {"status": run["status"], "summary": (run.get("summary") or {}).get("profiles") or None,
+        causes = {agent: [{k: x[k] for k in ("label", "count", "fix", "episodes")} for x in v["causes"]] for agent, v in c.get(f"/v1/runs/{run_id}/failures").items()}
+        return {"status": run["status"], "summary": (run.get("summary") or {}).get("profiles") or None, "failure_causes": causes,
                 "episodes": [{"id": e["id"], "split": e.get("split"), "scenario": e.get("scenario"), "status": e["status"], "verified": e.get("reward") == 1,
                               "ending": e.get("termination")} for e in episodes],
                 "console": link(f"/app/run/?id={run_id}")}

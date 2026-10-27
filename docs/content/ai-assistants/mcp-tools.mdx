@@ -253,7 +253,7 @@ run_evaluation(world_version_id, agent_ids, splits=None, repeats=None, budget_us
 
 ### run_results
 
-Status and scores of an evaluation run, with one line per episode.
+Status and scores of an evaluation run, one line per episode, and why episodes failed: named causes per agent with their usual fix. Start from the causes when explaining a run.
 
 ```python
 run_results(run_id)
@@ -263,7 +263,7 @@ run_results(run_id)
 |---|---|---|---|
 | `run_id` | string | required | From `run_evaluation`. |
 
-**Returns:** `status`, `summary` (scores for each agent), one line for each episode (`id`, `split`, `scenario`, `status`, `verified`, `ending`), and a console link.
+**Returns:** `status`, `summary` (scores for each agent), `failure_causes` (for each agent, the named causes of its failed episodes with `label`, `count`, `fix` and example `episodes`), one line for each episode (`id`, `split`, `scenario`, `status`, `verified`, `ending`), and a console link.
 
 **The same from elsewhere:** CLI [`rehearsal runs show`](/reference/cli#rehearsal-runs); Python `rh.runs.get(run_id)`.
 

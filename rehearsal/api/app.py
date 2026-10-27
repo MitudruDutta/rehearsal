@@ -58,6 +58,7 @@ from ..db.models import (
 )
 from ..db.session import session
 from ..agents.llm import merge_usage
+from ..evaluator.failures import run_failures as failure_causes
 from ..worker.evaluate import summarize_run
 from .auth import (
     COOKIE,
@@ -789,6 +790,14 @@ def get_run(run_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
         out = _cols(_get(s, Run, run_id, p))
         out["models"] = merge_usage((j.result or {}).get("models") for j in queue.run_jobs(s, run_id))  # per role, over every shard
         return out
+
+
+@app.get("/v1/runs/{run_id}/failures")
+def run_failures(run_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Why episodes failed, per agent: named causes, how many episodes each, and which (see evaluator/failures.py)."""
+    with session() as s:
+        _get(s, Run, run_id, p)
+    return failure_causes(run_id)
 
 
 @app.post("/v1/runs/{run_id}/commands")

@@ -301,7 +301,7 @@ def authorize(request: Request, p: Principal) -> Principal:
           or path.startswith("/v1/episodes/") or "/events" in path
           or path.startswith("/v1/streams/") or path.startswith("/v1/artifacts")
           or path == "/v1/dashboard" or path.startswith("/v1/world-versions/")
-          or (path.startswith("/v1/runs/") and path.endswith("/episodes"))):
+          or (path.startswith("/v1/runs/") and path.endswith(("/episodes", "/failures")))):
         p.require("evaluator")
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             p.require("write")

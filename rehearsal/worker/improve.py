@@ -20,6 +20,7 @@ from ..core.contracts import AgentProfile
 from ..db.events import emit
 from ..db.models import Action, AgentProfileRow, Episode, Run, Scenario
 from ..db.session import session
+from ..evaluator.failures import run_failures
 from .context import JobContext
 
 MAX_FAILURES = 8
@@ -66,6 +67,8 @@ def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dic
         failures = [_episode_digest(s, ep, sc) for ep, sc in rows if (ep.reward or 0) <= 0][:MAX_FAILURES]
         successes = sum(1 for ep, _ in rows if (ep.reward or 0) > 0)
         tool_names = sorted({a for ep, _ in rows for a in [x.tool for x in s.scalars(select(Action).where(Action.episode_id == ep.id))]})
+    # named causes over train and dev only, so the proposal targets the most common ones (never held-out jobs)
+    causes = next(iter(run_failures(run_id, splits=("train", "dev"), profile_id=profile_id).values()), {}).get("causes", []) if failures else []
     if not rows:
         raise ValueError("the run has no finished train/dev episodes for this profile")
     if not failures:
@@ -75,7 +78,7 @@ def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dic
         "shown, without overfitting to specific record IDs, names, or scenario wording (those will differ in held-out evaluation). "
         "You may change only the system prompt and per-tool guidance. Describe general behaviours: verify state after uncertain "
         "outcomes before retrying, re-read the latest customer request before acting, confirm the target record, avoid unnecessary "
-        "customer contacts, never claim completion without checking. If earlier attempts that did not help are listed, change "
+        "customer contacts, never claim completion without checking. Fix the most common failure causes first. If earlier attempts that did not help are listed, change "
         "your approach rather than restating them. Keep the {actor_id}, {role}, and {instructions} placeholders in "
         "the system prompt. Return JSON: {\"system_prompt\": str, \"tool_guidance\": {tool: str}, \"rationale\": str}."
     )
@@ -83,6 +86,7 @@ def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dic
         {
             "current_profile": {"system_prompt": profile.system_prompt or "(platform default)", "tool_guidance": profile.tool_guidance},
             "episodes_succeeded": successes,
+            "failure_causes": [{k: c[k] for k in ("label", "meaning", "count", "jobs", "checks")} for c in causes],
             "failed_episodes": failures,
             "tools_seen": tool_names,
             **({"earlier_attempts_that_did_not_help": rejected} if rejected else {}),

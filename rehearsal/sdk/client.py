@@ -148,6 +148,10 @@ class Runs(_Resource):
     def episodes(self, run_id: str) -> list[dict[str, Any]]:
         return self.c.get(f"/v1/runs/{run_id}/episodes")
 
+    def failures(self, run_id: str) -> dict[str, Any]:
+        """Why episodes failed, per agent: named causes, each with its count, its usual fix and example episodes."""
+        return self.c.get(f"/v1/runs/{run_id}/failures")
+
     def episode(self, ep_id: str) -> dict[str, Any]:
         return self.c.get(f"/v1/episodes/{ep_id}")
 

@@ -301,6 +301,7 @@ def _main(argv: list[str] | None = None) -> None:
     runs.add_parser("watch", help="follow a run live").add_argument("run_id")
     runs.add_parser("episodes", help="one line per episode").add_argument("run_id")
     runs.add_parser("episode", help="what happened in one episode").add_argument("episode_id")
+    runs.add_parser("failures", help="why episodes failed: named causes per agent, with example episodes").add_argument("run_id")
     cmp_ = cmd("compare", "compare agents within a run, or two runs on one world version")
     cmp_.add_argument("run_a")
     cmp_.add_argument("run_b", nargs="?")
@@ -537,6 +538,8 @@ def _main(argv: list[str] | None = None) -> None:
             _print(c.runs.get(args.run_id))
         elif args.sub == "watch":
             _watch(c.runs.events(args.run_id))
+        elif args.sub == "failures":
+            _print(c.runs.failures(args.run_id))
         elif args.sub == "episodes":
             _print([{k: e[k] for k in ("id", "scenario", "split", "profile", "status", "reward", "termination")} for e in c.runs.episodes(args.run_id)])
         else:

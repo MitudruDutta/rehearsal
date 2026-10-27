@@ -107,8 +107,8 @@ Rules:
 
 ## Workflow: Explain a run
 
-1. `run_results(run_id)`. List the episodes that are not verified.
-2. For each, call `episode_details(episode_id)`. Find, in order:
+1. `run_results(run_id)`. Start from `failure_causes`: for each agent, the named causes of its failed episodes (most common first), each with its usual fix and example episodes. They are read from the records, not guessed. Lead with them.
+2. Open one or two example episodes of each cause with `episode_details(episode_id)` to explain it concretely. Find, in order:
    - **Environment error?** The setup failed, not the agent. Say so; it is not counted.
    - **Failed checks.** What the database shows against what was wanted.
    - **The revision.** Did the agent act on the request as it was when it acted? Look for writes made after the customer's change.
