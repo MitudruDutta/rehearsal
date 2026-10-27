@@ -49,6 +49,16 @@ rh.jobs.wait(build["job_id"])
 
 Bring your own agent, in any language, through the episode API: read `rh.external.observation(episode_id)` and send tool calls with `rh.external.act(...)`.
 
+From TypeScript, the npm package `rehearsal-kit` has the same client, command and MCP server, and shares the sign-in:
+
+```ts
+import { Rehearsal } from "rehearsal-kit"; // npm install rehearsal-kit
+
+const rh = new Rehearsal();
+const build = await rh.worlds.build("<app_id>");
+await rh.jobs.wait(build.job_id);
+```
+
 ## Run your own server
 
 ```bash

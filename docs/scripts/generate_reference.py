@@ -14,6 +14,7 @@ What comes from where:
     content/reference/errors.mdx            the CLI's hints, and messages checked against the files they come from
     content/reference/api.mdx               the API schema, and the access rule in rehearsal/api/auth.py
     content/reference/python-sdk.mdx        the classes and methods of rehearsal/sdk/client.py
+    content/reference/typescript-sdk.mdx    the classes and methods of rehearsal/ts/src/sdk/client.ts
     content/reference/configuration.mdx     every environment variable the package reads, and the provider table
     lib/generated/product.json              the version in pyproject.toml, and counts
 
@@ -1501,6 +1502,136 @@ def sdk_page() -> str:
     return "\n".join(out).rstrip("\n") + "\n"
 
 
+TS_CLIENT = ROOT / "rehearsal" / "ts" / "src" / "sdk" / "client.ts"
+
+
+def ts_sdk_page() -> str:
+    """The TypeScript client, read from its source. Its methods must be the Python client's, in camelCase, so both pages
+    share SDK_ABOUT and cannot drift apart."""
+    source = TS_CLIENT.read_text(encoding="utf-8")
+    resources = re.findall(r"readonly (\w+) = new (\w+)\(this\)", source)
+    if not resources:
+        fail("the TypeScript client no longer creates its resources as `readonly x = new X(this)`")
+    classes = dict(re.findall(r"(?ms)^export class (\w+) extends Resource \{\n(.*?)^\}", source))
+    snake = lambda name: re.sub(r"(?<!^)([A-Z])", lambda m: "_" + m.group(1).lower(), name)  # noqa: E731
+
+    def calls(body: str) -> list[str]:
+        found = []
+        for verb, path in re.findall(r"this\.c\.(get|post|request|stream)(?:<[^>]*>)?\(\s*(?:\"(?:GET|POST)\",\s*)?[`\"]([^`\"]+)[`\"]", body):
+            method = "GET" if verb in ("get", "stream") else "POST"
+            found.append(f"{method} " + re.sub(r"\$\{(\w+)\}", lambda m: "<" + snake(m.group(1)).replace("include_images", "include_images") + ">", path.split("?")[0]))
+        return list(dict.fromkeys(found))
+
+    out = [
+        "---",
+        "title: TypeScript SDK",
+        "description: The TypeScript client in the rehearsal-kit npm package. Every resource and method, with its arguments and the API operation it calls.",
+        "generated: true",
+        "---",
+        "",
+        HEADER,
+        "",
+        "The `rehearsal-kit` package on npm is the TypeScript edition of the Python package: the same client, the same",
+        "`rehearsal` command and the same MCP server. It needs Node.js 20 or later, and works with npm, pnpm and bun.",
+        "",
+        "```bash",
+        "npm install rehearsal-kit",
+        "```",
+        "",
+        "```ts",
+        'import { Rehearsal } from "rehearsal-kit";',
+        "",
+        "const rh = new Rehearsal();",
+        'const run = await rh.evaluations.create("<wv_id>", ["<profile_id>"], ["dev"], 2);',
+        "for await (const event of rh.runs.events(run.run_id)) console.log(event.type, event.summary);",
+        "console.log((await rh.runs.get(run.run_id)).summary);",
+        "```",
+        "",
+        "Every method returns a promise of the JSON of the API's answer. As in Python, the client adds no types of its own",
+        "for answers, so a field that the API adds is there at once. Method names are the Python names in camelCase:",
+        "`rh.applications.importCatalog` is `rh.applications.import_catalog`.",
+        "",
+        "## The client",
+        "",
+        "```ts signature",
+        "new Rehearsal({ apiKey, baseUrl, timeout, fetch })",
+        "```",
+        "",
+        "| Option | Meaning |",
+        "|---|---|",
+        "| `apiKey` | The key. Without it: the environment variable `REHEARSAL_API_KEY`, then the sign-in that `rehearsal login` saved |",
+        f"| `baseUrl` | The server. Without it: `REHEARSAL_URL`, then the saved sign-in, then `{re.search(r'DEFAULT_URL = \"([^\"]+)\"', source).group(1)}` |",
+        "| `timeout` | Seconds to wait for one request |",
+        "| `fetch` | A `fetch` function to use instead of the global one, for example in tests |",
+        "",
+        "With no key anywhere, the constructor throws an `Error` that says how to sign in.",
+        "",
+        "### Errors",
+        "",
+        "A request that the server refuses throws `RehearsalError`. It has two fields: `status`, the HTTP status, and",
+        "`detail`, the server's message. [Errors](/reference/errors) lists them.",
+        "",
+        "```ts",
+        'import { RehearsalError } from "rehearsal-kit";',
+        "",
+        "try {",
+        '  await rh.evaluations.create("<wv_id>", ["<profile_id>"]);',
+        "} catch (error) {",
+        "  if (error instanceof RehearsalError && error.status === 402) console.log(error.detail); // the plan does not cover it: do not retry",
+        "  else throw error;",
+        "}",
+        "```",
+        "",
+        "### Any operation",
+        "",
+        "| Method | Does |",
+        "|---|---|",
+        "| `rh.get(path, params?)` | A `GET`. Resolves to the JSON |",
+        "| `rh.post(path, body)` | A `POST` with a JSON body. Resolves to the JSON |",
+        "| `rh.stream(path, cursor = 0)` | An async iterator of a stream's events. It reconnects from the last event after a lost connection; leaving the loop closes it |",
+        "| `rh.download(path)` | A file, such as an exported artifact, as a `Uint8Array` |",
+        "",
+    ]
+    seen = set()
+    for attribute, class_name in resources:
+        body = classes.get(class_name)
+        if body is None:
+            fail(f"the TypeScript client has no class {class_name}")
+        out += [f"## rh.{attribute}", ""]
+        for name, args, method_body in re.findall(r"(?ms)^  (?:async )?(\w+)\(([^)]*)\)[^{\n]*\{(.*?)(?=^  \S|\Z)", body):
+            if name == "constructor":
+                continue
+            key = f"{'external' if attribute == 'external' else attribute}.{snake(name)}"
+            if key not in SDK_ABOUT:
+                fail(f"the TypeScript method rh.{attribute}.{name} has no Python counterpart ({key} is not in SDK_ABOUT)")
+            seen.add(key)
+            out += [f"### rh.{attribute}.{name}", "", "```ts signature", f"rh.{attribute}.{name}({' '.join(args.split())})", "```", "", SDK_ABOUT[key], ""]
+            operations = calls(method_body)
+            if operations:
+                out += ["Calls " + ", then ".join(code(o) for o in operations) + ".", ""]
+    if seen != set(SDK_ABOUT):
+        fail(f"the TypeScript client lacks these Python methods: {sorted(set(SDK_ABOUT) - seen)}")
+    out += [
+        "## The command and the MCP server",
+        "",
+        "The package installs the same `rehearsal` command as the Python package, with the same commands, arguments and",
+        "exit codes; see [CLI](/reference/cli). Commands that run a server (`serve`, `worker`, `up`, `migrate`, `bootstrap`,",
+        "`users`, `openapi`, `prices`) need the Python server package. `rehearsal mcp`, or `npx -y rehearsal-kit mcp`, runs the",
+        "[MCP server](/ai-assistants/mcp-tools) with the same tools. To embed it: `import { buildServer } from \"rehearsal-kit/mcp\"`.",
+        "",
+        "## The saved sign-in",
+        "",
+        "Both packages read and write the same file, so signing in with either one signs in the other. Both functions are",
+        "exported by `rehearsal-kit`.",
+        "",
+        "| Function | Does |",
+        "|---|---|",
+        "| `configPath()` | Where the file is: `~/.config/rehearsal/config.json`, or the path in `REHEARSAL_CONFIG` |",
+        "| `savedLogin()` | The saved `url` and `api_key`, or an empty object |",
+    ]
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
 # ----------------------------------------------------------------------------------------------- configuration
 
 # Every setting the package reads from the environment: (section, name, default shown, meaning). The script stops when the
@@ -1655,6 +1786,7 @@ def main() -> None:
         DOCS / "content" / "reference" / "errors.mdx": errors_page(),
         DOCS / "content" / "reference" / "api.mdx": api_text,
         DOCS / "content" / "reference" / "python-sdk.mdx": sdk_page(),
+        DOCS / "content" / "reference" / "typescript-sdk.mdx": ts_sdk_page(),
         DOCS / "content" / "reference" / "configuration.mdx": config_page(),
         DOCS / "lib" / "generated" / "product.json": json.dumps({"version": version, "cliCommands": cli_count, "mcpTools": mcp_count, "apiOperations": api_count}, indent=2) + "\n",
     }

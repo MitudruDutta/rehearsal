@@ -33,7 +33,7 @@ as soon as the run starts.
 
 ### Create the profile
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 Open **Agents**, choose **Create a profile**, and turn on **My own agent sends actions through the API**.
@@ -50,6 +50,13 @@ rehearsal profiles create my-agent --external
 
 ```python
 agent = rh.profiles.create("my-agent", driver="external")
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const agent = await rh.profiles.create("my-agent", "", { driver: "external" });
 ```
 
 </Tab>
@@ -82,12 +89,15 @@ Keep the `run_id`.
 
 ### Run your agent's loop
 
-Use the Python client, or plain HTTP. Both are below.
+Use the Python or TypeScript client, or plain HTTP. All are below.
 
 </Step>
 </Steps>
 
-## The loop in Python
+## The loop in Python or TypeScript
+
+<Ways items={["Python", "TypeScript"]}>
+<Tab value="Python">
 
 ```python
 import uuid
@@ -114,7 +124,40 @@ while rh.runs.get(run["run_id"])["status"] not in ("finished", "failed", "cancel
         history.append({"role": "tool", "name": tool, "content": str(result)})
 ```
 
-`my_agent_decide` is your code. It gets the conversation so far and the tools, and returns one tool name with its
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+import { randomUUID } from "node:crypto";
+import { Rehearsal, type Json } from "rehearsal-kit";
+
+const rh = new Rehearsal();
+const run = await rh.evaluations.create(WORLD_VERSION_ID, [AGENT_ID], ["dev"], 1);
+const memory = new Map<string, Json[]>(); // episode id and actor -> everything that actor has seen
+
+while (!["finished", "failed", "cancelled"].includes((await rh.runs.get(run.run_id)).status)) {
+  for (const episode of await rh.runs.episodes(run.run_id)) {
+    if (episode.status !== "running") continue;
+    const observation = await rh.external.observation(episode.id);
+    if (!observation.awaiting_action) continue;
+    const turn = observation.turn.data;
+    const key = `${episode.id} ${turn.actor}`;
+    const history = memory.get(key) ?? [];
+    memory.set(key, history);
+    history.push(...turn.new);
+
+    const [tool, args] = await myAgentDecide(history, turn.tools); // your agent: exactly one tool call
+
+    const result = await rh.external.act(episode.id, turn.actor, tool, args, randomUUID());
+    history.push({ role: "tool", name: tool, content: JSON.stringify(result) });
+  }
+}
+```
+
+</Tab>
+</Ways>
+
+`my_agent_decide` (`myAgentDecide` in TypeScript) is your code. It gets the conversation so far and the tools, and returns one tool name with its
 arguments.
 
 - `turn["tools"]` uses the OpenAI function format: `{"type": "function", "function": {"name", "description",

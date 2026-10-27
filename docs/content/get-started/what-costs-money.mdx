@@ -49,7 +49,7 @@ You have three limits, from the smallest to the largest.
 
 Give a build or a run a budget. The job stops itself when it has spent that much.
 
-<Ways items={["CLI", "Python", "MCP"]}>
+<Ways items={["CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="CLI">
 
 ```bash
@@ -63,6 +63,14 @@ rehearsal eval <wv_id> --profile <profile_id> --split dev --budget 1
 ```python
 rh.worlds.build(app_id, budget_usd=6)
 rh.evaluations.create(wv_id, [profile_id], splits=["dev"], budget_usd=1)
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+await rh.worlds.build(appId, { budget_usd: 6 });
+await rh.evaluations.create(wvId, [profileId], ["dev"], null, { budget_usd: 1 });
 ```
 
 </Tab>

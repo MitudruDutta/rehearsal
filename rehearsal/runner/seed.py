@@ -21,6 +21,19 @@ def readable(body: str, limit: int = 1500) -> str:
     return re.sub(r"\s+", " ", html.unescape(text)).strip()[:limit]
 
 
+def _rooted(result: Any, path: str) -> str | None:
+    """The same path without the leading parts that do not exist, when that finds a value: a path written as if the
+    response were wrapped (``json.data.x``, ``body.data.x``) when paths start at the response body itself."""
+    parts = re.sub(r"\[(\d+)\]", r".\1", path.strip()).lstrip("$").lstrip(".").split(".")
+    for k in range(1, len(parts)):
+        try:
+            dig(result, ".".join(parts[k:]))
+            return ".".join(parts[k:])
+        except KeyError:
+            continue
+    return None
+
+
 class SeedError(Exception):
     def __init__(self, index: int, step: SeedStep, detail: str):
         super().__init__(f"seed step {index} ({step.kind} {step.method if step.kind == 'http' else ''} {step.path if step.kind == 'http' else step.command}) failed: {detail}")
@@ -78,7 +91,9 @@ def run_seed(instance: WorldInstance, steps: list[SeedStep], variables: dict[str
                     try:
                         variables[var] = dig(result, path)
                     except KeyError as exc:  # show the real response so the path can be corrected in one try
-                        raise SeedError(i, step, f"missing value {exc}; the response was: {json.dumps(result, default=str)[:600]}") from exc
+                        fix = _rooted(result, path)
+                        hint = f"; paths start at the response body itself, so this one is {fix!r}" if fix else ""
+                        raise SeedError(i, step, f"missing value {exc}{hint}; the response was: {json.dumps(result, default=str)[:600]}") from exc
         except KeyError as exc:
             raise SeedError(i, step, f"missing value {exc}") from exc
         if log:

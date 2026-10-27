@@ -21,7 +21,7 @@ An evaluation is a **run**: a set of agents, each attempting a set of jobs a num
 
 A profile is one version of an agent: its instructions and its model.
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 1. Open **Agents** and choose **Create a profile**.
@@ -42,6 +42,13 @@ rehearsal profiles list
 
 ```python
 agent = rh.profiles.create("support-agent", open("instructions.txt").read())
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const agent = await rh.profiles.create("support-agent", readFileSync("instructions.txt", "utf8"));
 ```
 
 </Tab>
@@ -107,7 +114,7 @@ stops itself.
 
 </Cost>
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 1. Open **Runs** and choose **Run an evaluation**.
@@ -136,6 +143,14 @@ print(run["run_id"], run["episodes"])
 ```
 
 </Tab>
+<Tab value="TypeScript">
+
+```ts
+const run = await rh.evaluations.create(wvId, [agent.id], ["dev"], 2);
+console.log(run.run_id, run.episodes);
+```
+
+</Tab>
 <Tab value="MCP">
 
 Ask your assistant to evaluate the agent. It calls `run_evaluation` after it has told you the episode count and
@@ -153,7 +168,7 @@ the time the run will start, and the console shows it. Paid plans and your own s
 
 ## Follow the run
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 The run page shows the agents, the customer and the verifier at work, and a table of episodes that fills as they
@@ -177,6 +192,14 @@ print(rh.runs.get(run["run_id"])["status"])
 ```
 
 </Tab>
+<Tab value="TypeScript">
+
+```ts
+for await (const event of rh.runs.events(run.run_id)) console.log(event.type, event.summary);
+console.log((await rh.runs.get(run.run_id)).status);
+```
+
+</Tab>
 <Tab value="MCP">
 
 The assistant calls `run_results` every 30 to 60 seconds until the status is `finished`.
@@ -191,7 +214,7 @@ work.
 
 A run is several server jobs, one for each sandbox. A command to the run goes to all of them.
 
-<Ways items={["Console", "Python", "HTTP"]}>
+<Ways items={["Console", "Python", "TypeScript", "HTTP"]}>
 <Tab value="Console">
 
 The run page has **Pause** and **Stop**.
@@ -201,6 +224,13 @@ The run page has **Pause** and **Stop**.
 
 ```python
 rh.runs.command(run["run_id"], "stop")  # or "pause", "resume"
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+await rh.runs.command(run.run_id, "stop"); // or "pause", "resume"
 ```
 
 </Tab>

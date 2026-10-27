@@ -25,7 +25,7 @@ itself. Do not subtract one score from the other.
 
 ## Compare
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 1. Open **Compare**.
@@ -52,6 +52,14 @@ With one run, the command compares the agents inside it. With two, both runs mus
 both = rh.evaluations.compare(run_a, run_b)  # run_b is optional
 for run_id, summary in both["runs"].items():
     print(run_id, summary)
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const both = await rh.evaluations.compare(runA, runB); // runB is optional
+for (const [runId, summary] of Object.entries(both.runs)) console.log(runId, summary);
 ```
 
 </Tab>

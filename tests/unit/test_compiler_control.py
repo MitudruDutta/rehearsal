@@ -403,3 +403,12 @@ def test_an_html_error_page_is_reported_as_its_visible_text():
     text = readable(page)
     assert text.startswith("DisallowedHost at /graphql/") and "add 'saleor' to ALLOWED_HOSTS." in text and "color" not in text
     assert readable('{"detail": "bad"}') == '{"detail": "bad"}' and len(readable("x" * 5000)) == 1500
+
+
+def test_a_save_path_written_as_if_the_response_were_wrapped_gets_the_right_path():
+    from rehearsal.runner.seed import _rooted
+
+    response = {"data": {"tokenCreate": {"token": "t", "errors": []}}, "extensions": {}}
+    assert _rooted(response, "json.body.data.tokenCreate.token") == "data.tokenCreate.token"
+    assert _rooted(response, "$.body.data.tokenCreate.errors[0]") is None  # nothing to find: no suggestion
+    assert _rooted(response, "data.missing") is None

@@ -199,9 +199,13 @@ everything about one episode: the request, each action and each check.
 
 [Read results](/guides/read-results) explains the fields.
 
-## The same in Python
+## The same in Python or TypeScript
 
-The package is also a Python client. It uses the same saved sign-in.
+The Python package is also a client, and so is the npm package (`npm install rehearsal-kit`). Both use the same
+saved sign-in.
+
+<Ways items={["Python", "TypeScript"]}>
+<Tab value="Python">
 
 ```python
 from rehearsal.sdk import Rehearsal
@@ -220,7 +224,30 @@ for episode in rh.runs.episodes(run["run_id"]):
     print(episode["id"], episode["scenario"], episode["reward"], episode["termination"])
 ```
 
-A failed request raises `RehearsalError`, which has the HTTP `status` and the server's `detail`.
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+import { readFileSync } from "node:fs";
+import { Rehearsal } from "rehearsal-kit";
+
+const rh = new Rehearsal(); // the saved sign-in, or REHEARSAL_API_KEY and REHEARSAL_URL
+
+const version = (await rh.worlds.list()).flatMap((w) => w.versions).find((v) => v.status === "published");
+const agent = await rh.profiles.create("support-agent", readFileSync("instructions.txt", "utf8"));
+
+const run = await rh.evaluations.create(version.id, [agent.id], ["dev"], 2);
+for await (const event of rh.runs.events(run.run_id)) console.log(event.type, event.summary); // ends when the run ends
+
+console.log((await rh.runs.get(run.run_id)).summary);
+for (const episode of await rh.runs.episodes(run.run_id)) console.log(episode.id, episode.scenario, episode.reward, episode.termination);
+```
+
+</Tab>
+</Ways>
+
+A failed request raises (Python) or throws (TypeScript) `RehearsalError`, which has the HTTP `status` and the server's
+`detail`.
 
 ## In CI
 

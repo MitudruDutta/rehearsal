@@ -73,7 +73,7 @@ world uses fictional data that Rehearsal creates.
 
 ## Add it
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 1. Open **Applications** and choose **Add application**.
@@ -129,6 +129,23 @@ app = rh.applications.create(
     policies=open("policies.txt").read(),
 )
 print(app["id"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+import { readFileSync } from "node:fs";
+import { Rehearsal } from "rehearsal-kit";
+
+const rh = new Rehearsal();
+const app = await rh.applications.create(
+  "gitea",
+  { kind: "git", url: "https://github.com/go-gitea/gitea", commit: "4ebd5e319b6a9e629bfd7a04292a6fe85b08dee9" },
+  { gitea: "gitea/gitea:28.1.0@sha256:f505a0d3a41323b786e05942fc7a4075e07ae7c169fd9485649aa55ee543a21a" },
+  readFileSync("policies.txt", "utf8"),
+);
+console.log(app.id);
 ```
 
 </Tab>

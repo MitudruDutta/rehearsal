@@ -12,7 +12,7 @@ one episode. Read them in that order.
 
 ## The summary
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 Open **Runs** and choose the run. The top of the run page shows the counts for each agent.
@@ -32,6 +32,13 @@ summary = rh.runs.get(run_id)["summary"]
 ```
 
 </Tab>
+<Tab value="TypeScript">
+
+```ts
+const { summary } = await rh.runs.get(runId);
+```
+
+</Tab>
 <Tab value="MCP">
 
 Ask your assistant for the results of the run. It calls `run_results`.
@@ -43,9 +50,22 @@ The summary has one entry for each agent under `profiles`, named `name@vN`. Each
 split that the run used (`train`, `dev`, `holdout`), then `per_scenario` with each job. For example, the verified
 share of version 2 on the held-out jobs is:
 
+<Ways items={["Python", "TypeScript"]}>
+<Tab value="Python">
+
 ```python
 summary["profiles"]["support-agent@v2"]["holdout"]["success_rate"]
 ```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+summary.profiles["support-agent@v2"].holdout.success_rate;
+```
+
+</Tab>
+</Ways>
 
 [Use Rehearsal in CI](/guides/use-rehearsal-in-ci#the-summary-field-by-field) shows the whole shape.
 
@@ -66,7 +86,7 @@ Read `holdout` first when the run has it. It is the score on jobs the agent was 
 
 ## One line for each episode
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 The **Episodes** table on the run page has one row for each episode: the job, the agent, the outcome and the cost.
@@ -84,6 +104,13 @@ rehearsal runs episodes <run_id>
 ```python
 for e in rh.runs.episodes(run_id):
     print(e["id"], e["scenario"], e["split"], e["reward"], e["termination"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+for (const e of await rh.runs.episodes(runId)) console.log(e.id, e.scenario, e.split, e.reward, e.termination);
 ```
 
 </Tab>
@@ -138,7 +165,7 @@ fix loop reads the same causes, for `train` and `dev` jobs only, and the CI gate
 
 ## One episode in full
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 Choose a row in the **Episodes** table. The page shows:
@@ -165,6 +192,16 @@ episode = rh.runs.episode(episode_id)
 for check in episode["oracle"]["check_results"]:
     if not check["passed"]:
         print(check["description"], "wanted", check["op"], check["expected"], "observed", check["actual"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const episode = await rh.runs.episode(episodeId);
+for (const check of episode.oracle.check_results) {
+  if (!check.passed) console.log(check.description, "wanted", check.op, check.expected, "observed", check.actual);
+}
 ```
 
 </Tab>

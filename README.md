@@ -166,6 +166,32 @@ To drive episodes with your own agent, read `rh.external.observation(episode_id)
 </details>
 
 <details>
+<summary><b>Use it from TypeScript</b></summary>
+
+The npm package has the same client, the same `rehearsal` command and the same MCP server, and uses the same sign-in:
+
+```bash
+npm install rehearsal-kit      # or: pnpm add rehearsal-kit / bun add rehearsal-kit
+```
+
+```ts
+import { Rehearsal } from "rehearsal-kit";
+
+const rh = new Rehearsal(); // your sign-in, or REHEARSAL_URL and REHEARSAL_API_KEY in CI
+const app = await rh.applications.create(
+  "my-app",
+  { kind: "git", url: "https://github.com/you/app", commit: "<sha>" },
+  { web: "registry.example.com/app@sha256:<digest>" },
+);
+const build = await rh.worlds.build(app.id);
+await rh.jobs.wait(build.job_id);
+```
+
+Method names are the Python names in camelCase. See [rehearsal/ts/README.md](rehearsal/ts/README.md).
+
+</details>
+
+<details>
 <summary><b>Use it from your AI assistant</b></summary>
 
 Install the plugin for Claude Code (Codex works the same way with `codex plugin ...`):

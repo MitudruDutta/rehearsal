@@ -11,32 +11,33 @@ tool or a limit that the code does not have. The check that keeps them equal run
   <LinkCard href="/reference/cli" title="CLI">Every `rehearsal` command, with its arguments and an example.</LinkCard>
   <LinkCard href="/reference/api" title="REST API">Every operation, with the access it needs and its request body.</LinkCard>
   <LinkCard href="/reference/python-sdk" title="Python SDK">Every method of the Python client, and the operation it calls.</LinkCard>
+  <LinkCard href="/reference/typescript-sdk" title="TypeScript SDK">The same client for Node.js, from npm, pnpm or bun.</LinkCard>
   <LinkCard href="/ai-assistants/mcp-tools" title="MCP tools">The tools an AI assistant calls, with arguments, results and costs.</LinkCard>
   <LinkCard href="/reference/errors" title="Errors">Each status and message, and what to do.</LinkCard>
   <LinkCard href="/reference/configuration" title="Configuration">Every setting a server and a client read, with its default.</LinkCard>
   <LinkCard href="/reference/plans-and-limits" title="Plans and limits">What each hosted plan allows, as the server enforces it.</LinkCard>
 </LinkCards>
 
-## The same task in four places
+## The same task in five places
 
-Rehearsal has one API. The console, the CLI, the Python client and the MCP tools all call it, so they can all do
-the same work. The words differ a little.
+Rehearsal has one API. The console, the CLI, the Python and TypeScript clients and the MCP tools all call it, so
+they can all do the same work. The words differ a little.
 
-| Task | Console | CLI | Python | MCP tool |
-|---|---|---|---|---|
-| Add an application | **Applications** | `rehearsal apps add` | `rh.applications.create` | `add_application` |
-| Build a world | **Build world** | `rehearsal build` | `rh.worlds.build` | `build_world` |
-| Follow a build | Build view | `rehearsal jobs watch` | `rh.jobs.events` | `job_status` |
-| List worlds | **Applications** | `rehearsal worlds list` | `rh.worlds.list` | `list_worlds` |
-| See the jobs of a world | World page | `rehearsal worlds scenarios` | `rh.worlds.scenarios` | `list_scenarios` |
-| Create an agent | **Agents** | `rehearsal profiles create` | `rh.profiles.create` | `create_agent` |
-| Run an evaluation | **Runs** | `rehearsal eval` | `rh.evaluations.create` | `run_evaluation` |
-| Read a run | Run page | `rehearsal runs show` | `rh.runs.get` | `run_results` |
-| Read an episode | Episode row | `rehearsal runs episode` | `rh.runs.episode` | `episode_details` |
-| Improve an agent | **Improve** on a run | `rehearsal improve` | `rh.post("/v1/improvements", ...)` | `improve_agent` |
-| Compare | **Compare** | `rehearsal compare` | `rh.evaluations.compare` | `compare_runs` |
+| Task | Console | CLI | Python | TypeScript | MCP tool |
+|---|---|---|---|---|---|
+| Add an application | **Applications** | `rehearsal apps add` | `rh.applications.create` | `rh.applications.create` | `add_application` |
+| Build a world | **Build world** | `rehearsal build` | `rh.worlds.build` | `rh.worlds.build` | `build_world` |
+| Follow a build | Build view | `rehearsal jobs watch` | `rh.jobs.events` | `rh.jobs.events` | `job_status` |
+| List worlds | **Applications** | `rehearsal worlds list` | `rh.worlds.list` | `rh.worlds.list` | `list_worlds` |
+| See the jobs of a world | World page | `rehearsal worlds scenarios` | `rh.worlds.scenarios` | `rh.worlds.scenarios` | `list_scenarios` |
+| Create an agent | **Agents** | `rehearsal profiles create` | `rh.profiles.create` | `rh.profiles.create` | `create_agent` |
+| Run an evaluation | **Runs** | `rehearsal eval` | `rh.evaluations.create` | `rh.evaluations.create` | `run_evaluation` |
+| Read a run | Run page | `rehearsal runs show` | `rh.runs.get` | `rh.runs.get` | `run_results` |
+| Read an episode | Episode row | `rehearsal runs episode` | `rh.runs.episode` | `rh.runs.episode` | `episode_details` |
+| Improve an agent | **Improve** on a run | `rehearsal improve` | `rh.post("/v1/improvements", ...)` | `rh.post("/v1/improvements", …)` | `improve_agent` |
+| Compare | **Compare** | `rehearsal compare` | `rh.evaluations.compare` | `rh.evaluations.compare` | `compare_runs` |
 
-In Python, `rh` is `Rehearsal()` from `rehearsal.sdk`.
+In Python, `rh` is `Rehearsal()` from `rehearsal.sdk`; in TypeScript, `new Rehearsal()` from `rehearsal-kit`.
 
 ## The API itself
 

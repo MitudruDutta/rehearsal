@@ -30,7 +30,7 @@ console shows the number before you start, and the loop stops early when every j
 
 </Cost>
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 Open the world and choose **Make an agent**. Give it a name and the number of rounds. The page that opens shows the
@@ -51,6 +51,15 @@ rehearsal artifacts download <artifact_id> support-agent.zip
 job = rh.worlds.make_agent(world_version_id, name="support-agent")
 done = rh.jobs.wait(job["job_id"])
 print(done["result"]["holdout"], done["result"]["artifact_id"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const job = await rh.worlds.makeAgent(worldVersionId, { name: "support-agent" });
+const done = await rh.jobs.wait(job.job_id);
+console.log(done.result.holdout, done.result.artifact_id);
 ```
 
 </Tab>

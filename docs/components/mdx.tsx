@@ -221,7 +221,7 @@ export function LinkCard({ href, title, children }: { href: string; title: strin
 
 /* ---- Tabs whose choice applies to every group on the site and is remembered ---- */
 
-/** Ways to do one task: Console, CLI, Python, MCP, HTTP. */
+/** Ways to do one task: Console, CLI, Python, TypeScript, MCP, HTTP. */
 export function Ways({ items, children }: { items: string[]; children: ReactNode }) {
   return (
     <Tabs items={items} groupId="way" persist className="max-w-(--rh-column)">

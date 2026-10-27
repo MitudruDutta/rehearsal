@@ -50,7 +50,7 @@ answer to the request shows that number. It often runs fewer, because it stops e
 
 </Cost>
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 Open the finished run and choose **Fix my agent** with the agent's name. The console opens the loop: each round, its
@@ -72,6 +72,15 @@ The command prints the job and the most episodes it can run, prints each round a
 job = rh.profiles.autofix(profile_id, run_id, rounds=3)
 done = rh.jobs.wait(job["job_id"])
 print(done["result"]["best"], done["result"]["holdout"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const job = await rh.profiles.autofix(profileId, runId, { rounds: 3 });
+const done = await rh.jobs.wait(job.job_id);
+console.log(done.result.best, done.result.holdout);
 ```
 
 </Tab>
@@ -99,7 +108,7 @@ The improvement step spends a small amount of model budget.
 
 </Cost>
 
-<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Ways items={["Console", "CLI", "Python", "TypeScript", "MCP"]}>
 <Tab value="Console">
 
 Open the finished run and choose **Improve** with the agent's name. The new version appears on the **Agents** page
@@ -123,6 +132,15 @@ new `profile_id`, the `version` and the `rationale`.
 job = rh.post("/v1/improvements", {"profile_id": profile_id, "run_id": run_id})
 done = rh.jobs.wait(job["job_id"])
 print(done["result"])
+```
+
+</Tab>
+<Tab value="TypeScript">
+
+```ts
+const job = await rh.post("/v1/improvements", { profile_id: profileId, run_id: runId });
+const done = await rh.jobs.wait(job.job_id);
+console.log(done.result);
 ```
 
 </Tab>

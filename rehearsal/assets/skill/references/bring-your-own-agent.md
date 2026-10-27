@@ -71,6 +71,32 @@ while rh.runs.get(run["run_id"])["status"] not in ("finished", "failed", "cancel
         history.append({"role": "tool", "name": tool, "content": str(result)})
 ```
 
+## TypeScript loop (the same, with the npm package `rehearsal-kit`)
+
+```ts
+import { randomUUID } from "node:crypto";
+import { Rehearsal, type Json } from "rehearsal-kit";
+
+const rh = new Rehearsal();                // REHEARSAL_API_KEY, REHEARSAL_URL
+const run = await rh.evaluations.create(WORLD_VERSION_ID, [EXTERNAL_AGENT_ID], ["dev"]);
+const memory = new Map<string, Json[]>();  // episode id and actor -> conversation so far
+
+while (!["finished", "failed", "cancelled"].includes((await rh.runs.get(run.run_id)).status)) {
+  for (const ep of await rh.runs.episodes(run.run_id)) {
+    if (ep.status !== "running") continue;
+    const obs = await rh.external.observation(ep.id);
+    if (!obs.awaiting_action) continue;
+    const turn = obs.turn.data;
+    const history = memory.get(`${ep.id} ${turn.actor}`) ?? [];
+    memory.set(`${ep.id} ${turn.actor}`, history);
+    history.push(...turn.new);
+    const [tool, args] = await myAgentDecide(history, turn.tools);   // the user's agent: one tool call
+    const result = await rh.external.act(ep.id, turn.actor, tool, args, randomUUID());
+    history.push({ role: "tool", name: tool, content: JSON.stringify(result) });
+  }
+}
+```
+
 `turn["tools"]` uses the OpenAI function format (`{"type": "function", "function": {"name", "description", "parameters"}}`). Most agent frameworks accept it directly as their tool list.
 
 ## Acting as the agent yourself (from an assistant)
