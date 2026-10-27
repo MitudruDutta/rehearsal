@@ -87,7 +87,7 @@ export default function Landing() {
               </a>
               <h1 className="mt-6 text-[clamp(40px,6vw,76px)] font-bold leading-[1.02] tracking-tight text-balance [text-shadow:0_2px_28px_rgb(4_8_26/0.7)]">Rehearse your AI agent on a copy of your real app.</h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-foreground/85 [text-shadow:0_1px_14px_rgb(4_8_26/0.85)] md:text-xl">
-                Rehearsal compiles your application into a sandboxed practice world with fictional data, runs your agent through real jobs, and scores every outcome against the application&apos;s own database.
+                Rehearsal compiles your application into a sandboxed practice world with fictional data, runs your agent through real jobs, and scores every outcome against the application&apos;s own database. Then it fixes what fails, and checks every change before it merges.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <StartCta />
@@ -114,8 +114,8 @@ export default function Landing() {
             <BentoCard Icon={MessageSquareDiff} name="Customers who change their minds" description="Simulated customers revise requests mid-task. Agents that finish the old request get caught." visual={<CustomerScene />} />
             <BentoCard Icon={TimerOff} name="Failures on purpose" description="Requests time out after the change went through. Blind retries show up as duplicates." visual={<FaultScene />} />
             <BentoCard className="lg:col-span-2"Icon={Database} name="Verified in your database, not by an LLM" description="Read-only checks against the application's own records decide every outcome, so a confident agent can't talk its way to a pass." visual={<VerifyScene />} />
-            <BentoCard className="lg:col-span-2"Icon={GitCompareArrows} name="Improve the agent, then compare" description="The improvement agent proposes changes from failed training jobs. Compare versions on jobs neither version has seen." visual={<ImproveScene />} />
-            <BentoCard Icon={Activity} name="Every step on the record" description="Each build and rehearsal keeps its full timeline: model calls, tool calls, checks, and what each one cost." visual={<TraceScene />} />
+            <BentoCard className="lg:col-span-2"Icon={GitCompareArrows} name="Fix my agent, proved on unseen jobs" description="Each round writes a new version from failed training jobs, rehearses it, and keeps it only if it verifies more without breaking a rule. The best version then faces the original on jobs no round has seen." visual={<ImproveScene />} />
+            <BentoCard Icon={Activity} name="Every step on the record" description="Each build and rehearsal keeps its full timeline: model calls by role, tool calls, checks, and what each one cost." visual={<TraceScene />} />
           </BentoGrid>
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed bg-card/40 px-5 py-4">
             <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">Coming soon</span>

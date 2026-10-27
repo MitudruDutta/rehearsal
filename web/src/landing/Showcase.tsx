@@ -255,7 +255,7 @@ export function VerifyScene() {
   );
 }
 
-/* ------------------------------------------------------------------------------------ Improve, then compare */
+/* ------------------------------------------------------------------------------------------- Fix my agent */
 
 const DIFF: ["-" | "+", string][] = [
   ["-", "Retry any refund call that fails."],
@@ -278,7 +278,7 @@ export function ImproveScene() {
             </Reveal>
           ))}
         </Mono>
-        <div className="mt-2.5 truncate text-[11px] text-muted-foreground">Proposed from failed training jobs</div>
+        <div className="mt-2.5 truncate text-[11px] text-muted-foreground">Round 2: verified more, no new rule broken, kept</div>
       </Pane>
       <div className="rounded-lg border bg-card p-3 text-[12px]">
         <div className="flex items-center justify-between gap-2">
@@ -300,7 +300,7 @@ export function ImproveScene() {
 // name, depth in the tree, where its bar starts and how wide it is (percent of the episode), colour
 const SPANS: [string, number, number, number, string][] = [
   ["episode · changed-mind", 0, 0, 100, "bg-primary/60"],
-  ["llm · deepseek-v4.1-flash", 1, 3, 34, "bg-primary"],
+  ["llm · nemotron-3-super", 1, 3, 34, "bg-primary"],
   ["tool · create_refund", 1, 39, 20, "bg-info"],
   ["tool · list_refunds", 1, 61, 16, "bg-info"],
   ["verifier · 3 passed", 1, 82, 16, "bg-success"],
