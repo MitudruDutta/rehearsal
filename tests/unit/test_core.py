@@ -185,3 +185,10 @@ def test_rate_limited_write_is_refused_and_not_carried_out():
     gw.arm_fault("create_post", "rate_limit", 1)
     res = gw._dispatch(manifest.tool("create_post"), {"operation_id": "op1", "role": "staff", "path": "/posts", "json": {}, "query": {}})
     assert res.status == "FAILED" and res.visible["status"] == 429 and "not carried out" in res.visible["error"] and sent == []
+
+
+def test_an_inline_dockerfile_sent_on_one_escaped_line_gets_real_lines():
+    from rehearsal.core.contracts import BuildSpec
+    assert BuildSpec(dockerfile_inline="FROM node:22-alpine\\nWORKDIR /app\\nRUN true").dockerfile_inline == "FROM node:22-alpine\nWORKDIR /app\nRUN true"
+    kept = "FROM alpine\nRUN printf 'a\\\\nb'"  # real lines: an escaped \n inside a command is left alone
+    assert BuildSpec(dockerfile_inline=kept).dockerfile_inline == kept

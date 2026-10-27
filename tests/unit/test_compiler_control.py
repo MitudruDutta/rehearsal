@@ -239,3 +239,127 @@ def test_a_build_uses_no_more_lanes_than_its_plan_allows(monkeypatch):
     c.options = c.options.__class__(parallel=1)  # free plan: one sandbox
     c._in_parallel(list(range(5)), lambda item, inst: None, own_sandbox=True)
     assert made == []  # one lane uses the main sandbox only
+
+
+def test_a_restarted_build_gets_new_repairs_and_keeps_the_earlier_errors(tmp_path, monkeypatch):
+    """A build that ran out of start attempts used to fail again at once when restarted, with no repair at all."""
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.pipeline import AppInput, BuildFailed, Compiler
+
+    c = Compiler(app=AppInput("test", tmp_path, {}, "", {}), checkpoint={"runtime": {"secrets": []}, "inspection": {},
+                 "materialize_attempts": [f"old error {i}" for i in range(5)]},
+                 workdir=tmp_path / "build", chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    monkeypatch.setattr(c, "manifest", lambda **kw: None)
+    monkeypatch.setattr(pipeline.WorldInstance, "create", classmethod(lambda cls, *a, **kw: (_ for _ in ()).throw(pipeline.RuntimeError_("yarn build failed"))))
+    asked = []
+    monkeypatch.setattr(c, "agent", lambda **kw: asked.append(kw["user"]) or {"secrets": []})
+    with pytest.raises(BuildFailed, match="after 10 attempts"):
+        c.phase_materialize()
+    assert len(asked) == 4  # four repairs in the new window (the fifth failure ends it)
+    assert "old error 0" in asked[0]  # the builder still sees what already failed
+
+
+@pytest.mark.parametrize("shape", ["wrapped", "unwrapped"])
+def test_a_runtime_is_accepted_in_the_shapes_models_send(tmp_path, shape):
+
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+    c = Compiler(app=AppInput("test", tmp_path, {"db": "postgres:16@sha256:" + "a" * 64}, "", {}), checkpoint={}, workdir=tmp_path / "b",
+                 chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    rt = {"services": [{"name": "app", "build": {"dockerfile_inline": "FROM alpine"}, "port": 80}, {"name": "db", "image": "postgres:16@sha256:" + "a" * 64}],
+          "state_probes": [{"service": "db", "kind": "postgres", "database": "x", "user": "u", "password": "p"}]}
+    args = {"wrapped": {"runtime": rt}, "unwrapped": rt}[shape]
+    out = c._accept_runtime(args)
+    assert [s["name"] for s in out["services"]] == ["app", "db"] and out["state_probes"][0]["kind"] == "postgres"
+
+
+def test_repairs_start_from_the_runtime_that_got_furthest(tmp_path, monkeypatch):
+    """A repair that broke an image which already built must be shown the version that worked, not only the latest."""
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.pipeline import AppInput, BuildFailed, Compiler
+
+    c = Compiler(app=AppInput("test", tmp_path, {}, "", {}), checkpoint={"runtime": {"secrets": [], "v": "a"}, "inspection": {}},
+                 workdir=tmp_path / "build", chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    monkeypatch.setattr(c, "manifest", lambda **kw: None)
+    errors = iter(["one-shot migrate exited 1: Cannot find module", "image build for app failed: install broke", *["image build for app failed"] * 5])
+    monkeypatch.setattr(pipeline.WorldInstance, "create", classmethod(lambda cls, *a, **kw: (_ for _ in ()).throw(pipeline.RuntimeError_(next(errors)))))
+    asked, versions = [], iter("bcdefg")
+    monkeypatch.setattr(c, "agent", lambda **kw: asked.append(kw["user"]) or {"secrets": [], "v": next(versions)})
+    with pytest.raises(BuildFailed):
+        c.phase_materialize()
+    assert "got furthest" not in asked[0]  # the furthest runtime is the current one: nothing to compare yet
+    assert "Attempt 1 got furthest" in asked[1] and '"v": "a"' in asked[1]  # runtime "a" built its images; "b" broke the build
+    assert c.ck["materialize_furthest"]["attempt"] == 1
+
+
+def test_json_text_is_parsed_and_broken_json_text_is_refused_with_the_reason():
+    import json
+
+    from rehearsal.compiler.agent import Rejected, _unstring
+    assert _unstring({"runtime": json.dumps({"services": []})}) == {"runtime": {"services": []}}
+    with pytest.raises(Rejected, match=r"not valid JSON: Expecting ',' delimiter at character \d+.*check its brackets"):
+        _unstring({"runtime": '{"services": [] "state_probes": []}'}, {"properties": {"runtime": {"type": "object"}}})  # a missing comma
+    assert _unstring({"note": "[draft] plain text"}, {"properties": {"note": {"type": "string"}}}) == {"note": "[draft] plain text"}
+
+
+def test_copying_a_folder_into_the_working_directory_is_caught_before_building(tmp_path):
+    from rehearsal.compiler.pipeline import copy_problems
+    (tmp_path / ".yarn" / "releases").mkdir(parents=True)
+    (tmp_path / "package.json").write_text("{}")
+    found = copy_problems("FROM node:22\nWORKDIR /app\nCOPY package.json yarn.lock .yarn/ .\nRUN yarn install", tmp_path)
+    assert len(found) == 1 and "COPY .yarn ./.yarn" in found[0]
+    fine = "FROM node:22\nCOPY . .\nCOPY .yarn ./.yarn\nCOPY package.json .\nCOPY --from=build /out .\nRUN true"
+    assert copy_problems(fine, tmp_path) == []
+
+
+def test_a_bracket_slip_in_long_json_is_balanced_once_and_still_validated():
+    import json
+
+    from rehearsal.compiler.agent import _balance, _unstring
+    slip = '{"services": [{"name": "app"}], "state_probes": [{"service": "db", "password": "{{secret.X}}"]}'  # } missing before ]
+    assert json.loads(_balance(slip)) == {"services": [{"name": "app"}], "state_probes": [{"service": "db", "password": "{{secret.X}}"}]}
+    assert _unstring({"runtime": slip}, {"properties": {"runtime": {"type": "object"}}})["runtime"]["state_probes"][0]["service"] == "db"
+    assert _balance('{"a": "brackets ] } inside a string"}') == '{"a": "brackets ] } inside a string"}'
+
+
+def test_a_flattening_copy_is_allowed_when_a_later_line_restores_the_folder(tmp_path):
+    from rehearsal.compiler.pipeline import copy_problems
+    (tmp_path / ".yarn" / "releases").mkdir(parents=True)
+    furthest = "FROM node:22\nCOPY package.json .yarnrc.yml .yarn/ .\nCOPY .yarn/releases .yarn/releases\nRUN yarn install"
+    assert copy_problems(furthest, tmp_path) == []
+    assert copy_problems("FROM node:22\nCOPY .yarn/ .\nCOPY . .\nRUN true", tmp_path) == []
+    assert len(copy_problems("FROM node:22\nCOPY .yarn/ .\nRUN yarn install", tmp_path)) == 1
+
+
+def test_a_repair_that_leaves_the_failing_service_unchanged_is_refused(tmp_path, monkeypatch):
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.pipeline import AppInput, Compiler, failing_service
+
+    assert failing_service("service celery_worker exited during startup (killed for exceeding its 1g memory limit ...)") == "celery_worker"
+    assert failing_service("one-shot migrate did not finish within 240 s") == "migrate"
+    assert failing_service("image build for app failed") is None
+
+    worker = {"name": "worker", "image": "app@sha256:" + "a" * 64, "command": ["celery", "worker"]}
+    web = {"name": "web", "image": "app@sha256:" + "a" * 64, "port": 8000}
+    db = {"name": "db", "image": "postgres@sha256:" + "b" * 64}
+    probes = [{"service": "db", "kind": "postgres", "database": "x", "user": "u", "password": "p"}]
+    c = Compiler(app=AppInput("t", tmp_path, {"app": worker["image"], "db": db["image"]}, "", {}),
+                 checkpoint={"runtime": {"services": [worker, web, db], "secrets": [], "state_probes": probes}, "inspection": {}},
+                 workdir=tmp_path / "b", chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    monkeypatch.setattr(c, "manifest", lambda **kw: None)
+    errors = iter(["service worker exited during startup (killed for exceeding its 1g memory limit)"] + ["image build for x failed"] * 9)
+    monkeypatch.setattr(pipeline.WorldInstance, "create", classmethod(lambda cls, *a, **kw: (_ for _ in ()).throw(pipeline.RuntimeError_(next(errors)))))
+    outcomes = []
+
+    def agent(**kw):
+        unchanged = {"runtime": {"services": [worker, web, db], "state_probes": probes}}
+        try:
+            kw["submit"].fn(unchanged)
+        except pipeline.Rejected as exc:
+            outcomes.append(str(exc))
+        fixed = {**worker, "command": ["celery", "worker", "--concurrency", "2"]}
+        return kw["submit"].fn({"runtime": {"services": [fixed, web, db], "state_probes": probes}})
+
+    monkeypatch.setattr(c, "agent", agent)
+    with pytest.raises(pipeline.BuildFailed):
+        c.phase_materialize()
+    assert "service worker is the one that failed, and it is unchanged" in outcomes[0]

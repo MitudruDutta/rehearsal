@@ -166,23 +166,6 @@ To drive episodes with your own agent, read `rh.external.observation(episode_id)
 </details>
 
 <details>
-<summary><b>Use it from TypeScript</b></summary>
-
-`sdk/typescript` is a dependency-free client with the same resources as the Python SDK, for Node 18+, Deno, Bun and browsers. It is not on npm yet: build it with `pnpm install && pnpm build` in that folder and add the folder as a dependency.
-
-```ts
-import { Rehearsal } from "rehearsal-kit";
-
-const rh = new Rehearsal(); // REHEARSAL_API_KEY and REHEARSAL_URL
-const job = await rh.worlds.makeAgent(worldVersionId, { name: "support-agent" });
-for await (const ev of rh.jobs.events(job.job_id)) console.log(ev.type, ev.summary);
-```
-
-See the [TypeScript SDK reference](https://docs.rehearsalkit.xyz/reference/typescript-sdk).
-
-</details>
-
-<details>
 <summary><b>Use it from your AI assistant</b></summary>
 
 Install the plugin for Claude Code (Codex works the same way with `codex plugin ...`):

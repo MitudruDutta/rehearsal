@@ -135,3 +135,14 @@ def test_a_finding_under_another_common_name_is_accepted():
     assert web.brief_problems(b, seen) == [] and web.finding(b["rules"][0], "rule") == "open hours only"
     b["pitfalls"] = [{"source": "https://forum.example/t/1"}]
     assert "pitfalls items [0] have no 'pitfall'" in " ".join(web.brief_problems(b, seen))
+
+
+def test_the_builder_can_look_up_documented_commands_only_with_a_key(monkeypatch, tmp_path):
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+    c = Compiler(app=AppInput("app", tmp_path, {}, "", {}), checkpoint={}, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    assert c._docs_tools() == []
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+    assert [t.name for t in c._docs_tools()] == ["web_search", "read_page"]
+    assert "(15)" in c._builder_system() and "official documentation" in c._builder_system()

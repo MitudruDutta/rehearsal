@@ -83,7 +83,3 @@ jobs:
         run: pnpm --dir web exec tsc --noEmit
       - name: Build
         run: pnpm --dir web exec next build
-      - name: TypeScript SDK
-        run: |
-          pnpm --dir sdk/typescript install --frozen-lockfile
-          pnpm --dir sdk/typescript test

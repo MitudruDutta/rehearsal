@@ -82,7 +82,10 @@ def build_service_image(service: ServiceSpec, source_dir: Path, world_key: str) 
             if not dockerfile.is_relative_to(context):
                 raise RuntimeError_("Dockerfile escapes the build context")
             args += ["-f", str(dockerfile)]
-        proc = _run([*args, str(context)], timeout=3600, check=False)
+        try:
+            proc = _run([*args, str(context)], timeout=3600, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError_(f"image build for {service.name} did not finish within an hour") from exc
     log = (proc.stdout + proc.stderr)[-6000:]
     if proc.returncode != 0:
         raise RuntimeError_(f"image build for {service.name} failed:\n{log}")
@@ -298,7 +301,14 @@ class WorldInstance:
                     continue
                 if log:
                     log(f"running one-shot {svc.name}")
-                proc = _run(["docker", "run", *self._service_args(svc)], timeout=svc.health.timeout_s, check=False)
+                try:
+                    proc = _run(["docker", "run", *self._service_args(svc)], timeout=svc.health.timeout_s, check=False)
+                except subprocess.TimeoutExpired as exc:  # a slow setup step is a fact for the builder, not a crash of the build
+                    so_far = self.logs(svc.name, 60)
+                    _run(["docker", "rm", "-f", f"{self.prefix}-{svc.name}"], check=False)
+                    raise RuntimeError_(f"one-shot {svc.name} did not finish within {svc.health.timeout_s} s (its health.timeout_s). "
+                                        f"Raise health.timeout_s for a slow setup step such as migrations, or make the step do less. "
+                                        f"Output so far:\n{so_far[-3000:]}") from exc
                 out = (proc.stdout + proc.stderr)[-3000:]
                 if proc.returncode != 0:
                     hint = "" if svc.volumes_from else (
@@ -334,8 +344,9 @@ class WorldInstance:
             state = _run(["docker", "inspect", "-f", "{{.State.Status}}", f"{self.prefix}-{svc.name}"], check=False).stdout.strip()
             if state in ("exited", "dead"):
                 raise RuntimeError_(f"service {svc.name} exited during startup{self._death(svc.name)}:\n{self.logs(svc.name, 80)}")
-            if h.command:
-                return self.exec(svc.name, h.command, timeout=30)[0] == 0
+            if h.command:  # templates as in env and command: a check such as pg_isready -U {{secret.DB_USER}} needs the real value
+                scopes = self._scopes()
+                return self.exec(svc.name, [render_template(c, scopes) for c in h.command], timeout=30)[0] == 0
             if h.http_path and svc.port:
                 try:
                     return self.http(svc.name, "GET", h.http_path, timeout=10).status_code < 500

@@ -226,3 +226,36 @@ def test_compose_passes_each_workers_container_identity(tmp_path):
         capture_output=True, text=True, check=True,
     )
     assert proc.stdout.splitlines() == ["worker", "scaled-worker-id", "0002"]
+
+
+def test_a_slow_one_shot_becomes_a_repairable_sandbox_error(monkeypatch):
+    """A setup step that outlives its timeout used to crash the whole build instead of reaching the builder."""
+    monkeypatch.delenv("REHEARSAL_WORKER_CONTAINER", raising=False)
+    manifest = WorldManifest(name="test", services=[ServiceSpec(name="migrate", image="test", oneshot=True, health={"timeout_s": 5})])
+    inst = runtime.WorldInstance(runtime.InstanceRecord("test", manifest.model_dump(mode="json", by_alias=True), {}, "tok",
+                                                        images={"migrate": "test"}, volumes={"migrate": []}))
+    calls = []
+
+    def run(args, **kw):
+        calls.append(args[:2])
+        if args[:2] == ["docker", "run"]:
+            raise subprocess.TimeoutExpired(args, kw.get("timeout"))
+        return subprocess.CompletedProcess(args, 0, "applied 12 of 40 migrations", "")
+
+    monkeypatch.setattr(runtime, "_run", run)
+    monkeypatch.setattr(inst, "_service_args", lambda svc: ["--name", f"{inst.prefix}-{svc.name}", "test"])
+    with pytest.raises(runtime.RuntimeError_, match=r"(?s)did not finish within 5 s.*health.timeout_s.*applied 12 of 40"):
+        inst._start_services(run_oneshots=True)
+    assert ["docker", "rm"] in calls  # the abandoned container is removed
+
+
+def test_health_check_commands_get_templates_filled_like_env_and_command(monkeypatch):
+    monkeypatch.delenv("REHEARSAL_WORKER_CONTAINER", raising=False)
+    manifest = WorldManifest(name="test", services=[ServiceSpec(name="db", image="postgres", health={"command": ["pg_isready", "-U", "{{secret.DB_USER}}"]})], secrets=["DB_USER"])
+    inst = runtime.WorldInstance(runtime.InstanceRecord("test", manifest.model_dump(mode="json", by_alias=True), {"DB_USER": "shopkeeper"}, "tok",
+                                                        images={"db": "postgres"}, volumes={"db": []}))
+    monkeypatch.setattr(runtime, "_run", lambda args, **kw: subprocess.CompletedProcess(args, 0, "running\n", ""))
+    ran = []
+    monkeypatch.setattr(inst, "exec", lambda service, command, timeout=30: ran.append(command) or (0, "", ""))
+    inst.wait_healthy(manifest.services[0])
+    assert ran == [["pg_isready", "-U", "shopkeeper"]]

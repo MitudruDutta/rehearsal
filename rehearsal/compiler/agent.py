@@ -67,16 +67,51 @@ def _trim(messages: list[dict[str, Any]]) -> None:
             messages[i]["content"] = content[:500] + "\n...[older result elided]"
 
 
-def _unstring(args: dict[str, Any]) -> dict[str, Any]:
-    """Some models send nested arrays/objects as JSON text ("tools": "[{...}]"); validators expect the value."""
+def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Some models send nested arrays/objects as JSON text ("tools": "[{...}]"); validators expect the value. For a
+    field the schema declares as an object or array, text that does not parse is refused with the parse error, so the
+    model can fix it instead of resending it; a plain text field may start with a bracket."""
+    structured = {k for k, p in ((schema or {}).get("properties") or {}).items() if isinstance(p, dict) and p.get("type") in ("object", "array")}
     out = dict(args)
     for k, v in args.items():
         if isinstance(v, str) and v.lstrip()[:1] in ("[", "{"):
             try:
                 out[k] = json.loads(v)
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as exc:
+                if k not in structured:
+                    continue
+                try:  # the common slip in long JSON: an object closed with ] (or the reverse); balance the closers once
+                    out[k] = json.loads(_balance(v))
+                    continue
+                except json.JSONDecodeError:
+                    pass
+                near = v[max(0, exc.pos - 80):exc.pos + 20]
+                raise Rejected(f"'{k}' was sent as text that is not valid JSON: {exc.msg} at character {exc.pos}, near ...{near}... "
+                               f"Send '{k}' as a JSON value, not as a string, and check its brackets.") from exc
     return out
+
+
+def _balance(text: str) -> str:
+    """Inserts the closers a model forgot before a mismatched one, outside strings, and appends any still open. The result is
+    only used when it parses, and the submit validator still checks it like any other value."""
+    out, stack, in_str, esc = [], [], False, False
+    pairs = {"{": "}", "[": "]"}
+    for ch in text:
+        if in_str:
+            esc, in_str = (ch == "\\" and not esc), (in_str if esc or ch != '"' else False)
+        elif ch == '"':
+            in_str = True
+        elif ch in pairs:
+            stack.append(pairs[ch])
+        elif ch in "]}":
+            while stack and stack[-1] != ch and ch in stack:
+                out.append(stack.pop())
+            if stack and stack[-1] == ch:
+                stack.pop()
+            else:
+                continue  # a closer with nothing open: drop it
+        out.append(ch)
+    return "".join(out) + "".join(reversed(stack))
 
 
 def run_agent(
@@ -135,7 +170,7 @@ def run_agent(
             elif tool is submit:
                 run.attempts += 1
                 try:
-                    run.result = tool.fn(_unstring(call.arguments))
+                    run.result = tool.fn(_unstring(call.arguments, tool.parameters))
                     log("compiler.submit.accepted", f"{role} output accepted (attempt {run.attempts})", {"role": role})
                     return run
                 except Rejected as exc:

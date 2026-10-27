@@ -96,6 +96,48 @@ def plan_problems(briefs: Any, target: int, tools: dict[str, bool] | None = None
     return problems + stress.coverage(briefs, target, tools)
 
 
+def failing_service(error: str) -> str | None:
+    """The service a sandbox start error names first: 'service X exited ...' or 'one-shot X exited / did not finish'."""
+    m = re.match(r"\s*(?:service|one-shot) ([a-z][a-z0-9_]*)\b", error)
+    return m.group(1) if m else None
+
+
+def _same_service(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Whether two service specs run the same thing, compared after validation so defaults count as written."""
+    def norm(x: dict[str, Any]) -> str:
+        try:
+            x = ServiceSpec.model_validate(x).model_dump(mode="json", by_alias=True)
+        except ValidationError:
+            pass
+        keys = ("image", "build", "command", "entrypoint", "env", "user", "health", "depends_on", "volumes_from", "oneshot")
+        return json.dumps({k: x.get(k) for k in keys}, sort_keys=True, default=str)
+    return norm(a) == norm(b)
+
+
+def copy_problems(dockerfile: str, context: Path) -> list[str]:
+    """Docker copies a directory's contents, not the directory: COPY .yarn . puts .yarn/releases at ./releases. A model
+    repairing a build tends to make this mistake over and over, so it is caught before anything is built."""
+    copies = []
+    for line in dockerfile.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0].upper() in ("COPY", "ADD") and not any(p.startswith("--from") for p in parts):
+            args = [p.rstrip("/") or "." for p in parts[1:] if not p.startswith("--")]
+            if len(args) >= 2:
+                copies.append((line.strip(), args[:-1], args[-1]))
+    out = []
+    for i, (line, sources, dest) in enumerate(copies):
+        if dest not in (".", "./"):
+            continue
+        for name in sources:
+            # harmless when a later line copies the folder to its own path, or the whole source
+            restored = any("." in later_src and later_dest in (".", "./") or any(x == name or x.startswith(name + "/") for x in later_src) and later_dest.removeprefix("./").startswith(name.removeprefix("./"))
+                           for _, later_src, later_dest in copies[i + 1:])
+            if name != "." and (context / name).is_dir() and not restored:
+                out.append(f"'{line}' copies the contents of the folder {name}, not the folder itself, so files under {name}/ "
+                           f"land in the working directory; write COPY {name} ./{name}, or COPY . . to copy the whole source")
+    return out
+
+
 EPISODE_VARS = ("episode_started_s", "episode_started_ms", "episode_started_at")  # set by the engine for every episode
 
 
@@ -504,6 +546,8 @@ class Compiler:
 
     def _accept_runtime(self, a: dict[str, Any]) -> dict[str, Any]:
         rt = a.get("runtime")
+        if rt is None and "services" in a:  # the runtime sent without its wrapper (JSON text is parsed by the agent loop)
+            rt = a
         if not isinstance(rt, dict):
             raise Rejected("runtime must be an object with services, dependencies, secrets, state_probes")
         rt = {k: rt.get(k, []) for k in ("services", "dependencies", "secrets", "state_probes")}
@@ -513,6 +557,7 @@ class Compiler:
             raise Rejected(str(exc)[:3000]) from exc
         problems = []
         supplied = set(self.app.images.values())
+        problems += sorted({x for s in m.services if s.build and s.build.dockerfile_inline for x in copy_problems(s.build.dockerfile_inline, self.app.source_dir / s.build.context)})
         for s in m.services:
             if s.image and s.image.startswith("rh-img-"):
                 problems.append(f"service {s.name}: rh-img-* images are built by this server; use build or a registry image")
@@ -525,6 +570,11 @@ class Compiler:
         if problems:
             raise Rejected("; ".join(problems))
         return m.model_dump(mode="json", by_alias=True, include={"services", "dependencies", "secrets", "state_probes"}, exclude_none=False)
+
+    def _docs_tools(self) -> list[Tool]:
+        """Web search for the builder (Tavily), so it can check the application's documented setup, migration and start
+        commands instead of relying on memory of another version. Only with a Tavily key."""
+        return web.tools(set(), self.add_cost) if web.enabled() else []
 
     def _builder_system(self) -> str:
         return (
@@ -548,13 +598,20 @@ class Compiler:
             "sets volumes_from to that service and leaves data_paths empty; for client/server databases, connecting over the network is enough. "
             "(12) Run processes as the user the image expects; many images refuse to run their main binary as root. "
             "(13) Building from source: when the repository has no Dockerfile, write one in build.dockerfile_inline; never name a "
-            "dockerfile that the repository does not contain. Read the project manifest first and use the runtime version it declares "
-            "(engines.node in package.json, requires-python or python_requires, the go directive in go.mod). Use the package manager its "
-            "lockfile and config imply: yarn.lock with .yarnrc.yml or a packageManager field means Yarn 2 or later through corepack "
-            "(corepack enable); pnpm-lock.yaml means pnpm; package-lock.json means npm ci; poetry.lock, uv.lock or requirements.txt for "
-            "Python. Copy the package manager's config files (.yarnrc.yml, .yarn/, .npmrc, .python-version) together with the manifest "
-            "and lockfile before installing, install, then copy the rest and build. Dependencies download while the image builds; once the "
-            "world runs it has no internet. (14) Service names use only lowercase letters, digits and underscores, starting with a letter."
+            "dockerfile that the repository does not contain. Copy the whole source (COPY . .) before installing dependencies, so the "
+            "package manager finds its own config and bundled files (.yarnrc.yml with .yarn/, .npmrc, .python-version). Choose a runtime "
+            "version that satisfies what the project declares (engines.node in package.json, requires-python, the go directive in go.mod); "
+            "when it declares only a minimum, use the newest long-term-support release (Node 22, Python 3.12), because dependencies often "
+            "need newer than the minimum. Use the package manager its lockfile and config imply: yarn.lock with .yarnrc.yml or a "
+            "packageManager field means Yarn 2 or later through corepack (corepack enable; yarn install --immutable, since "
+            "--frozen-lockfile is Yarn 1 only); pnpm-lock.yaml means pnpm; package-lock.json means npm ci; poetry.lock, uv.lock or "
+            "requirements.txt for Python. Run a command that a dependency provides through the package manager (yarn <bin>, npx <bin>, "
+            "pnpm exec <bin>, poetry run <bin>), never as a bare name: a runtime image's entrypoint treats a bare name as a script file. "
+            "Dependencies download while the image builds; once the "
+            "world runs it has no internet. (14) Service names use only lowercase letters, digits and underscores, starting with a letter. "
+            "(15) When web_search is available and you are unsure of the application's commands for setup, migrations, seeding or "
+            "starting, look them up in its official documentation for the version in the repository instead of guessing; commands "
+            "change between major versions."
         )
 
     def phase_plan(self) -> None:
@@ -565,12 +622,16 @@ class Compiler:
             "Call submit_runtime with {\"runtime\": {services, dependencies, secrets, state_probes}}."
         )
         submit = Tool("submit_runtime", "Submit the runtime section.", params({"runtime": {"type": "object"}}), self._accept_runtime)
-        self.ck["runtime"] = self.agent(role="builder", system=self._builder_system(), user=user, tools=[*repo_tools(self.repo), *image_tools()], submit=submit, max_steps=35)
+        self.ck["runtime"] = self.agent(role="builder", system=self._builder_system(), user=user, tools=[*repo_tools(self.repo), *image_tools(), *self._docs_tools()], submit=submit, max_steps=35)
 
     # ------------------------------------------------------------------ 3. materialize
 
     def phase_materialize(self) -> None:
         attempts = self.ck.setdefault("materialize_attempts", [])
+        # Each run of this phase (a restarted build included) gets its own repairs; the builder still sees every earlier error.
+        window = len(attempts)
+        # The last runtime whose images built (a later step failed): repairs start from it instead of losing what worked.
+        furthest = self.ck.get("materialize_furthest")
         while True:
             secrets = self.ck.get("secrets", {})
             for name in self.ck["runtime"]["secrets"]:
@@ -585,21 +646,38 @@ class Compiler:
             except RuntimeError_ as exc:
                 error = str(exc)
                 attempts.append(_brief(error, 3000))
+                if "image build for" not in error:  # every image built; only starting the services failed
+                    furthest = self.ck["materialize_furthest"] = {"attempt": len(attempts), "runtime": self.ck["runtime"]}
                 self.save()
                 self.log("compiler.repair", f"sandbox start failed (attempt {len(attempts)}); asking the builder to repair", {"error": error[-1500:]})
-                if len(attempts) >= 5:
+                if len(attempts) - window >= 5:
                     raise BuildFailed(f"application could not be started after {len(attempts)} attempts:\n{_brief(error, 3000)}") from exc
                 history = "\n\n".join(f"Attempt {i + 1} error:\n{_brief(e, 1200)}" for i, e in enumerate(attempts[:-1]))
                 user = (
                     f"Your runtime failed to start. Error and service logs:\n{error[-9000:]}\n\nCurrent runtime:\n{dumps(self.ck['runtime'])}\n\n"
                     f"Earlier failed attempts (do not repeat these mistakes):\n{history or '(none)'}\n\n"
+                    + (f"Attempt {furthest['attempt']} got furthest: all its images built and only a later step failed. Its runtime:\n"
+                       f"{dumps(furthest['runtime'])}\nStart from whichever of these two runtimes got further, keep what already works, "
+                       "and change only what the latest error is about.\n\n" if furthest and furthest["runtime"] != self.ck["runtime"] else
+                       "Keep what already works and change only what the latest error is about.\n\n") +
                     f"Owner-supplied images (use these exact references; this list may have changed since planning):\n{dumps(self.app.images)}\n\n"
                     "You already inspected the source; read only what this error requires, then submit.\n\n"
                     f"Inspection report:\n{dumps(self.ck['inspection'])}\n\nSchema:\n{self._runtime_schema()}\n\n"
                     "Diagnose the cause from the logs and source, then call submit_runtime with a corrected {\"runtime\": ...}."
                 )
-                submit = Tool("submit_runtime", "Submit the corrected runtime section.", params({"runtime": {"type": "object"}}), self._accept_runtime)
-                self.ck["runtime"] = self.agent(role="builder_repair", system=self._builder_system(), user=user, tools=[*repo_tools(self.repo), *image_tools()], submit=submit, max_steps=30)
+                failing = failing_service(error)
+                before = next((x for x in self.ck["runtime"].get("services", []) if x.get("name") == failing), None)
+
+                def accept_repair(args: dict[str, Any], failing: str | None = failing, before: Any = before) -> dict[str, Any]:
+                    rt = self._accept_runtime(args)
+                    after = next((x for x in rt.get("services", []) if x.get("name") == failing), None)
+                    if before is not None and after is not None and _same_service(before, after):
+                        raise Rejected(f"service {failing} is the one that failed, and it is unchanged; change it to fix the error "
+                                       f"(the first line of the error says why it failed)")
+                    return rt
+
+                submit = Tool("submit_runtime", "Submit the corrected runtime section.", params({"runtime": {"type": "object"}}), accept_repair)
+                self.ck["runtime"] = self.agent(role="builder_repair", system=self._builder_system(), user=user, tools=[*repo_tools(self.repo), *image_tools(), *self._docs_tools()], submit=submit, max_steps=30)
         self._inst = inst
         self.ck["instance"] = inst.record.to_json()
         clean = self.workdir / "snapshots" / "clean"

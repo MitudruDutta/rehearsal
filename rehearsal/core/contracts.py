@@ -46,6 +46,12 @@ class BuildSpec(Strict):
     dockerfile: str | None = None  # relative to context
     dockerfile_inline: str | None = None  # generated overlay when the repo has none
 
+    @field_validator("dockerfile_inline")
+    @classmethod
+    def _real_lines(cls, v: str | None) -> str | None:
+        # a model that escaped its JSON twice sends one line with literal \n; Docker would read it as one instruction
+        return v.replace("\\n", "\n") if v and "\n" not in v and "\\n" in v else v
+
     @field_validator("context", "dockerfile")
     @classmethod
     def _relative(cls, v: str | None) -> str | None:
