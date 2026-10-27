@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from .. import telemetry
+from ..redaction import redact_any
 from ..agents.episode import EpisodeState, Engine, ExternalPolicy, LLMPolicy
 from ..config import settings
 from ..core.contracts import AgentProfile, OracleResult, ScenarioSpec, WorldManifest
@@ -95,9 +95,9 @@ class DBRecorder:
                 queue.record_spend(s, job, delta, tokens)
             for kind, r in self.pending:
                 if kind == "action":
-                    s.add(Action(episode_id=self.episode_id, finished_at=now(), **telemetry._redact_any(r)))
+                    s.add(Action(episode_id=self.episode_id, finished_at=now(), **redact_any(r)))
                 elif kind == "message":
-                    s.add(Message(episode_id=self.episode_id, **telemetry._redact_any(r)))
+                    s.add(Message(episode_id=self.episode_id, **redact_any(r)))
                 else:
                     emit(s, project_id=self.project_id, stream=self.run_id, episode_id=self.episode_id,
                          type=r["type"], summary=r["summary"], actor_id=r["actor"], goal_version=r["goal_version"], data=r["data"])
@@ -221,8 +221,7 @@ def run_episode(ctx: JobContext, inst: WorldInstance, manifest: WorldManifest, w
         max_turns_per_actor=profile.max_turns_per_actor,
         default_stress=bool(ctx.payload.get("default_stress", True)),
     )
-    with telemetry.span(f"episode.{scenario.id}", "CHAIN", session_id=episode_id, run=run_id, profile=f"{profile.name}@v{profile.version}"):
-        result = engine.run()
+    result = engine.run()
     recorder.save(engine.state)
     fp_after = _fingerprint(inst)
     with session() as s:

@@ -41,7 +41,7 @@ The scope was set in a flipped-interaction session: the coding agent asked, the 
 | D3 | How do we know the compiler generalises? | One application (Easy!Appointments) is **held out** and never inspected during development. |
 | D4 | Who decides pass or fail? | **Read-only checks on the application's database** and a journal of outside effects. No language model grades outcomes. |
 | D5 | Is model training in scope? | **No, paused.** Compile, evaluate, improve the prompt and compare first; training is future work. |
-| D6 | Which tools must the build show? | **tracing** for tracing, **Recorder** for development provenance, **planning tool** for the business plan. |
+| D6 | Which models run it? | **NVIDIA Nemotron** open models, served by **Nebius Token Factory**. |
 | D7 | What does it run on? | A hosted service on free cloud credits, plus a package anyone can install and self-host. |
 
 ## 5. In scope
@@ -78,7 +78,7 @@ The scope was set in a flipped-interaction session: the coding agent asked, the 
 | S3 | An improved agent version can be compared with the original on held-out jobs. |
 | S4 | A new user can go from sign-up to a first result using the docs alone. |
 | S5 | The hosted service is live, takes payments, and keeps every job under a spending cap. |
-| S6 | tracing traces, Recorder checkpoints and a planning tool business plan back the submission. |
+| S6 | Every agent in Rehearsal runs on NVIDIA Nemotron through Nebius Token Factory. |
 
 ## 9. Risks
 

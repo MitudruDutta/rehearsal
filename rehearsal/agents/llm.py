@@ -20,7 +20,7 @@ from typing import Any, Callable
 import httpx
 import openai
 
-from .. import pricing, telemetry
+from .. import pricing
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ def _client(provider: str) -> Any:
         # A short connect timeout makes a dead route (for example a broken IPv6 or NAT64 path) fail fast, so the next
         # address of the host (IPv4) is tried, instead of the call hanging for minutes before the fallback chain moves on.
         timeout = httpx.Timeout(180.0, connect=10.0)
-        _clients[provider] = telemetry.wrap(openai.OpenAI(base_url=base, api_key=key, timeout=timeout, max_retries=0))
+        _clients[provider] = openai.OpenAI(base_url=base, api_key=key, timeout=timeout, max_retries=0)
     return _clients[provider]
 
 

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from .. import telemetry
 from ..compiler.pipeline import AppInput, BuildOptions, Compiler
 from ..config import settings
 from ..db import queue
@@ -46,8 +45,7 @@ def handle(ctx: JobContext) -> dict:
         destroy=destroy_owned,
     )
     try:
-        with telemetry.span("world_build", "CHAIN", session_id=ctx.job_id, application=app_row["name"], job=ctx.job_id):
-            pkg = compiler.run()
+        pkg = compiler.run()
     except BaseException as exc:
         if not isinstance(exc, (queue.LeaseLost, queue.JobPaused)) and p.get("keep_sandbox_on_failure") is not True:
             compiler.cleanup()

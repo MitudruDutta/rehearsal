@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 import httpx
 
-from .. import telemetry
+from ..redaction import redact_any
 from ..core.contracts import ToolSpec, WorldManifest, render_template
 from .runtime import WorldInstance
 
@@ -176,8 +176,7 @@ class Gateway:
             return GatewayResult("REJECTED", {"error": str(exc)}, rejected_reason=str(exc), mutating=tool.mutating)
         request["operation_id"] = operation_id
         request["role"] = role
-        with telemetry.span(f"tool.{tool_name}", "TOOL", tool=tool_name, role=role, operation_id=operation_id):
-            return self._dispatch(tool, request, allow_faults=allow_faults)
+        return self._dispatch(tool, request, allow_faults=allow_faults)
 
     def replay(self, request: dict[str, Any]) -> GatewayResult:
         """Re-sends a stored request with its original Idempotency-Key."""
@@ -239,5 +238,5 @@ class Gateway:
                 mutating=tool.mutating,
             )
         ok = 200 <= resp.status_code < 300 and not (tool.graphql is not None and graphql_failed(body, mutating=tool.mutating))
-        visible = {"status": resp.status_code, "body": _truncate(telemetry._redact_any(body))}
+        visible = {"status": resp.status_code, "body": _truncate(redact_any(body))}
         return GatewayResult("SUCCEEDED" if ok else "FAILED", visible, request=request, response=response, mutating=tool.mutating)

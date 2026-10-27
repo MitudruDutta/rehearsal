@@ -43,7 +43,7 @@ One database holds control flow (jobs) and domain state, so there is one source 
 | `rehearsal/db/` | SQLAlchemy models, Alembic migrations, job queue, event log |
 | `rehearsal/api/` | REST API, live event streams, auth, request limits, static console |
 | `rehearsal/billing.py`, `rehearsal/pricing.py` | Plans and Dodo Payments; model price catalog and spend caps |
-| `rehearsal/telemetry/` | tracing spans and secret masking |
+| `rehearsal/redaction.py` | Secret masking for everything stored or shown |
 | `rehearsal/sdk/` | Python client, CLI (28 commands), MCP server (18 tools) |
 | `web/` | Console (Next.js static export, served by the API) |
 | `docs/` | Documentation site (Fumadocs) and these planning documents |
@@ -138,10 +138,9 @@ No model judgement is involved. A published world can be re-checked later (`rehe
 
 Plans (Free, Pro, Team, Enterprise) set applications, builds and episodes per month, sandboxes at once and a model-spend safety net. Checkout and the customer portal use Dodo Payments; webhooks are signature-verified, time-limited and applied once, and subscription state is re-read from Dodo rather than trusted from the event. Self-hosted servers run with plans off.
 
-## 12. Observability and provenance
+## 12. Observability
 
-- **tracing:** spans only when `TRACING_API_KEY` is set; every exported span passes through secret masking. Workflow roots for compilation, evaluation and improvement; detections for failed executions, slow and expensive model calls.
-- **Recorder:** coding sessions recorded as checkpoints in git refs, synced to a separate checkpoint repository; commits carry `Session-Checkpoint` trailers ([CHECKPOINTS.md](../CHECKPOINTS.md)). session-graph is installed for change-impact analysis.
+- **Timelines:** every build, episode and improvement run writes its steps to the event log in the same transaction as the change it describes; the console shows them live. Every summary and recorded action passes through secret masking first.
 
 ## 13. Deployment
 

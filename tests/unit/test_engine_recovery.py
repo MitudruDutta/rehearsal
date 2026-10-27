@@ -50,8 +50,6 @@ def call(name="mutate", id="call-1", **args):
 
 @pytest.fixture
 def make_engine(monkeypatch):
-    monkeypatch.setattr(ep.telemetry, "_enabled", False)
-
     def forbidden(*args, **kwargs):
         raise AssertionError("unexpected model call")
 

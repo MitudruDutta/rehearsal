@@ -1503,8 +1503,7 @@ CONFIG: list[tuple[str, str, str, str]] = [
     ("Spend and plans", "DODO_PAYMENTS_WEBHOOK_KEY", "", "The secret that signs the payment provider's notifications."),
     ("Spend and plans", "DODO_PAYMENTS_ENVIRONMENT", "`test_mode`", "`test_mode` or `live_mode`."),
     ("Spend and plans", "DODO_PRODUCT_*", "", "The payment provider's product id for each thing that can be bought: `PRO_MONTHLY`, `PRO_YEARLY`, `TEAM_MONTHLY`, `TEAM_YEARLY`, `EPISODES_1000`, `BUILD_1`."),
-    ("Tracing and training", "TRACING_API_KEY", "", "With it, the server sends traces of model calls to tracing. Without it, tracing is off."),
-    ("Tracing and training", "KAGGLE_API_TOKEN", "", "For training, which is not built yet."),
+    ("Training", "KAGGLE_API_TOKEN", "", "For training, which is not built yet."),
 ]
 
 # Variables that the sandbox's own helper containers read. Rehearsal sets them itself; they are not settings.

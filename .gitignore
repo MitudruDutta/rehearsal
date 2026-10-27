@@ -15,7 +15,6 @@ rehearsal/api/static/
 web/.next/
 web/out/
 web/*.tsbuildinfo
-.session/settings.local.json
 .claude/settings.local.json
 .codex/
 infra/deploy.env

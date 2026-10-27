@@ -37,7 +37,7 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 - **Readiness verdict.** Ready to pilot, or not yet, with every measure linked to the episodes behind it.
 - **Improve, then compare.** The improvement agent proposes the next agent version from failed training jobs. Compare both versions on held-out jobs neither has seen.
 - **Bring your own agent.** Describe an agent with instructions and a model, or drive episodes from your own code in any language through the episode API.
-- **Every step traced.** Builds, rehearsals and improvements are traced with [Tracing](https://example.invalid), down to each model call, tool call and check.
+- **Every step on the record.** Each build, rehearsal and improvement keeps its full timeline in Rehearsal: model calls, tool calls, checks, and what each one cost.
 - **Any model provider.** OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, Nebius, NVIDIA, OpenRouter, a LiteLLM proxy, or any OpenAI-compatible endpoint, with fallback chains and spend caps.
 
 ## How it works
@@ -178,7 +178,6 @@ Settings come from the environment, or from `.env` in the working directory. The
 | `REHEARSAL_SESSION_SECRET` | development value | Signs console session cookies; set your own |
 | `REHEARSAL_MODEL_COMPILER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | Groq, OpenAI, Anthropic, Google, then OpenRouter | Model chains, `provider:model[,provider:model...]` |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ... | none | One key for each provider the chains name |
-| `TRACING_API_KEY` | none | Turns on tracing; everything runs without it |
 | `REHEARSAL_SIGNUP` | `open` | `closed` stops new workspaces from the sign-in page |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |
 | `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `https://rehearsalkit.xyz`, none | Where the CLI and SDK connect |
@@ -211,17 +210,14 @@ Rehearsal was planned before it was built, in three documents that build on each
 | [Product requirements](docs/prd.md) | Users, journeys, numbered functional and non-functional requirements, acceptance criteria, and release status |
 | [Technical specification](docs/spec.md) | Architecture, data model, the World Compiler, job validation, sandboxing, scoring, the job queue, interfaces, spending, deployment, and testing |
 
-[CHECKPOINTS.md](CHECKPOINTS.md) records how the build followed them: each key decision with the Recorder checkpoint of the session that made it.
-
 ## Status
 
 Rehearsal is in early release (0.1.x). World builds, evaluations, improvement and comparison work end to end. `rehearsal train` and `rehearsal run-bundle` exist but report that they are not implemented yet. A world build takes one to three hours and spends model budget; every job has a spend cap.
 
 ## Built with
 
-- [Tracing](https://example.invalid) traces every build and rehearsal (workflow roots for compilation, evaluation and improvement; secrets are masked before export).
-- [Recorder](https://example.invalid) keeps the AI coding sessions behind the commits in this repository, configured in `.session/settings.json`. [CHECKPOINTS.md](CHECKPOINTS.md) lists the key decisions with their checkpoints, and [session-plugin](https://github.com/MitudruDutta/session-plugin) is an open-source Recorder CLI plugin that ties an agent's instruction changes to their Rehearsal results.
-- [planning tool](https://example.invalid) modeled the business plan.
+- [NVIDIA Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) open models run every agent in Rehearsal.
+- [Nebius Token Factory](https://nebius.com/token-factory) serves them.
 
 ## Contributing
 

@@ -1,14 +1,14 @@
 /* "Powered by": the services Rehearsal runs on, as a strip of logos that slides slowly and pauses under the pointer.
    Logos are the companies' own files (public/landing/partners/), grey until hovered; each opens the company's site.
-   dodo-payments.svg is Dodo's logo with its lettering recoloured white, for this dark band.
+   dodo-payments.svg is Dodo's logo with its lettering recoloured white, for this dark band. NVIDIA (Simple Icons, in NVIDIA
+   green) and Nebius ship square marks, so those two show their name beside the mark.
    The list is drawn twice so the strip can loop without a gap; the second copy is hidden from screen readers. */
 
-const PARTNERS = [
-  { name: "Dodo Payments", href: "https://dodopayments.com/", src: "/landing/partners/dodo-payments.svg", height: 30 },
+const PARTNERS: { name: string; href: string; src: string; height: number; label?: string }[] = [
+  { name: "NVIDIA Nemotron", href: "https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/", src: "/landing/partners/nvidia.svg", height: 34, label: "NVIDIA Nemotron" },
+  { name: "Nebius Token Factory", href: "https://nebius.com/token-factory", src: "/landing/partners/nebius.svg", height: 34, label: "Nebius Token Factory" },
   { name: "AWS", href: "https://aws.amazon.com/", src: "/landing/partners/aws.svg", height: 40 },
-  { name: "Tracing", href: "https://example.invalid", src: "/landing/partners/tracing.webp", height: 32 },
-  { name: "planning tool", href: "https://example.invalid", src: "/landing/partners/planning.svg", height: 36 },
-  { name: "Recorder", href: "https://example.invalid", src: "/landing/partners/recorder.svg", height: 32 },
+  { name: "Dodo Payments", href: "https://dodopayments.com/", src: "/landing/partners/dodo-payments.svg", height: 30 },
 ];
 
 function Logos({ copy }: { copy?: boolean }) {
@@ -24,10 +24,11 @@ function Logos({ copy }: { copy?: boolean }) {
               rel="noopener noreferrer"
               tabIndex={copy || pass > 0 ? -1 : undefined}
               aria-label={copy || pass > 0 ? undefined : p.name}
-              className="block opacity-60 grayscale transition duration-300 hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
+              className="flex items-center gap-3 opacity-60 grayscale transition duration-300 hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- a static export, and SVGs need no resizing */}
               <img src={p.src} alt="" style={{ height: p.height }} className="w-auto max-w-none select-none" draggable={false} />
+              {p.label && <span className="whitespace-nowrap font-heading text-xl font-semibold tracking-tight text-white">{p.label}</span>}
             </a>
           </li>
         )),

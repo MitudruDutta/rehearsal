@@ -295,7 +295,7 @@ export function ImproveScene() {
   );
 }
 
-/* -------------------------------------------------------------------------------------------- Every step traced */
+/* --------------------------------------------------------------------------------------- Every step on the record */
 
 // name, depth in the tree, where its bar starts and how wide it is (percent of the episode), colour
 const SPANS: [string, number, number, number, string][] = [

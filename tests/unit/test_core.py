@@ -22,7 +22,7 @@ from rehearsal.core.contracts import (
 from rehearsal.evaluator.probes import ProbeError, params_used, single_statement
 from rehearsal.evaluator.oracle import duplicate_effects
 from rehearsal.runner.gateway import Gateway
-from rehearsal.telemetry import _redact_any, redact
+from rehearsal.redaction import redact, redact_any
 
 
 def _world(**extra):
@@ -119,14 +119,12 @@ def test_duplicate_effects_counts_identical_requests():
 def test_redaction():
     assert "hunter2" not in redact('{"password": "hunter2"}')
     assert "abcdefghijklmnop" not in redact("Authorization: Bearer abcdefghijklmnop")
-    masked = _redact_any({"basic_auth": ["admin", "s3cret-value"], "headers": {"Authorization": "token x"}, "note": "ok"})
+    masked = redact_any({"basic_auth": ["admin", "s3cret-value"], "headers": {"Authorization": "token x"}, "note": "ok"})
     assert masked == {"basic_auth": "[REDACTED]", "headers": {"Authorization": "[REDACTED]"}, "note": "ok"}
 
 
 def test_redact_drops_nul_bytes_postgres_cannot_store():
-    from rehearsal import telemetry
-
-    assert telemetry._redact_any({"out": "a\x00b"}) == {"out": "ab"}
+    assert redact_any({"out": "a\x00b"}) == {"out": "ab"}
 
 
 def test_graphql_errors_hidden_in_http_200_replies_count_as_failures():
@@ -156,53 +154,6 @@ def test_snapshot_paths_survive_moving_the_data_folder(tmp_path):
     assert moved.data_path("/elsewhere/snap") == Path("/elsewhere/snap") and here.stored_path("/elsewhere/snap") == "/elsewhere/snap"
 
 
-def test_llm_spans_sent_to_tracing_carry_their_cost(monkeypatch):
-    from types import SimpleNamespace
-
-    from rehearsal import pricing, telemetry
-
-    monkeypatch.setattr(telemetry, "settings", lambda: SimpleNamespace(model_compiler="nebius:deepseek-ai/DeepSeek-V4.1-Flash", model_agent="", model_participant="", model_improver=""))
-    monkeypatch.setattr(pricing, "cached_quote", lambda provider, model: SimpleNamespace(cost=lambda p, c: (p * 0.30 + c * 1.20) / 1e6) if provider == "nebius" else None)
-    span = {"attributes": {"tracing.span.kind": "llm", "tracing.llm.model_name": "deepseek-ai/DeepSeek-V4.1-Flash",
-                           "tracing.llm.token_count.prompt": 1000, "tracing.llm.token_count.completion": 500}}
-    assert abs(telemetry.mask(span)["attributes"]["tracing.llm.cost_usd"] - 0.0009) < 1e-9
-    other = {"attributes": {"tracing.span.kind": "llm", "tracing.llm.model_name": "unknown-model"}}
-    assert "tracing.llm.cost_usd" not in telemetry.mask(other)["attributes"]
-
-
-def test_masking_a_span_never_waits_on_the_network(monkeypatch):
-    """tracing drops a span whose mask misses its 5-second batch deadline: with no prices in memory the mask must
-    return at once (without a cost) and load the price list in the background, never inline."""
-    import threading
-    import time
-    from types import SimpleNamespace
-
-    from rehearsal import pricing, telemetry
-
-    monkeypatch.setattr(telemetry, "settings", lambda: SimpleNamespace(model_compiler="nebius:deepseek-ai/DeepSeek-V4.1-Flash", model_agent="", model_participant="", model_improver=""))
-    monkeypatch.setattr(pricing, "_cache", {})
-    monkeypatch.setattr(pricing, "_refreshing", set())
-    loaded, loader_thread = threading.Event(), {}
-
-    def slow_price_list():
-        loader_thread["name"] = threading.current_thread().name
-        time.sleep(0.5)  # a price list over a slow network
-        loaded.set()
-        return {"deepseek-ai/DeepSeek-V4.1-Flash": pricing.Quote("nebius", "deepseek-ai/DeepSeek-V4.1-Flash", 0.30, 1.20, "test")}
-
-    monkeypatch.setitem(pricing.LISTS, "nebius", slow_price_list)
-    monkeypatch.setattr(pricing, "_overrides", lambda: {})
-    span = {"attributes": {"tracing.span.kind": "llm", "tracing.llm.model_name": "deepseek-ai/DeepSeek-V4.1-Flash",
-                           "tracing.llm.token_count.prompt": 1000, "tracing.llm.token_count.completion": 500}}
-    started = time.perf_counter()
-    first = telemetry.mask(span)
-    assert time.perf_counter() - started < 0.2 and "tracing.llm.cost_usd" not in first["attributes"]  # did not wait
-    assert loaded.wait(5) and loader_thread["name"] == "price-refresh"  # loaded in the background
-    time.sleep(0.05)
-    again = {"attributes": dict(span["attributes"])}
-    assert abs(telemetry.mask(again)["attributes"]["tracing.llm.cost_usd"] - 0.0009) < 1e-9  # the next span is priced
-
-
 def test_tool_schemas_in_events_keep_fields_named_password():
     from rehearsal.db.events import _mask
 
@@ -219,7 +170,6 @@ def test_external_agents_see_the_same_tool_results_as_hosted_agents():
     assert _mask(result, "external.action.result") == result  # same as the hosted agent's view
     assert _mask(result, "compiler.tool")["result"]["body"]["token"] == "[REDACTED]"  # console events stay masked
     assert "sk-" not in str(_mask({"result": "key sk-proj-abcdefghijklmnopqrstuvwxyz123456"}, "external.action.result"))
-
 
 
 def test_rate_limited_write_is_refused_and_not_carried_out():

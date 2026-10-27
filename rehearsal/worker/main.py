@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import logging
 import os
@@ -15,7 +14,6 @@ from typing import Any, Callable
 from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.orm import Session
 
-from .. import telemetry
 from ..db import queue
 from ..db.models import Job, Run, TrainingJob, WorldVersion, now
 from ..db.session import session
@@ -67,14 +65,7 @@ def _run_one(worker_id: str, kinds: list[str] | None = None) -> bool:
     log.info("claimed %s (%s) attempt %s", job.id, job.kind, job.attempts)
     try:
         with JobContext(job, worker_id) as ctx:
-            workflow = {
-                "world_build": "compile-practice-world",
-                "evaluation": "rehearse-agent",
-                "improvement": "revise-agent-instructions",
-            }.get(job.kind)
-            with (telemetry.span(workflow, "WORKFLOW", session_id=job.id, job=job.id)
-                  if workflow else contextlib.nullcontext()):
-                result = _handler(job.kind)(ctx)
+            result = _handler(job.kind)(ctx)
         with session() as s:
             row = queue.owned(s, job.id, worker_id, job.attempts)
             queue.finish(s, row, status="succeeded", result=result)  # type: ignore[arg-type]
@@ -161,29 +152,25 @@ def run_worker(kinds: list[str] | None = None, once: bool = False) -> None:
     from ..db.session import engine
 
     log.info("worker %s started (kinds=%s, database %s)", worker_id, kinds or "all", engine().url.host or "local")
-    telemetry.enabled()
     swept, backoff = 0.0, 0.0
-    try:
-        while not stopping["flag"]:
-            try:
-                busy = run_one(worker_id, kinds)
-                backoff = 0.0
-            except (OperationalError, InterfaceError) as exc:
-                # The database is unreachable for a moment (network blip, failover, restart). Never let that end the
-                # worker: wait and try again. A job that was running resumes from its checkpoint when its lease expires.
-                backoff = min(30.0, backoff * 2 or 1.0)
-                log.warning("database unreachable (%s); retrying in %.0f s", str(exc).splitlines()[0][:200], backoff)
-                time.sleep(backoff)
-                continue
-            if once and not busy:
-                return
-            if not busy:
-                if time.time() - swept > 60:  # idle workers clean up after ended jobs
-                    swept = time.time()
-                    try:
-                        sweep()
-                    except Exception as exc:  # noqa: BLE001 - cleanup must never stop the worker
-                        log.warning("sandbox cleanup failed: %s", exc)
-                time.sleep(1.0)
-    finally:
-        telemetry.shutdown()
+    while not stopping["flag"]:
+        try:
+            busy = run_one(worker_id, kinds)
+            backoff = 0.0
+        except (OperationalError, InterfaceError) as exc:
+            # The database is unreachable for a moment (network blip, failover, restart). Never let that end the
+            # worker: wait and try again. A job that was running resumes from its checkpoint when its lease expires.
+            backoff = min(30.0, backoff * 2 or 1.0)
+            log.warning("database unreachable (%s); retrying in %.0f s", str(exc).splitlines()[0][:200], backoff)
+            time.sleep(backoff)
+            continue
+        if once and not busy:
+            return
+        if not busy:
+            if time.time() - swept > 60:  # idle workers clean up after ended jobs
+                swept = time.time()
+                try:
+                    sweep()
+                except Exception as exc:  # noqa: BLE001 - cleanup must never stop the worker
+                    log.warning("sandbox cleanup failed: %s", exc)
+            time.sleep(1.0)

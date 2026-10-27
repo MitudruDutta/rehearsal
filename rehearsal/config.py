@@ -31,7 +31,6 @@ class Settings:
     model_agent: str
     model_participant: str
     model_improver: str
-    tracing_api_key: str | None
     kaggle_api_token: str | None
     google_client_id: str | None = None  # enables "Sign in with Google" in the console
     signup: str = "open"  # anyone can create an organisation and get an admin key from the console; "closed" turns that off
@@ -103,7 +102,6 @@ def settings() -> Settings:
         model_agent=env("REHEARSAL_MODEL_AGENT") or default_chain,
         model_participant=env("REHEARSAL_MODEL_PARTICIPANT") or "groq:openai/gpt-oss-20b,openai:gpt-5-nano,google:gemini-2.5-flash",
         model_improver=env("REHEARSAL_MODEL_IMPROVER") or env("REHEARSAL_MODEL_COMPILER") or default_chain,
-        tracing_api_key=env("TRACING_API_KEY") or None,
         kaggle_api_token=env("KAGGLE_API_TOKEN") or None,
         google_client_id=env("GOOGLE_CLIENT_ID") or None,
         signup=env("REHEARSAL_SIGNUP", "open"),

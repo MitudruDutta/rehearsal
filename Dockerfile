@@ -31,7 +31,7 @@ COPY examples/ examples/
 COPY infra/certs/ infra/certs/
 COPY --from=console /src/rehearsal/api/static rehearsal/api/static
 # the client wheel is served at /downloads so users can install the CLI straight from this server
-RUN pip install ".[server,telemetry]" && pip wheel --no-deps -w /srv/rehearsal/downloads . \
+RUN pip install ".[server]" && pip wheel --no-deps -w /srv/rehearsal/downloads . \
     && useradd --create-home rehearsal && mkdir -p /var/lib/rehearsal && chown rehearsal /var/lib/rehearsal
 ENV REHEARSAL_DOWNLOADS_DIR=/srv/rehearsal/downloads
 USER rehearsal

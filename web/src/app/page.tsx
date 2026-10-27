@@ -115,7 +115,7 @@ export default function Landing() {
             <BentoCard Icon={TimerOff} name="Failures on purpose" description="Requests time out after the change went through. Blind retries show up as duplicates." visual={<FaultScene />} />
             <BentoCard className="lg:col-span-2"Icon={Database} name="Verified in your database, not by an LLM" description="Read-only checks against the application's own records decide every outcome, so a confident agent can't talk its way to a pass." visual={<VerifyScene />} />
             <BentoCard className="lg:col-span-2"Icon={GitCompareArrows} name="Improve the agent, then compare" description="The improvement agent proposes changes from failed training jobs. Compare versions on jobs neither version has seen." visual={<ImproveScene />} />
-            <BentoCard Icon={Activity} name="Every step traced" description="Each build and rehearsal is a Tracing trace: model calls, tool calls, and checks." visual={<TraceScene />} />
+            <BentoCard Icon={Activity} name="Every step on the record" description="Each build and rehearsal keeps its full timeline: model calls, tool calls, checks, and what each one cost." visual={<TraceScene />} />
           </BentoGrid>
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed bg-card/40 px-5 py-4">
             <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">Coming soon</span>

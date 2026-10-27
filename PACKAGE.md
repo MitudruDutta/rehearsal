@@ -15,7 +15,7 @@ pip install rehearsal-kit
 To run the server, workers, and sandboxes yourself:
 
 ```bash
-pip install "rehearsal-kit[server]"          # add [telemetry] for Tracing tracing (Python 3.11–3.13)
+pip install "rehearsal-kit[server]"
 ```
 
 Python 3.11 or newer. Running a server needs Linux with Docker; the client runs anywhere.

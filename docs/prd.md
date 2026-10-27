@@ -121,8 +121,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 
 | ID | Requirement |
 |---|---|
-| FR-34 | Builds, episodes and improvement runs are traced in tracing, with secrets masked before export; the product runs unchanged without a tracing key. |
-| FR-35 | Development sessions are recorded with Recorder; commits carry checkpoint trailers and key decisions are listed in [CHECKPOINTS.md](../CHECKPOINTS.md). |
+| FR-34 | Every build, episode and improvement run keeps a full timeline (model calls, tool calls, checks, cost), with secrets masked before anything is stored. |
 
 ## 6. Non-functional requirements
 
@@ -146,7 +145,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | S3 | `rehearsal improve` produces a new version and `rehearsal compare` shows both runs on held-out jobs. |
 | S4 | The docs' quickstarts take a new user to a first result. |
 | S5 | rehearsalkit.xyz serves the console, accepts payments, and refuses to start an unpriced job. |
-| S6 | tracing traces, Recorder checkpoints (see CHECKPOINTS.md) and the planning tool plan exist for the build. |
+| S6 | Each role's model calls go to NVIDIA Nemotron models on Nebius Token Factory. |
 
 ## 8. Metrics
 

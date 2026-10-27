@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Protocol
 
-from .. import telemetry
+from ..redaction import redact_any
 from ..core.contracts import (
     DEFAULT_AGENT_PROMPT,
     AgentProfile,
@@ -456,7 +456,7 @@ class Engine:
             "seq": self.state.action_seq,
             "actor": actor,
             "tool": tool,
-            "args": telemetry._redact_any(args),
+            "args": redact_any(args),
             "operation_id": res.request.get("operation_id") or self._op_id(),
             "status": res.status,
             "goal_version": self.state.goal_version,
@@ -719,57 +719,56 @@ class Engine:
         # Lets a check count only what happened in this episode, whatever format the application stores times in.
         self.variables.update(episode_started_s=int(st.started), episode_started_ms=int(st.started * 1000),
                               episode_started_at=datetime.fromtimestamp(st.started, timezone.utc).isoformat(timespec="seconds"))
-        with telemetry.span(f"episode.{self.scenario.id}", "AGENT", session_id=self.episode_id, scenario=self.scenario.id, episode=self.episode_id):
-            if not st.opened:
-                st.opened = True
-                self.recorder.event("episode.started", self.scenario.title, goal_version=1, data={"scenario": self.scenario.id})
-                self.customer_says(self.scenario.participant.opening_message, 1)
-                self._fire("step")
-                self._arm_first_use_faults()
-                self._arm_default_stress()
-                self.save()
-            while not (reason := self._stop_reason()):
-                self.check()
-                turn = self.policy.next_turn(self)
-                if turn is None:
-                    # A live agent that goes quiet still hears the customer's change of mind, as it would in production.
-                    if not self.environment_error and not isinstance(self.policy, ScriptedPolicy) and self._deliver_pending_changes():
-                        continue
-                    st.termination = st.termination or ("environment_error" if self.environment_error else "stalled")
-                    break
-                actor_id, calls = turn
-                actor = st.actors[actor_id]
-                if calls and (not actor.transcript or actor.transcript[-1].get("role") != "assistant"
-                              or [c["id"] for c in actor.transcript[-1].get("tool_calls", [])] != [c.id for c in calls]):
-                    actor.transcript.append({"role": "assistant", "content": "", "tool_calls": [
-                        {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.raw_arguments or "{}"}}
-                        for c in calls
-                    ]})
-                self.save()  # Persist the whole assistant batch and scripted cursor before any effects.
-                for call in calls:
-                    reason = self._stop_reason()
-                    if reason is None:
-                        self.check()
-                        self._interventions()
-                        reason = self._stop_reason()
-                    if reason:
-                        st.termination = reason
-                        visible = {"error": f"tool call skipped: episode stopped ({reason})", "skipped": True}
-                    else:
-                        visible = self.execute(actor_id, call)
-                    observe = getattr(self.policy, "observe", None)
-                    if observe:
-                        observe(self, actor, call, visible)
-                    else:
-                        actor.transcript.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(visible, default=str)[:8000]})
-                    st.pending.pop(call.id, None)
-                    self.save()
-            else:
-                st.termination = reason
-            if st.completed:
-                st.termination = "completed"
+        if not st.opened:
+            st.opened = True
+            self.recorder.event("episode.started", self.scenario.title, goal_version=1, data={"scenario": self.scenario.id})
+            self.customer_says(self.scenario.participant.opening_message, 1)
+            self._fire("step")
+            self._arm_first_use_faults()
+            self._arm_default_stress()
             self.save()
-            return self.finish()
+        while not (reason := self._stop_reason()):
+            self.check()
+            turn = self.policy.next_turn(self)
+            if turn is None:
+                # A live agent that goes quiet still hears the customer's change of mind, as it would in production.
+                if not self.environment_error and not isinstance(self.policy, ScriptedPolicy) and self._deliver_pending_changes():
+                    continue
+                st.termination = st.termination or ("environment_error" if self.environment_error else "stalled")
+                break
+            actor_id, calls = turn
+            actor = st.actors[actor_id]
+            if calls and (not actor.transcript or actor.transcript[-1].get("role") != "assistant"
+                          or [c["id"] for c in actor.transcript[-1].get("tool_calls", [])] != [c.id for c in calls]):
+                actor.transcript.append({"role": "assistant", "content": "", "tool_calls": [
+                    {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.raw_arguments or "{}"}}
+                    for c in calls
+                ]})
+            self.save()  # Persist the whole assistant batch and scripted cursor before any effects.
+            for call in calls:
+                reason = self._stop_reason()
+                if reason is None:
+                    self.check()
+                    self._interventions()
+                    reason = self._stop_reason()
+                if reason:
+                    st.termination = reason
+                    visible = {"error": f"tool call skipped: episode stopped ({reason})", "skipped": True}
+                else:
+                    visible = self.execute(actor_id, call)
+                observe = getattr(self.policy, "observe", None)
+                if observe:
+                    observe(self, actor, call, visible)
+                else:
+                    actor.transcript.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(visible, default=str)[:8000]})
+                st.pending.pop(call.id, None)
+                self.save()
+        else:
+            st.termination = reason
+        if st.completed:
+            st.termination = "completed"
+        self.save()
+        return self.finish()
 
     def finish(self) -> OracleResult:
         st = self.state

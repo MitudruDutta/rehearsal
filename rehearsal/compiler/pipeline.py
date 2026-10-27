@@ -248,7 +248,7 @@ class Compiler:
 
         lanes = max(1, min(settings().build_parallel, self.options.parallel or settings().build_parallel, len(items)))
         try:
-            with ThreadPoolExecutor(lanes) as pool:  # each lane copies the context so its telemetry nests under this phase
+            with ThreadPoolExecutor(lanes) as pool:  # each lane copies the context, so the job's known-price rule applies there too
                 for f in [pool.submit(contextvars.copy_context().run, lane, i) for i in range(lanes)]:
                     f.result()
         finally:

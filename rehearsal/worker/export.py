@@ -21,7 +21,7 @@ from typing import Any
 import yaml
 from sqlalchemy import select
 
-from .. import telemetry
+from ..redaction import redact_any
 from ..config import settings
 from ..db.models import Application, Artifact, Episode, Run, Scenario, World, WorldVersion, now
 from ..db.session import session
@@ -65,7 +65,7 @@ def trajectories(episode: Episode) -> list[dict[str, Any]]:
                 m["tool_calls"] = [{"id": c["id"], "type": "function", "function": c["function"]} for c in m["tool_calls"]]
             cleaned.append(m)
         out.append({"actor": actor_id, "role": actor.get("role"), "messages": cleaned, "tools": actor.get("tools", [])})
-    return telemetry._redact_any(out)
+    return redact_any(out)
 
 
 def handle_dataset(ctx: JobContext) -> dict[str, Any]:

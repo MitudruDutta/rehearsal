@@ -30,7 +30,6 @@ x-worker-env: &worker_env
   LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
   NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
   OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-  TRACING_API_KEY: ${TRACING_API_KEY:-}
   LITELLM_API_KEY: ${LITELLM_API_KEY:-}
   # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.
   REHEARSAL_MAX_ACTIVE_BUILDS: ${REHEARSAL_MAX_ACTIVE_BUILDS:-2}

@@ -13,7 +13,8 @@ import pytest
 import yaml
 from fastapi import HTTPException, Request
 
-from rehearsal import pricing, telemetry
+from rehearsal import pricing
+from rehearsal.redaction import redact, redact_any
 from rehearsal.agents import llm
 from rehearsal.api import auth
 from rehearsal.core.contracts import BuildSpec, ServiceSpec
@@ -170,13 +171,13 @@ def test_build_accepts_dockerfile_confined_to_context(tmp_path, docker_run, link
 def test_redacts_exact_configured_secret_in_free_text(monkeypatch, name):
     value = "synthetic.credential+with/punctuation=987654"
     monkeypatch.setenv(name, value)
-    assert telemetry.redact(f"upstream failure ({value})") == "upstream failure ([REDACTED])"
+    assert redact(f"upstream failure ({value})") == "upstream failure ([REDACTED])"
 
 
 def test_redacts_overlapping_configured_secrets_longest_first(monkeypatch):
     monkeypatch.setenv("TEST_SHORT_TOKEN", "synthetic-overlap")
     monkeypatch.setenv("TEST_LONG_TOKEN", "synthetic-overlap-with-suffix")
-    assert telemetry.redact("synthetic-overlap-with-suffix synthetic-overlap") == "[REDACTED] [REDACTED]"
+    assert redact("synthetic-overlap-with-suffix synthetic-overlap") == "[REDACTED] [REDACTED]"
 
 
 @pytest.mark.parametrize("token", [
@@ -184,13 +185,13 @@ def test_redacts_overlapping_configured_secrets_longest_first(monkeypatch):
     "v1." + "aB_9-" * 8 + "." + "cD_0-" * 8,
 ])
 def test_redacts_bare_nebius_shaped_token(token):
-    assert telemetry.redact(f"upstream failure ({token})") == "upstream failure ([REDACTED])"
+    assert redact(f"upstream failure ({token})") == "upstream failure ([REDACTED])"
 
 
-def test_span_mask_redacts_nested_configured_credentials(monkeypatch):
+def test_nested_values_redact_configured_and_sensitive_credentials(monkeypatch):
     value = "synthetic-nested-provider-credential"
     monkeypatch.setenv("NEBIUS_API_KEY", value)
-    assert telemetry.mask({"attributes": {
+    assert redact_any({"attributes": {
         "nebius_api_key": "unconfigured-sensitive-value",
         "session_secret": "another-unconfigured-sensitive-value",
         "messages": [f"upstream returned {value}", (value, "public message")],

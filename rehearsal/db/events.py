@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .. import telemetry
+from ..redaction import redact, redact_any
 from .models import Event
 
 
@@ -41,7 +41,7 @@ def emit(
         type=type,
         actor_id=actor_id,
         goal_version=goal_version,
-        summary=telemetry.redact(summary)[:2000],
+        summary=redact(summary)[:2000],
         # Command payloads are executable input: masking here changes tool semantics.
         # Their public representations are masked in serialize(), like all events.
         data=(data or {}) if type in {"external.action.submitted", "intervention.requested"} else _mask(data or {}, type),
@@ -61,7 +61,7 @@ def _mask(data: dict[str, Any], type: str = "") -> dict[str, Any]:
     field description, and masking it by name turns the schema into an invalid one that model providers reject.
     What a bring-your-own agent receives is masked by value only (real credentials), not by key name: a hosted
     agent sees the sandbox's fictional "token" or "password" fields, so an external agent must see them too."""
-    masked = telemetry._redact_any({k: v for k, v in (data or {}).items() if k != "tools"}, by_key=type not in AGENT_FACING)
+    masked = redact_any({k: v for k, v in (data or {}).items() if k != "tools"}, by_key=type not in AGENT_FACING)
     return {**masked, "tools": data["tools"]} if "tools" in (data or {}) else masked
 
 

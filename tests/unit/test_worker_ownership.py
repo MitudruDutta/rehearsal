@@ -61,7 +61,6 @@ def worker(request, monkeypatch):
     monkeypatch.setattr(main.queue, "release_shard", Mock(return_value=False))  # no other shard is working on the run
     monkeypatch.setattr(main.queue, "finish", Mock(side_effect=finish))
     monkeypatch.setattr(main, "JobContext", Mock(side_effect=lambda *args: nullcontext()))
-    monkeypatch.setattr(main.telemetry, "span", Mock(side_effect=lambda *args, **kwargs: nullcontext()))
     state.handler = Mock(return_value={"ok": True})
     monkeypatch.setattr(main, "_handler", Mock(return_value=state.handler))
     monkeypatch.setattr(events, "emit", Mock())
@@ -195,7 +194,5 @@ def test_worker_survives_the_database_being_unreachable(monkeypatch):
 
     monkeypatch.setattr(main, "run_one", flaky)
     monkeypatch.setattr(main.time, "sleep", sleeps.append)
-    monkeypatch.setattr(main.telemetry, "enabled", lambda: None)
-    monkeypatch.setattr(main.telemetry, "shutdown", lambda: None)
     main.run_worker(once=True)
     assert len(calls) == 3 and sleeps == [1.0, 2.0]  # waited and retried with back-off instead of exiting
