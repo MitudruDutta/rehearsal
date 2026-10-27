@@ -673,3 +673,21 @@ def test_the_seeder_can_send_the_build_back_to_the_runtime_with_its_reason(tmp_p
     assert c.run() == {"ok": True}
     assert calls[0] == "seed" and calls[1][0] == "materialize" and "INSTALL_LOCK" in calls[1][1] and calls[2] == "seed"
     assert c.ck["rewound"] == ["materialize"]
+
+
+def test_an_api_that_answers_404_everywhere_its_spec_lists_is_a_runtime_problem(tmp_path):
+    """Gitea before its install is finished answers 404 to every API path; its spec (from the source) lists them."""
+    from types import SimpleNamespace
+
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    c = Compiler(app=AppInput("t", tmp_path, {}, "", {}), checkpoint={"done": []}, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: None, save=lambda d: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    spec = {"swagger": "2.0", "basePath": "/api/v1", "paths": {p: {"get": {"operationId": p.strip("/").replace("/", "_") or "root"}}
+                                                                for p in ("/version", "/settings/api", "/user", "/repos/{owner}/{repo}")}}
+    status = {"code": 404}
+    inst = SimpleNamespace(http=lambda svc, method, path, timeout=20: SimpleNamespace(status_code=status["code"]))
+    why = c._api_not_served(inst, "gitea", spec)
+    assert why and "GET /api/v1/version answered 404" in why and "{owner}" not in why
+    status["code"] = 401  # served, just not signed in
+    assert c._api_not_served(inst, "gitea", spec) is None

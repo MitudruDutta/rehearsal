@@ -502,6 +502,10 @@ class Compiler:
                 return self.run()  # continue from the reopened step
             except RuntimeChangeNeeded as exc:
                 if self.ck.get("rewound", []).count("materialize") >= 2:
+                    if phase == "discover":  # the probe's evidence is a hint, not a reason to fail: carry on with what was found
+                        self.log("compiler.repair", "the API still answers 404 after two runtime repairs; continuing", {"reason": str(exc)[:600]})
+                        self.mark(phase)
+                        continue
                     raise CompilerAgentError(f"{phase}: the runtime still needs a change after two repairs: {exc}", AgentRun()) from None
                 self._rewind_to_runtime(phase, str(exc), feedback=(
                     f"The application started, but the {phase} step found that the runtime must change before it can continue:\n{str(exc)[:1500]}\n"
@@ -878,6 +882,29 @@ class Compiler:
             found["rest"] = {"service": best[1], "source": best[2], "operations": best[0]}
         self.ck["api"] = found
         self.log("compiler.discovery", f"API discovery: {json.dumps(found)}", found)
+        if best and best[2].startswith("repo:") and (refused := self._api_not_served(inst, best[1], best[3])):
+            raise RuntimeChangeNeeded(refused)
+
+    def _api_not_served(self, inst: WorldInstance, service: str, spec: dict[str, Any]) -> str | None:
+        """The application's own specification (read from its source) lists these paths; if every one answers 404, the
+        running application is not serving its API yet, which only the runtime can change (an install lock, a setup
+        wizard that has not run). Seeding and tools would otherwise fail on every call."""
+        gets = [o for o in operations(spec) if o.method == "GET" and "{" not in o.path][:6]
+        if len(gets) < 3:
+            return None
+        answers = []
+        for op in gets:
+            try:
+                answers.append((op.path, inst.http(service, "GET", op.path, timeout=20).status_code))
+            except Exception:  # noqa: BLE001  (unreachable: the health check's business)
+                return None
+        if any(code != 404 for _, code in answers):
+            return None
+        return ("The application does not serve the API that its own specification describes: "
+                + ", ".join(f"GET {path} answered {code}" for path, code in answers)
+                + ". It is probably waiting for an install or first-run setup to be completed (an install lock, a setup wizard). "
+                  "Complete it in the runtime: the setting or environment variable the application reads for it, or a setup "
+                  "command in the oneshot service.")
 
     def api(self) -> tuple[list[Operation] | None, GraphQLSchema | None]:
         if self._ops is None and (self.workdir / "openapi.json").exists():
