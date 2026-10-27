@@ -167,6 +167,13 @@ def _brief(error: str, limit: int) -> str:
 
 
 
+def _example_args(item: dict[str, Any]) -> dict[str, Any]:
+    """A tool's example call. For a GraphQL tool it belongs beside "graphql"; it is also read from inside, where a model
+    that left out the } after the variables put it, so the example is not lost as an empty call."""
+    inner = item.get("graphql") if isinstance(item.get("graphql"), dict) else {}
+    return item.get("example_args") or inner.get("example_args") or {}
+
+
 def _route(method: str, path: str) -> tuple[str, str]:
     """Method and path with parameter names erased, so /users/{id} matches /users/{user_id}."""
     return method.upper(), re.sub(r"\{[^}]*\}|:[A-Za-z_]\w*", "{}", path.split("?")[0]).rstrip("/")
@@ -948,7 +955,7 @@ class Compiler:
             inst.restore(Path(self.ck["base_snapshot"]))
             gw = Gateway(inst, manifest, variables)
             failures = []
-            examples = {it["name"]: it.get("example_args") or {} for it in items}
+            examples = {it["name"]: _example_args(it) for it in items}
             for spec in sorted(specs, key=lambda t: t.mutating):
                 try:
                     args = render_value(examples[spec.name], {"vars": variables})

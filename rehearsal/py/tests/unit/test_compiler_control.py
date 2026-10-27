@@ -499,3 +499,23 @@ def test_tools_text_from_a_real_build_with_both_kinds_of_missing_brace_is_read()
     tools = _unstring({"tools": text}, {"properties": {"tools": {"type": "array"}}})["tools"]
     assert [t["name"] for t in tools] == ["one", "two", "three"]
     assert all(t["graphql"]["variables"][0]["schema"]["properties"]["ids"]["items"] == {"type": "string"} for t in tools)
+
+
+def test_a_graphql_tools_example_is_read_where_a_missing_brace_put_it():
+    from rehearsal.compiler.pipeline import _example_args
+
+    assert _example_args({"graphql": {"document": "q"}, "example_args": {"id": "1"}}) == {"id": "1"}
+    assert _example_args({"graphql": {"document": "q", "example_args": {"input": {"name": "x"}}}}) == {"input": {"name": "x"}}
+    assert _example_args({"method": "GET", "path": "/x"}) == {}
+
+
+def test_one_brace_too_many_inside_a_list_of_tool_variables_is_removed():
+    """From the same build: a variable's schema closed with one } too many, so its "required" and "description" landed
+    in the list of variables."""
+    from rehearsal.compiler.agent import _unstring
+
+    var = '{"name": "input", "schema": {"type": "object", "properties": {"name": {"type": "string"}}}}, "required": true, "description": "Product input"}'
+    text = '[{"name": "create_product", "graphql": {"document": "mutation { x }", "variables": [%s]}, "example_args": {"input": {"name": "A"}}}]' % var
+    tool = _unstring({"tools": text}, {"properties": {"tools": {"type": "array"}}})["tools"][0]
+    assert tool["graphql"]["variables"][0] == {"name": "input", "schema": {"type": "object", "properties": {"name": {"type": "string"}}},
+                                               "required": True, "description": "Product input"}
