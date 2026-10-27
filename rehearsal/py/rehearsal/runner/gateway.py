@@ -36,6 +36,16 @@ class GatewayResult:
     mutating: bool = False
 
 
+def without_traces(value: Any) -> Any:
+    """A response body without server stack traces (a debug-mode GraphQL server attaches one to every error). They are
+    long and say nothing a caller can act on, and they push the actual message out of any length limit."""
+    if isinstance(value, dict):
+        return {k: without_traces(v) for k, v in value.items() if k.lower() not in ("stacktrace", "traceback", "backtrace", "trace")}
+    if isinstance(value, list):
+        return [without_traces(v) for v in value]
+    return value
+
+
 def graphql_failed(body: Any, *, mutating: bool = True) -> str | None:
     """Why a GraphQL reply failed, or None. GraphQL answers HTTP 200 even when nothing happened: errors arrive in a
     top-level "errors" list (often with "data": {"field": null}, for example an expired token), or inside the mutation
@@ -44,12 +54,12 @@ def graphql_failed(body: Any, *, mutating: bool = True) -> str | None:
         return None
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
     if body.get("errors") and (mutating or not any(v is not None for v in data.values())):
-        return json.dumps(body["errors"], default=str)[:1500]
+        return json.dumps(without_traces(body["errors"]), default=str)[:1500]
     for payload in data.values():
         if isinstance(payload, dict):
             for key in ("errors", "userErrors"):
                 if payload.get(key):
-                    return json.dumps(payload[key], default=str)[:1500]
+                    return json.dumps(without_traces(payload[key]), default=str)[:1500]
     return None
 
 

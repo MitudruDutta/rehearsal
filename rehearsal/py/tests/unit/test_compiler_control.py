@@ -519,3 +519,27 @@ def test_one_brace_too_many_inside_a_list_of_tool_variables_is_removed():
     tool = _unstring({"tools": text}, {"properties": {"tools": {"type": "array"}}})["tools"][0]
     assert tool["graphql"]["variables"][0] == {"name": "input", "schema": {"type": "object", "properties": {"name": {"type": "string"}}},
                                                "required": True, "description": "Product input"}
+
+
+def test_build_goes_back_to_seed_when_tool_examples_find_no_records():
+    """The Saleor seed made only accounts and tokens, so every example call used an invented id and failed."""
+    from types import SimpleNamespace
+
+    from rehearsal.compiler.pipeline import Compiler
+
+    ck = {"done": ["inspect", "plan", "materialize", "discover", "seed"], "seed": {"steps": [{"path": "/graphql/"}], "roles": [{"name": "admin"}], "vars": {}},
+          "rejected": {}}
+    logged = []
+    c = SimpleNamespace(ck=ck, save=lambda: None, log=lambda *a: logged.append(a[1]))
+    reason = 'adapter: output rejected 8 times; last reason: product_update -> FAILED: {"errors": [{"field": "id", "message": "Invalid ID: Product:U:1. Expected: Product."}]}'
+    assert Compiler._rewind(c, "adapt", reason) is True
+    assert "seed" not in ck["done"] and "found no records to act on" in ck["rejected"]["seeder"]["error"]
+    assert "records the seed never created" in logged[0]
+
+
+def test_stack_traces_are_left_out_of_error_bodies():
+    from rehearsal.runner.gateway import graphql_failed, without_traces
+
+    body = {"errors": [{"message": "Unknown type \"RefundCreateInput\".", "extensions": {"exception": {"code": "GraphQLError", "stacktrace": ["Traceback"] * 50}}}]}
+    assert without_traces(body) == {"errors": [{"message": "Unknown type \"RefundCreateInput\".", "extensions": {"exception": {"code": "GraphQLError"}}}]}
+    assert "Traceback" not in graphql_failed(body) and "RefundCreateInput" in graphql_failed(body)

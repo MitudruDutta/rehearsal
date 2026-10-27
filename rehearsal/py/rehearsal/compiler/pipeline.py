@@ -41,7 +41,7 @@ from ..core.contracts import (
 )
 from ..config import settings
 from ..evaluator.probes import Prober, ProbeError
-from ..runner.gateway import Gateway
+from ..runner.gateway import Gateway, without_traces
 from ..runner.runtime import InstanceRecord, RuntimeError_, WorldInstance, hostnames, new_secrets
 from ..runner.seed import SeedError, readable, run_seed
 from .agent import AgentRun, CompilerAgentError, Rejected, Tool, params, run_agent
@@ -440,13 +440,15 @@ class Compiler:
         return self.ck["package"]
 
     def _rewind(self, phase: str, reason: str) -> bool:
-        """Tool adaptation cannot repair what the seed step made. When it is stopped by sign-in or permission errors,
-        the seed step runs again with that evidence instead of the build failing. Once per build. Likewise, when the
+        """Tool adaptation cannot repair what the seed step made. When it is stopped by sign-in or permission errors, or
+        by records that do not exist, the seed step runs again with that evidence instead of the build failing. Once per build. Likewise, when the
         application refuses Rehearsal's requests because of its own host check, the runtime is repaired."""
         if phase in ("discover", "seed", "adapt") and HOST_REJECTED.search(reason) and self.ck.get("rewound", []).count("materialize") < 2:
             return self._rewind_to_runtime(phase, reason)
         blocked = re.search(r"\b40[13]\b|unauthori[sz]ed|forbidden|invalid token|expired|credential|permission", reason, re.I)
-        if phase != "adapt" or not blocked or "seed" in self.ck.get("rewound", []) or "seed" not in self.ck:
+        # the examples needed records the seed never made (ids invented by the adapter fail to resolve)
+        missing = re.search(r"invalid id|not found|does not exist|doesn't exist|no such|couldn't resolve|could not resolve", reason, re.I)
+        if phase != "adapt" or not (blocked or missing) or "seed" in self.ck.get("rewound", []) or "seed" not in self.ck:
             return False
         seed = self.ck.pop("seed")
         self.ck.setdefault("rewound", []).append("seed")
@@ -455,11 +457,14 @@ class Compiler:
         memory.pop("adapter", None)
         memory["seeder"] = {
             "args": {"steps": seed["steps"], "roles": seed["roles"]},
-            "error": f"This seed replayed, but the next step could not use it: {reason[-2000:]}\nChange the seed so this cannot happen "
-                     "(for sign-in failures: give each role a credential that does not expire).",
+            "error": f"This seed replayed, but the next step could not use it: {reason[-2000:]}\n" + (
+                "Change the seed so this cannot happen (for sign-in failures: give each role a credential that does not expire)." if blocked else
+                "The tools' example calls found no records to act on. Create the business records the inspected workflows use "
+                "(several, with a few variations) and save their ids as vars, so tools have real ids to use."),
         }
         self.save()
-        self.log("compiler.repair", "tool adaptation was blocked by sign-in or permission errors; going back to the seed step with that evidence", {"phase": "seed"})
+        why = "sign-in or permission errors" if blocked else "records the seed never created"
+        self.log("compiler.repair", f"tool adaptation was blocked by {why}; going back to the seed step with that evidence", {"phase": "seed"})
         return True
 
     def _rewind_to_runtime(self, phase: str, reason: str) -> bool:
@@ -965,7 +970,7 @@ class Compiler:
                 for role in spec.roles if not spec.mutating else spec.roles[:1]:
                     res = gw.execute(role, spec.name, args, f"op_adapt_{spec.name}_{role}")
                     if res.status != "SUCCEEDED":
-                        failures.append(f"{spec.name} as {role} with {json.dumps(args)[:300]} -> {res.status}: {json.dumps(res.visible)[:600]}")
+                        failures.append(f"{spec.name} as {role} with {json.dumps(args)[:300]} -> {res.status}: {json.dumps(without_traces(res.visible))[:600]}")
             if failures:
                 raise Rejected("These example calls did not succeed against the seeded state (reads run first, then writes in order):\n" + "\n".join(failures))
             holder["examples"] = examples
