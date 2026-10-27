@@ -26,6 +26,14 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _named(value: str) -> str:
+    """A role or tool name as models often write it ("Administrator", "productCreate", "create-product"), made into the
+    lowercase name the pattern asks for, so the model is not sent back for spelling. Later steps see only this name."""
+    if isinstance(value, str) and not SLUG.match(value):
+        value = re.sub(r"[^a-z0-9]+", "_", re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", value.strip()).lower()).strip("_")
+    return _slug(value)
+
+
 def _slug(value: str) -> str:
     if not SLUG.match(value):
         raise ValueError(f"{value!r} must match {SLUG.pattern}")
@@ -177,7 +185,7 @@ class RoleSpec(Strict):
     @field_validator("name")
     @classmethod
     def _slug_name(cls, v: str) -> str:
-        return _slug(v)
+        return _named(v)
 
 
 JSON_TYPES = {"string", "number", "integer", "boolean", "object", "array", "null"}
@@ -255,7 +263,12 @@ class ToolSpec(Strict):
     @field_validator("name")
     @classmethod
     def _slug_name(cls, v: str) -> str:
-        return _slug(v)
+        return _named(v)
+
+    @field_validator("roles")
+    @classmethod
+    def _role_names(cls, v: list[str]) -> list[str]:
+        return [_named(r) for r in v]
 
     @model_validator(mode="after")
     def _path_params(self) -> "ToolSpec":
@@ -340,7 +353,8 @@ class WorldManifest(Strict):
                 raise ValueError(f"state probe {probe.path} is not inside a declared data path of {svc.name}")
         for d in self.dependencies:
             if d.service not in services:
-                raise ValueError(f"dependency references unknown service {d.service}")
+                raise ValueError(f"dependency references unknown service {d.service}: name the application service that uses this "
+                                 f"{d.kind} provider, one of {sorted(services)}; Rehearsal's own provider needs no entry")
         return self
 
     def tool(self, name: str) -> ToolSpec | None:
@@ -612,10 +626,18 @@ class OracleResult(BaseModel):
         return 1 if self.goal_satisfied and not self.environment_error else 0
 
 
+class AgentEndpoint(BaseModel):
+    """The user's own agent, reached as an OpenAI-compatible chat endpoint (rehearsal.agents.endpoint)."""
+    url: str
+    model: str = ""  # the model name the endpoint expects, if any
+    credential_id: str | None = None  # the workspace credential holding its API key, sealed; never the key itself
+
+
 class AgentProfile(BaseModel):
     name: str
     version: int = 1
     driver: Literal["llm", "external"] = "llm"  # external: actions arrive through the API
+    endpoint: AgentEndpoint | None = None  # set: each turn goes to the user's agent at this URL instead of a model
     system_prompt: str = ""
     tool_guidance: dict[str, str] = Field(default_factory=dict)
     model: str | None = None  # fallback chain; None uses REHEARSAL_MODEL_AGENT

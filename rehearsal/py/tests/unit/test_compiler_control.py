@@ -643,3 +643,32 @@ def test_a_step_that_keeps_failing_pauses_the_build_and_resuming_grants_another_
     c.add_cost(0.02)
     assert len(paused) == 2 and "40% of the $10.00 budget" in paused[1]
     assert "compiler.submit.rejected" in logged  # the events still reach the build log
+
+
+def test_the_seeder_can_send_the_build_back_to_the_runtime_with_its_reason(tmp_path, monkeypatch):
+    """Gitea's runtime started without its install lock, so every seed command failed with "run gitea web to install";
+    only the runtime can change that. The seeder says so, and the runtime step gets the reason as its first error."""
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.pipeline import AppInput, Compiler, RuntimeChangeNeeded
+
+    ck = {"done": ["inspect", "research", "plan", "materialize", "discover"], "runtime": {"secrets": [], "services": []}, "instance": None}
+    c = Compiler(app=AppInput("t", tmp_path, {}, "", {}), checkpoint=ck, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: None, save=lambda d: None, heartbeat=lambda: None, add_cost=lambda *a: None, destroy=lambda inst: None)
+    calls = []
+
+    def seed():
+        calls.append("seed")
+        if calls.count("seed") == 1:
+            raise RuntimeChangeNeeded("every gitea command says: run gitea web to install; set GITEA__security__INSTALL_LOCK=true")
+
+    def materialize():
+        calls.append(("materialize", c.ck.get("runtime_feedback", "")))
+
+    for name in ("inspect", "research", "plan", "discover", "adapt", "author", "validate"):
+        monkeypatch.setattr(c, f"phase_{name}", lambda: None)
+    monkeypatch.setattr(c, "phase_materialize", materialize)
+    monkeypatch.setattr(c, "phase_seed", seed)
+    monkeypatch.setattr(c, "phase_package", lambda: c.ck.__setitem__("package", {"ok": True}))
+    assert c.run() == {"ok": True}
+    assert calls[0] == "seed" and calls[1][0] == "materialize" and "INSTALL_LOCK" in calls[1][1] and calls[2] == "seed"
+    assert c.ck["rewound"] == ["materialize"]

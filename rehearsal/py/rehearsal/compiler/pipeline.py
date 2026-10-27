@@ -173,6 +173,12 @@ GUARD_REPEATS = 10
 GUARD_SHARE = 0.4
 
 
+class RuntimeChangeNeeded(BaseException):
+    """Raised by the seeder's runtime_needs_change tool: the application runs, but the runtime must change before data can
+    be created (an install step left open, a missing setting). A BaseException, so the agent loop does not take it for a
+    tool error to show the model."""
+
+
 def rejection_kind(text: str) -> str:
     """What a rejection is about, without its particulars (numbers, quoted values, commands), so repeats group together."""
     line = (text.strip().splitlines() or [""])[0]
@@ -494,6 +500,14 @@ class Compiler:
                 if not self._rewind(phase, str(exc)):
                     raise
                 return self.run()  # continue from the reopened step
+            except RuntimeChangeNeeded as exc:
+                if self.ck.get("rewound", []).count("materialize") >= 2:
+                    raise CompilerAgentError(f"{phase}: the runtime still needs a change after two repairs: {exc}", AgentRun()) from None
+                self._rewind_to_runtime(phase, str(exc), feedback=(
+                    f"The application started, but the {phase} step found that the runtime must change before it can continue:\n{str(exc)[:1500]}\n"
+                    "Change the runtime for exactly that (an environment variable, a setting file, a setup command in the oneshot service) "
+                    "and keep everything else that already works."))
+                return self.run()
             self.mark(phase)
         return self.ck["package"]
 
@@ -526,7 +540,7 @@ class Compiler:
         self.log("compiler.repair", f"tool adaptation was blocked by {why}; going back to the seed step with that evidence", {"phase": "seed"})
         return True
 
-    def _rewind_to_runtime(self, phase: str, reason: str) -> bool:
+    def _rewind_to_runtime(self, phase: str, reason: str, feedback: str | None = None) -> bool:
         """Only the runtime can change which hosts the application accepts: tear the sandbox down, drop what was built
         on it, and start the runtime again with this evidence as its first error. At most twice per build: a first repair
         can change the wrong setting."""
@@ -539,9 +553,10 @@ class Compiler:
             self.ck.pop(key, None)
         self.ck.setdefault("rewound", []).append("materialize")
         self.ck["done"] = [p for p in self.ck.get("done", []) if PHASES.index(p) < PHASES.index("materialize")]
-        self.ck["runtime_feedback"] = self._host_feedback(f"in the {phase} step", reason)
+        self.ck["runtime_feedback"] = feedback or self._host_feedback(f"in the {phase} step", reason)
         self.save()
-        self.log("compiler.repair", f"the application refused Rehearsal's requests in the {phase} step (host check); going back to the runtime with that evidence", {"phase": "materialize"})
+        why = "found that the runtime must change" if feedback else "was refused by the application's host check"
+        self.log("compiler.repair", f"the {phase} step {why}; going back to the runtime with that evidence", {"phase": "materialize", "reason": reason[:600]})
         return True
 
     def _host_feedback(self, where: str, reason: str) -> str:
@@ -945,6 +960,14 @@ class Compiler:
             "Explore with the tools, then call submit_seed with {\"steps\": [...], \"roles\": [...]}."
         )
         tools = [*repo_tools(self.repo), *live_tools(inst, prober, self.ck["secrets"]), *schema_tools(prober), *api_tools(ops, gql)]
+
+        def runtime_needs_change(a: dict[str, Any]) -> str:
+            raise RuntimeChangeNeeded(str(a.get("reason") or "")[:2000])
+
+        tools.append(Tool("runtime_needs_change", "Send the build back to the runtime step when data cannot be created until the runtime "
+                          "changes (for example the application refuses to work until an install step or setting is done, which only "
+                          "an environment variable or setup command can fix). Say exactly what must change and the evidence.",
+                          params({"reason": {"type": "string"}}), runtime_needs_change))
         submit = Tool("submit_seed", "Submit reproducible seed steps and roles.", params({"steps": {"type": "array", "items": {"type": "object"}}, "roles": {"type": "array", "items": {"type": "object"}}}), accept)
         self.ck["seed"] = self.agent(role="seeder", system=system, user=user, tools=tools, submit=submit, max_steps=70, max_submits=8)
         base = self.workdir / "snapshots" / "base"
@@ -1007,7 +1030,7 @@ class Compiler:
             inst.restore(Path(self.ck["base_snapshot"]))
             gw = Gateway(inst, manifest, variables)
             failures = []
-            examples = {it["name"]: _example_args(it) for it in items}
+            examples = {spec.name: _example_args(it) for it, spec in zip(items, specs)}  # by the normalized name
             for spec in sorted(specs, key=lambda t: t.mutating):
                 try:
                     args = render_value(examples[spec.name], {"vars": variables})
@@ -1057,7 +1080,7 @@ class Compiler:
                 WorldManifest.model_validate(manifest.model_dump(mode="json", by_alias=True))
             except ValidationError as exc:
                 raise Rejected(str(exc)[:3000]) from exc
-            examples = {it["name"]: _example_args(it) for it in items}
+            examples = {spec.name: _example_args(it) for it, spec in zip(items, specs)}  # by the normalized name
             if failures := failures_of(items, specs, manifest):
                 raise Rejected("These example calls did not succeed against the seeded state (reads run first, then writes in order):\n" + "\n".join(failures))
             holder["examples"] = examples
