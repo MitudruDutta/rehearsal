@@ -1,22 +1,38 @@
 ---
 title: Use Rehearsal in CI
-description: Run the held-out jobs on every pull request that changes your agent, and fail the build when the score drops or a rule is broken.
+description: Rehearse the changed agent on every pull request, next to the version on main, and fail the check when it verifies too little, breaks a rule or does worse.
 audience: Platform and ML engineers
-last_reviewed: 2026-10-11
-time: 30 minutes to set up
+last_reviewed: 2026-10-27
+time: 10 minutes to set up
 cost: One run for each pull request, about $0.02 for each episode
 needs: a published world version, and a key with Build and evaluate access
 ---
 
-A pull request that changes your agent's instructions can make the agent worse. This guide adds a check that
-evaluates the changed agent on the `holdout` jobs and fails when the result is not good enough.
+A pull request that changes your agent's instructions can make the agent worse. The Rehearsal gate is a check for
+that: it rehearses the changed agent and the agent on `main` side by side, on the same jobs, and fails the pull
+request when the change does worse.
 
-## How the check works
+## How the gate decides
 
-1. The CI job creates a new version of the agent profile from the instructions in the pull request.
-2. It starts one run on the `holdout` split, with the new version.
-3. It waits for the run, then reads the summary.
-4. It fails when the verified share is under your threshold, or when any episode broke a rule.
+1. It makes a version of the agent from the instructions file in the pull request. When the latest version already
+   has the same instructions, it reuses it.
+2. It makes the baseline the same way, from the same file on `main`.
+3. It starts one run with both versions, so both get the same jobs at the same time.
+4. It waits for the run and checks the result.
+
+The change **passes** only when all of these hold:
+
+| Check | Default |
+|---|---|
+| Verified success reaches `min-success` | No minimum |
+| Episodes with a rule violation stay at or under `max-violations` | 0: any broken rule fails |
+| Verified success is not lower than the baseline's, minus `tolerance` | 0 |
+| No more rule violations, false completions or duplicate side effects than the baseline | Always on with a baseline |
+| At least one episode was scored | Always on |
+
+The gate writes a Markdown report to the job summary: both versions side by side, every check with PASS or FAIL,
+and a link to the run. It exits with `0` (passed), `1` (failed) or `2` (the run could not start or did not finish).
+A refused or unfinished run is never reported as the agent failing.
 
 <Caution title="The Free plan waits for quiet hours">
 
@@ -33,12 +49,8 @@ own server for CI.
 ### Create a key for CI
 
 In the console, open **API keys** and create a key named for the pipeline, with **Build and evaluate** access.
-Store it as a secret in your CI system. Give the pipeline its own key, so that you can revoke it alone.
-
-| Secret | Value |
-|---|---|
-| `REHEARSAL_URL` | Your server's address |
-| `REHEARSAL_API_KEY` | The key |
+Store it as the repository secret `REHEARSAL_API_KEY`. Give the pipeline its own key, so that you can revoke it
+alone.
 
 </Step>
 <Step>
@@ -51,112 +63,84 @@ Use one published world version for every run, so that results stay comparable. 
 rehearsal worlds list
 ```
 
-Keep the id in your repository's settings as `REHEARSAL_WORLD_VERSION`. Change it when you build a new world
-version for a new release of your application.
-
-</Step>
-<Step>
-
-### Add the script
-
-Save this as `ci/rehearse.py`. It needs only the `rehearsal-kit` package.
-
-```python
-"""Evaluates the agent in this checkout on the held-out jobs. Exits with 1 when it is not good enough."""
-import os
-import sys
-import time
-
-from rehearsal.sdk import Rehearsal
-from rehearsal.sdk.client import RehearsalError
-
-NAME = "support-agent"
-INSTRUCTIONS = "agent/instructions.txt"
-MIN_VERIFIED = 0.8   # share of scored episodes that must be verified
-REPEATS = 2
-BUDGET_USD = 2.0     # the run stops itself at this spend
-
-rh = Rehearsal()     # reads REHEARSAL_URL and REHEARSAL_API_KEY
-world_version = os.environ["REHEARSAL_WORLD_VERSION"]
-
-profile = rh.profiles.create(NAME, open(INSTRUCTIONS, encoding="utf-8").read())
-label = f"{profile['name']}@v{profile['version']}"
-
-try:
-    run = rh.evaluations.create(world_version, [profile["id"]], splits=["holdout"], repeats=REPEATS, budget_usd=BUDGET_USD)
-except RehearsalError as error:
-    # 402: the plan does not cover the run. 429: every sandbox is in use. Neither is the agent's fault.
-    sys.exit(f"Rehearsal did not start the run ({error.status}): {error.detail}")
-
-print(f"{label}: {run['episodes']} episodes, run {run['run_id']}")
-print(f"Watch: {rh.base_url}/app/run/?id={run['run_id']}")
-
-while (status := rh.runs.get(run["run_id"])["status"]) not in ("finished", "failed", "cancelled"):
-    time.sleep(15)
-if status != "finished":
-    sys.exit(f"The run ended as {status}. See the run page.")
-
-scores = rh.runs.get(run["run_id"])["summary"]["profiles"][label]["holdout"]
-print(
-    f"verified {scores['successes']} of {scores['finished']}, "
-    f"rule violations {scores['hard_violation_episodes']}, false completions {scores['false_completions']}, "
-    f"duplicates {scores['duplicate_effects']}, not scored {scores['environment_errors']}, ${scores['cost_usd']}"
-)
-
-problems = []
-if scores["finished"] == 0:
-    problems.append("no episode was scored")
-elif scores["success_rate"] < MIN_VERIFIED:
-    problems.append(f"verified share {scores['success_rate']:.0%} is under {MIN_VERIFIED:.0%}")
-if scores["hard_violation_episodes"]:
-    problems.append(f"{scores['hard_violation_episodes']} episodes broke a rule")
-if scores["false_completions"]:
-    problems.append(f"{scores['false_completions']} episodes claimed work that was not done")
-if problems:
-    sys.exit("Not good enough: " + "; ".join(problems))
-print("Good enough.")
-```
+Keep the id as the repository variable `REHEARSAL_WORLD_VERSION`. Change it when you build a new world version for a
+new release of your application.
 
 </Step>
 <Step>
 
 ### Add the workflow
 
-This example is for GitHub Actions. It runs only when the agent's files change.
+Save this as `.github/workflows/rehearse.yml`. It runs only when the agent's instructions change.
 
 ```yaml
 name: Rehearse the agent
 on:
   pull_request:
-    paths: ["agent/**"]
+    paths: ["agent/instructions.md"]
 
 concurrency:
   group: rehearse-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  rehearse:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install rehearsal-kit
-      - run: python ci/rehearse.py
-        env:
-          REHEARSAL_URL: ${{ secrets.REHEARSAL_URL }}
-          REHEARSAL_API_KEY: ${{ secrets.REHEARSAL_API_KEY }}
-          REHEARSAL_WORLD_VERSION: ${{ vars.REHEARSAL_WORLD_VERSION }}
+          fetch-depth: 0   # the baseline is read from main
+      - uses: MitudruDutta/rehearsal@main
+        with:
+          api-key: ${{ secrets.REHEARSAL_API_KEY }}
+          world-version: ${{ vars.REHEARSAL_WORLD_VERSION }}
+          prompt-file: agent/instructions.md
+          name: support-agent
+          baseline-ref: origin/main
+          splits: holdout
+          repeats: "2"
+          min-success: "0.6"
 ```
+
+On your own server, add `server: https://your-server`.
 
 </Step>
 </Steps>
 
+### Every input
+
+| Input | Meaning |
+|---|---|
+| `api-key` | Required. A key with **Build and evaluate** access |
+| `world-version` | Required. The published world version |
+| `prompt-file` and `name` | The instructions file and the agent's name. Or give `profile`, a profile id |
+| `baseline-ref` | A git ref whose `prompt-file` is the baseline, for example `origin/main`. Or give `baseline`, a profile id |
+| `splits` | Comma-separated: `train`, `dev`, `holdout`. Empty runs every split |
+| `repeats` | Attempts at each job. Default `1` |
+| `min-success` | Fail below this verified success rate, from 0 to 1 |
+| `max-violations` | Fail above this many episodes with a rule violation. Default `0` |
+| `tolerance` | How far below the baseline's success rate still passes. Default `0` |
+| `timeout-minutes` | How long to wait for the run. Default `90` |
+| `server` | Default `https://rehearsalkit.xyz` |
+
+## Other CI systems
+
+The action runs one command. Any CI system can run it:
+
+```bash
+pip install rehearsal-kit
+git show origin/main:agent/instructions.md > main-instructions.md
+rehearsal gate "$REHEARSAL_WORLD_VERSION" --prompt-file agent/instructions.md --name support-agent \
+  --baseline-file main-instructions.md --split holdout --repeats 2 --min-success 0.6 --budget 2
+```
+
+It reads `REHEARSAL_URL` and `REHEARSAL_API_KEY` from the environment. See every flag in the
+[CLI reference](/reference/cli).
+
 ## The summary, field by field
 
-The script reads `summary["profiles"]["<name>@v<version>"]["holdout"]`. The summary of a run has this shape:
+To build your own check, read the run's summary with `rh.runs.get(run_id)["summary"]`. It has this shape:
 
 ```json
 {
@@ -195,8 +179,8 @@ episode was scored.
 - **Use counts as well as the share.** With 2 jobs and 2 repeats, one episode is 25 points. Ask for more repeats, or
   compare with the last result, before you block a merge on a small difference.
 - **Treat a rule violation as a failure, always.** A verified share of 90% with one broken rule is not a pass.
-- **Do not count episodes that were not scored.** `environment_errors` are the environment's fault. The script
-  reports them and does not fail on them.
+- **Do not count episodes that were not scored.** `environment_errors` are the environment's fault. The gate reports
+  them and does not fail on them, unless nothing at all was scored.
 
 ## Keep the cost down
 
@@ -204,10 +188,11 @@ episode was scored.
 |---|---|
 | Run only the `holdout` split | It is the score that matters, and it is the smallest set |
 | Run only when the agent's files change | The `paths` filter in the workflow |
-| Give the run a budget | The run stops itself at `BUDGET_USD` |
+| Give the run a budget | The run stops itself at `--budget` |
 | Cancel a run that a newer push replaces | The `concurrency` block in the workflow |
 
-Each CI run creates a new version of the profile. Versions cost nothing and are kept.
+A pull request that does not change the instructions reuses the existing version, and the gate then runs it alone,
+without a baseline.
 
 <Caution title="Do not tune on holdout">
 
@@ -219,17 +204,17 @@ check confirm it. Build a new world version from time to time to get fresh jobs.
 
 ## When the check cannot run
 
-| The script prints | Meaning | Do this |
+| The gate prints | Meaning | Do this |
 |---|---|---|
-| `did not start the run (402)` | The plan's episodes or allowance are used up | Add a top-up, or wait for the month to renew |
-| `did not start the run (429)` | Every sandbox of the plan is in use | Run again later. Limit CI to one run at a time |
-| `did not start the run (401)` | The key is wrong or revoked | Replace the secret |
-| `did not start the run (409)` | The world version is not published | Fix `REHEARSAL_WORLD_VERSION` |
-| `The run ended as failed` | The server could not run it | Open the run page. See [Read results](/guides/read-results#when-a-result-looks-wrong) |
+| `could not run: HTTP 402` | The plan's episodes or allowance are used up | Add a top-up, or wait for the month to renew |
+| `could not run: HTTP 429` | Every sandbox of the plan is in use | Run again later. Limit CI to one run at a time |
+| `could not run: HTTP 401` | The key is wrong or revoked | Replace the secret |
+| `could not run: HTTP 409` | The world version is not published | Fix `REHEARSAL_WORLD_VERSION` |
+| `The run did not finish (failed)` | The server could not run it | Open the run page. See [Read results](/guides/read-results#when-a-result-looks-wrong) |
 
 ## Next
 
 <LinkCards>
-  <LinkCard href="/reference/python-sdk" title="Python SDK">Every method the script can use.</LinkCard>
+  <LinkCard href="/reference/cli" title="CLI reference">Every flag of `rehearsal gate`.</LinkCard>
   <LinkCard href="/guides/compare-agents-and-runs" title="Compare agents and runs">Compare the new version with the last one.</LinkCard>
 </LinkCards>

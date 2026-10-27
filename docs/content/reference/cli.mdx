@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Every rehearsal command, with its arguments and an example. The 29 commands, grouped by task.
+description: Every rehearsal command, with its arguments and an example. The 30 commands, grouped by task.
 generated: true
 ---
 
@@ -49,6 +49,7 @@ server's message and a hint: see [Errors](/reference/errors).
 | [`rehearsal compare`](#rehearsal-compare) | Compare agents within a run, or two runs on one world version |
 | [`rehearsal improve`](#rehearsal-improve) | Propose a revised agent profile from train/dev failures |
 | [`rehearsal autofix`](#rehearsal-autofix) | Fix an agent in rounds, keep only versions that verify more, prove the best on held-out jobs |
+| [`rehearsal gate`](#rehearsal-gate) | Pass or fail an agent change in CI: rehearse it, next to a baseline, and judge the result |
 
 **Data**
 
@@ -548,6 +549,52 @@ rehearsal autofix <profile_id> <run_id> --rounds 3 --watch
 ```
 
 The command prints a `job_id` and the most episodes the loop can run, then follows each round. The result names the best version and its held-out score next to the original's.
+
+### rehearsal gate
+
+Pass or fail an agent change in CI: rehearse it, next to a baseline, and judge the result.
+
+Made for CI: it spends model budget for each episode, like `eval`. Every flag of the check has a default that fails on a rule violation and on any regression against the baseline. See [Use Rehearsal in CI](/guides/use-rehearsal-in-ci).
+
+<Cost>
+
+This command spends model budget.
+
+</Cost>
+
+```text
+rehearsal gate [<wv_id>] [--profile <profile>] [--prompt-file <prompt_file>] [--name <name>] [--baseline <baseline>] [--baseline-file <baseline_file>] [--split <split>]... [--repeats <repeats>] [--min-success <min_success>] [--max-violations <max_violations>] [--tolerance <tolerance>] [--budget <budget>] [--run <run>] [--timeout <timeout>] [--report <report>]
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `<wv_id>` |  | The published world version to rehearse on. Not needed with `--run`. |
+| `--profile <profile>` |  | The agent profile to test. |
+| `--prompt-file <prompt_file>` |  | Test a version of `--name` made from this instructions file. When the latest version with the same instructions exists, it is reused. |
+| `--name <name>` |  | The agent's name, with `--prompt-file` or `--baseline-file`. |
+| `--baseline <baseline>` |  | A profile to rehearse in the same run. The change may not do worse. |
+| `--baseline-file <baseline_file>` |  | The baseline as an instructions file, for example the file on the main branch. |
+| `--split <split>` |  | Which split to rehearse. Repeat for several. Default: every split. |
+| `--repeats <repeats>` | `1` | Attempts at each job. |
+| `--min-success <min_success>` |  | Fail below this verified success rate, from 0 to 1. |
+| `--max-violations <max_violations>` |  | Fail above this many episodes with a rule violation. |
+| `--tolerance <tolerance>` |  | How far below the baseline's success rate still passes, from 0 to 1. |
+| `--budget <budget>` |  | Model spend in US dollars at which the run stops itself. |
+| `--run <run>` |  | Judge this finished run instead of starting one. |
+| `--timeout <timeout>` | `90` | Minutes to wait for the run. A run that does not finish in time exits with 2. |
+| `--report <report>` |  | Append the Markdown report to this file, for example `$GITHUB_STEP_SUMMARY`. |
+
+```bash
+rehearsal gate <wv_id> --prompt-file agent/instructions.md --name support-agent --baseline-file main-instructions.md --min-success 0.6
+```
+
+It prints the run's progress, then a Markdown report, and exits 0 when the change passes, 1 when it fails, and 2 when the run did not finish.
+
+```bash
+rehearsal gate --run <run_id> --profile <profile_id> --baseline <profile_id> --report summary.md
+```
+
+Judges a finished run without starting a new one.
 
 ## Data
 

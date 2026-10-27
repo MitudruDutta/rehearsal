@@ -1,0 +1,100 @@
+name: Rehearsal gate
+description: Rehearse an AI agent on a practice copy of your application and fail the check when it verifies too little or does worse than its baseline.
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  api-key:
+    description: A Rehearsal API key with "Build and evaluate" access. Store it as a repository secret.
+    required: true
+  world-version:
+    description: The published world version to rehearse on.
+    required: true
+  prompt-file:
+    description: The agent's instructions file in this repository. The gate tests a version made from it (reused when unchanged).
+    required: false
+  name:
+    description: The agent's name in Rehearsal, used with prompt-file and baseline-file.
+    required: false
+  profile:
+    description: An agent profile id to test, in place of prompt-file.
+    required: false
+  baseline-ref:
+    description: A git ref whose prompt-file is the baseline, for example origin/main. The change may not do worse than it.
+    required: false
+  baseline:
+    description: A baseline profile id, in place of baseline-ref.
+    required: false
+  splits:
+    description: Comma-separated splits to rehearse (train, dev, holdout). Empty means every split.
+    required: false
+    default: ""
+  repeats:
+    description: Attempts at each job.
+    required: false
+    default: "1"
+  min-success:
+    description: Fail below this verified success rate, from 0 to 1. Empty means no minimum.
+    required: false
+    default: ""
+  max-violations:
+    description: Fail above this many episodes with a rule violation.
+    required: false
+    default: "0"
+  tolerance:
+    description: How far below the baseline's success rate still passes, from 0 to 1.
+    required: false
+    default: "0"
+  timeout-minutes:
+    description: How long to wait for the run.
+    required: false
+    default: "90"
+  server:
+    description: The Rehearsal server.
+    required: false
+    default: https://rehearsalkit.xyz
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install the Rehearsal client
+      shell: bash
+      run: python -m pip install --quiet "$GITHUB_ACTION_PATH"
+    - name: Rehearse and judge
+      shell: bash
+      env:
+        REHEARSAL_API_KEY: ${{ inputs.api-key }}
+        REHEARSAL_URL: ${{ inputs.server }}
+        WORLD_VERSION: ${{ inputs.world-version }}
+        PROMPT_FILE: ${{ inputs.prompt-file }}
+        AGENT_NAME: ${{ inputs.name }}
+        PROFILE: ${{ inputs.profile }}
+        BASELINE_REF: ${{ inputs.baseline-ref }}
+        BASELINE: ${{ inputs.baseline }}
+        SPLITS: ${{ inputs.splits }}
+        REPEATS: ${{ inputs.repeats }}
+        MIN_SUCCESS: ${{ inputs.min-success }}
+        MAX_VIOLATIONS: ${{ inputs.max-violations }}
+        TOLERANCE: ${{ inputs.tolerance }}
+        TIMEOUT: ${{ inputs.timeout-minutes }}
+      run: |
+        args=("$WORLD_VERSION" --repeats "$REPEATS" --max-violations "$MAX_VIOLATIONS" --tolerance "$TOLERANCE" --timeout "$TIMEOUT" --report "$GITHUB_STEP_SUMMARY")
+        [ -n "$PROFILE" ] && args+=(--profile "$PROFILE")
+        [ -n "$PROMPT_FILE" ] && args+=(--prompt-file "$PROMPT_FILE" --name "$AGENT_NAME")
+        [ -n "$BASELINE" ] && args+=(--baseline "$BASELINE")
+        if [ -n "$BASELINE_REF" ] && [ -n "$PROMPT_FILE" ]; then
+          baseline_file="$RUNNER_TEMP/rehearsal-baseline"
+          if git show "$BASELINE_REF:$PROMPT_FILE" > "$baseline_file" 2>/dev/null; then
+            args+=(--baseline-file "$baseline_file")
+          else
+            echo "No $PROMPT_FILE at $BASELINE_REF; running without a baseline."
+          fi
+        fi
+        [ -n "$MIN_SUCCESS" ] && args+=(--min-success "$MIN_SUCCESS")
+        IFS=',' read -ra splits <<< "$SPLITS"
+        for s in "${splits[@]}"; do [ -n "$s" ] && args+=(--split "$(echo "$s" | xargs)"); done
+        rehearsal gate "${args[@]}"

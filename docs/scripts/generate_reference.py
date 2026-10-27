@@ -133,6 +133,21 @@ ARGUMENTS: dict[str, str] = {
     "autofix --rounds": "Proposals to try, 1 to 5. The loop stops early when every train and dev job passes.",
     "autofix --repeats": "Attempts at each job in every rehearsal, 1 to 5.",
     "autofix --watch": "Stay attached, print each round, then print the result.",
+    "gate wv_id": "The published world version to rehearse on. Not needed with `--run`.",
+    "gate --profile": "The agent profile to test.",
+    "gate --prompt-file": "Test a version of `--name` made from this instructions file. When the latest version with the same instructions exists, it is reused.",
+    "gate --name": "The agent's name, with `--prompt-file` or `--baseline-file`.",
+    "gate --baseline": "A profile to rehearse in the same run. The change may not do worse.",
+    "gate --baseline-file": "The baseline as an instructions file, for example the file on the main branch.",
+    "gate --split": "Which split to rehearse. Repeat for several. Default: every split.",
+    "gate --repeats": "Attempts at each job.",
+    "gate --min-success": "Fail below this verified success rate, from 0 to 1.",
+    "gate --max-violations": "Fail above this many episodes with a rule violation.",
+    "gate --tolerance": "How far below the baseline's success rate still passes, from 0 to 1.",
+    "gate --budget": "Model spend in US dollars at which the run stops itself.",
+    "gate --run": "Judge this finished run instead of starting one.",
+    "gate --timeout": "Minutes to wait for the run. A run that does not finish in time exits with 2.",
+    "gate --report": "Append the Markdown report to this file, for example `$GITHUB_STEP_SUMMARY`.",
     "export run_ids": "One or more run ids.",
     "export --split": "Which split to export. Repeat for several. Default: `train`.",
     "train --base-model": "Not used yet.",
@@ -156,6 +171,7 @@ NOTES: dict[str, str] = {
     "eval": "An evaluation spends model budget for each episode. Without `--split` or `--repeats`, every approved job runs twice. See [Evaluate an agent](/guides/evaluate-an-agent).",
     "improve": "This spends a small amount of model budget. It reads only failed train and dev episodes. See [Improve an agent](/guides/improve-an-agent).",
     "autofix": "This spends model budget for every rehearsal: rounds × (train and dev jobs) plus two versions on the held-out jobs, times `--repeats`. The answer shows the episode count. A version is kept only if it verifies more episodes without a new rule violation or false completion. See [Improve an agent](/guides/improve-an-agent).",
+    "gate": "Made for CI: it spends model budget for each episode, like `eval`. Every flag of the check has a default that fails on a rule violation and on any regression against the baseline. See [Use Rehearsal in CI](/guides/use-rehearsal-in-ci).",
     "jobs": "`retry` restarts a failed or stopped job from its last saved step. Finished steps are not repeated.",
     "worlds": "`validate` spends model budget: it tries each job once with a live agent.",
     "train": "Not built yet. The command prints a message that says so and exits.",
@@ -169,7 +185,7 @@ NOTES: dict[str, str] = {
 
 SERVER_ONLY = {"serve", "worker", "up", "migrate", "bootstrap", "users", "openapi", "prices"}
 COMING_SOON = {"train", "run-bundle"}
-SPENDS = {"build", "eval", "improve", "autofix"}
+SPENDS = {"build", "eval", "improve", "autofix", "gate"}
 
 
 def placeholder(name: str) -> str:

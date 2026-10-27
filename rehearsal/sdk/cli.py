@@ -316,6 +316,23 @@ def _main(argv: list[str] | None = None) -> None:
     fix.add_argument("--repeats", type=int, default=1, help="episodes per job in each rehearsal, 1 to 5 (default 1)")
     fix.add_argument("--watch", action="store_true")
 
+    gate = cmd("gate", "pass or fail an agent change in CI: rehearse it, next to a baseline, and judge the result")
+    gate.add_argument("wv_id", nargs="?", help="the published world version to rehearse on")
+    gate.add_argument("--profile", help="the agent profile to test")
+    gate.add_argument("--prompt-file", help="test a version of --name with these instructions (reused when unchanged)")
+    gate.add_argument("--name", help="the agent's name, with --prompt-file or --baseline-file")
+    gate.add_argument("--baseline", help="a profile to rehearse side by side; the change may not do worse")
+    gate.add_argument("--baseline-file", help="the baseline as an instructions file, for example the one on the main branch")
+    gate.add_argument("--split", action="append", default=[], help="train, dev or holdout; default every split")
+    gate.add_argument("--repeats", type=int, default=1, help="attempts at each job (default 1)")
+    gate.add_argument("--min-success", type=float, help="fail below this verified success rate, 0 to 1")
+    gate.add_argument("--max-violations", type=int, default=0, help="fail above this many episodes with a rule violation (default 0)")
+    gate.add_argument("--tolerance", type=float, default=0.0, help="how far below the baseline's success rate still passes, 0 to 1")
+    gate.add_argument("--budget", type=float, help="model spend in US dollars at which the run stops itself")
+    gate.add_argument("--run", help="judge this finished run instead of starting one")
+    gate.add_argument("--timeout", type=float, default=90, help="minutes to wait for the run (default 90)")
+    gate.add_argument("--report", help="append the Markdown report to this file, for example $GITHUB_STEP_SUMMARY")
+
     exp = cmd("export", "export verified trajectories as a dataset")
     exp.add_argument("run_ids", nargs="+")
     exp.add_argument("--split", action="append", default=[])
@@ -349,7 +366,7 @@ def _main(argv: list[str] | None = None) -> None:
     groups = [
         ("Start", ["login", "whoami", "logout"]),
         ("Applications and worlds", ["apps", "build", "worlds", "jobs"]),
-        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve", "autofix"]),
+        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve", "autofix", "gate"]),
         ("Data", ["export", "artifacts", "export-example", "export-replay"]),
         ("AI assistants", ["mcp", "skill"]),
         ("Run your own server", ["serve", "worker", "up", "migrate", "bootstrap", "users", "openapi", "prices"]),
@@ -535,6 +552,18 @@ def _main(argv: list[str] | None = None) -> None:
         if args.watch:
             _watch(c.jobs.events(res["job_id"]))
             _print((c.jobs.get(res["job_id"]).get("result")) or {})
+    elif args.cmd == "gate":
+        import httpx
+
+        from .client import RehearsalError
+        from .gate import UNFINISHED, run as run_gate
+
+        try:
+            code = run_gate(_client(), args)
+        except (RehearsalError, httpx.HTTPError) as exc:  # the check could not run, which is not the agent failing
+            print(f"The gate could not run: {exc}", file=sys.stderr)
+            code = UNFINISHED
+        sys.exit(code)
     elif args.cmd == "export":
         _print(_client().post("/v1/dataset-exports", {"run_ids": args.run_ids, "splits": args.split or ["train"]}))
     elif args.cmd == "train":
