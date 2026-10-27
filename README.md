@@ -12,6 +12,7 @@ Rehearsal is CI for AI agents. It runs your agent on a working copy of your real
 
 [![PyPI](https://img.shields.io/pypi/v/rehearsal-kit?label=rehearsal-kit&color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/rehearsal-kit?color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
+[![npm](https://img.shields.io/npm/v/rehearsal-kit?label=npm&color=2b59d9)](https://www.npmjs.com/package/rehearsal-kit)
 [![Tests](https://github.com/MitudruDutta/rehearsal/actions/workflows/tests.yml/badge.svg)](https://github.com/MitudruDutta/rehearsal/actions/workflows/tests.yml)
 [![Docs](https://img.shields.io/badge/docs-docs.rehearsalkit.xyz-2b59d9)](https://docs.rehearsalkit.xyz)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](LICENSE)
@@ -114,12 +115,17 @@ Jobs written from source code alone can drift from what users really do. So ever
 
 ## Quickstart
 
-Install the client (the `rehearsal` CLI and the Python SDK). It runs on any OS with Python 3.11 or newer.
+Install the client: the `rehearsal` CLI, the SDK and the MCP server. It comes in two editions with the same
+commands and the same sign-in, and runs on any OS. Pick the one that matches your agent's language:
 
 ```bash
-pip install rehearsal-kit
-rehearsal login            # opens the console in your browser; approve the code shown
+pip install rehearsal-kit          # Python 3.11 or newer: the CLI and the Python SDK
+npm install -g rehearsal-kit       # Node.js 20 or newer: the CLI and the TypeScript SDK
+rehearsal login                    # opens the console in your browser; approve the code shown
 ```
+
+Without installing, `npx rehearsal-kit <command>` runs the same CLI. The server, workers and World Compiler are
+Python only; see [Self-hosting](#self-hosting).
 
 Build a world and evaluate an agent on the hosted service at [rehearsalkit.xyz](https://rehearsalkit.xyz):
 
@@ -201,10 +207,11 @@ claude plugin marketplace add MitudruDutta/rehearsal
 claude plugin install rehearsal@rehearsal
 ```
 
-Or add only the MCP server:
+Or add only the MCP server, from either package:
 
 ```bash
-claude mcp add rehearsal -- uvx --from "rehearsal-kit[mcp]" rehearsal mcp
+claude mcp add rehearsal -- uvx --from "rehearsal-kit[mcp]" rehearsal mcp   # Python, with uv
+claude mcp add rehearsal -- npx -y rehearsal-kit mcp                        # Node.js
 ```
 
 Then ask your assistant to build a world, run an evaluation, or explain a failed episode.
