@@ -236,12 +236,23 @@ export const COMMANDS: Record<string, Cmd> = {
   },
   worlds: {
     summary: "list practice worlds, their jobs, re-checks and bundles",
-    actions: { list: { summary: "worlds and their versions" }, show: { summary: "one world version", args: ["wv_id"] },
+    actions: { list: { summary: "worlds and their versions" }, library: { summary: "ready-made worlds you can rehearse on without building one" },
+               incident: { summary: "turn a production incident into a validated job in a world", args: ["wv_id"],
+                           opts: { file: { type: "string", help: "the incident: what was asked, what the agent did, what should have happened" }, watch: { type: "boolean" } } },
+               show: { summary: "one world version", args: ["wv_id"] },
                scenarios: { summary: "the jobs of a world version", args: ["wv_id"] }, validate: { summary: "re-check every job of a published world", args: ["wv_id"] },
                bundle: { summary: "export a portable world bundle", args: ["wv_id"], opts: { "include-images": { type: "boolean" } } } },
     run: async (a) => {
       const c = client();
       if (a.sub === "list") return print(await c.worlds.list());
+      if (a.sub === "library") return print(await c.worlds.library());
+      if (a.sub === "incident") {
+        if (!a.file) fail("rehearsal worlds incident: the following arguments are required: --file", 2);
+        const res = await c.worlds.reportIncident(a.wv_id, readFileSync(a.file, "utf8"));
+        print(res);
+        if (a.watch) { await watch(c.jobs.events(res.job_id)); print((await c.jobs.get(res.job_id)).result ?? {}); }
+        return;
+      }
       if (a.sub === "show") return print(await c.worlds.version(a.wv_id));
       if (a.sub === "scenarios") return print((await c.worlds.scenarios(a.wv_id)).map((s) => pick(s, "id", "slug", "family", "split", "status")));
       if (a.sub === "validate") return print(await c.worlds.validate(a.wv_id));

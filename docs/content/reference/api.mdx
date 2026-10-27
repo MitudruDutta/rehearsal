@@ -1,6 +1,6 @@
 ---
 title: REST API
-description: Every operation of the Rehearsal API, 75 in all, with the access it needs, its parameters and its request body.
+description: Every operation of the Rehearsal API, 77 in all, with the access it needs, its parameters and its request body.
 generated: true
 ---
 
@@ -66,12 +66,14 @@ Each operation below shows the least access it accepts. `admin` is accepted ever
 | [`POST /v1/jobs/{job_id}/commands`](#post-v1jobsjob_idcommands) | Pauses, resumes, stops or retries a server job |
 | [`GET /v1/worlds`](#get-v1worlds) | The worlds of the project, each with its versions and their status |
 | [`GET /v1/world-versions/{wv_id}`](#get-v1world-versionswv_id) | One world version: its manifest of services, roles and tools, its validation report and its provenance |
+| [`GET /v1/library`](#get-v1library) | Ready-made worlds: the latest published version of each world in the library, which any workspace can rehearse an agent on, or make an agent for, without building anything |
 | [`GET /v1/world-versions/{wv_id}/scenarios`](#get-v1world-versionswv_idscenarios) | The jobs of a world version, with their split, status and specification |
 | [`POST /v1/world-versions/{wv_id}/scenarios`](#post-v1world-versionswv_idscenarios) | Adds a scenario to a published world; it is validated before it can be approved |
 | [`GET /v1/scenarios/{sc_id}`](#get-v1scenariossc_id) | One job, with its specification and validation report |
 | [`POST /v1/scenarios/{sc_id}/approve`](#post-v1scenariossc_idapprove) | Approves a job, so that runs use it |
 | [`POST /v1/scenarios/{sc_id}/reject`](#post-v1scenariossc_idreject) | Rejects a job, so that runs do not use it |
 | [`POST /v1/world-versions/{wv_id}/validate`](#post-v1world-versionswv_idvalidate) | Re-checks a published world: replays every job, tries each with a live agent, and withdraws the unfair ones |
+| [`POST /v1/world-versions/{wv_id}/incidents`](#post-v1world-versionswv_idincidents) | Turns a production incident into a validated job in this world, so every later evaluation and gate checks for it |
 | [`GET /v1/agent-profiles`](#get-v1agent-profiles) | The agent profiles of the project, every version |
 | [`POST /v1/agent-profiles`](#post-v1agent-profiles) | Creates an agent profile |
 | [`GET /v1/agent-profiles/{prof_id}`](#get-v1agent-profilesprof_id) | One agent profile |
@@ -325,6 +327,14 @@ One world version: its manifest of services, roles and tools, its validation rep
 
 **Answers** `200`.
 
+### GET /v1/library
+
+<Operation method="GET" path="/v1/library" access="read" />
+
+Ready-made worlds: the latest published version of each world in the library, which any workspace can rehearse an agent on, or make an agent for, without building anything.
+
+**Answers** `200`.
+
 ### GET /v1/world-versions/\{wv_id\}/scenarios
 
 <Operation method="GET" path="/v1/world-versions/<wv_id>/scenarios" access="evaluator" />
@@ -400,6 +410,24 @@ Re-checks a published world: replays every job, tries each with a live agent, an
 | Parameter | In | Type | Default |
 |---|---|---|---|
 | `wv_id` | the path | string | required |
+
+**Answers** `202`.
+
+### POST /v1/world-versions/\{wv_id\}/incidents
+
+<Operation method="POST" path="/v1/world-versions/<wv_id>/incidents" access="write and evaluator" />
+
+Turns a production incident into a validated job in this world, so every later evaluation and gate checks for it.
+
+| Parameter | In | Type | Default |
+|---|---|---|---|
+| `wv_id` | the path | string | required |
+
+Request body, as JSON:
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `incident` | string, 40 to 20000 characters | required | What happened: what was asked, what the agent did, and what should have happened. A transcript is best. 40 to 20,000 characters. |
 
 **Answers** `202`.
 

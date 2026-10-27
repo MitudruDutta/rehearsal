@@ -90,6 +90,15 @@ class Worlds(_Resource):
     def list(self) -> list[dict[str, Any]]:
         return self.c.get("/v1/worlds")
 
+    def report_incident(self, wv_id: str, incident: str) -> dict[str, Any]:
+        """Turns something an agent got wrong in production into a validated job in this world (a job; poll it). Describe
+        what was asked, what the agent did and what should have happened; a transcript is best."""
+        return self.c.post(f"/v1/world-versions/{wv_id}/incidents", {"incident": incident})
+
+    def library(self) -> list[dict[str, Any]]:
+        """Ready-made worlds any workspace can rehearse an agent on, or make an agent for, without building one."""
+        return self.c.get("/v1/library")
+
     def version(self, wv_id: str) -> dict[str, Any]:
         return self.c.get(f"/v1/world-versions/{wv_id}")
 

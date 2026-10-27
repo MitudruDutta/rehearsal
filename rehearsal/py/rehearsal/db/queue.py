@@ -37,7 +37,7 @@ class Handover(Exception):
     """The worker is stopping (a deploy or restart): give the job back at a safe point instead of losing its lease."""
 
 
-SPENDING = {"world_build", "evaluation", "improvement", "world_validate"}  # job kinds that call models on the server's keys
+SPENDING = {"world_build", "evaluation", "improvement", "world_validate", "incident"}  # job kinds that call models on the server's keys
 
 
 class AllowanceExhausted(Exception):

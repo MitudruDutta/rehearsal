@@ -375,3 +375,81 @@ def test_an_agent_given_by_url_keeps_its_key_sealed(db, monkeypatch):
     assert "sk-secret-9" not in client.get("/v1/credentials", headers=h).text
     refused = client.post("/v1/agent-profiles", headers=h, json={"name": "inside", "endpoint": {"url": "https://10.0.0.1/v1"}})
     assert refused.status_code == 422 and "private" in refused.text
+
+
+def test_any_workspace_can_rehearse_on_a_library_world_without_seeing_its_held_out_jobs(db, monkeypatch):
+    from rehearsal.config import settings
+    from rehearsal.db.models import Scenario
+
+    lib_project, _ = bootstrap("Library", "library")
+    other_project, other_key = bootstrap("Other", "other")
+    wv_id = _published_world(lib_project, scenarios=1)
+    private_wv = _published_world(other_project, scenarios=1)
+    with session() as s:
+        s.add(Scenario(project_id=lib_project, world_version_id=wv_id, slug="secret", family="f", split="holdout", status="approved",
+                       spec={"title": "Refund the wrong order", "goals": [{"instruction": "the hidden answer"}]}))
+    monkeypatch.setenv("REHEARSAL_LIBRARY_PROJECT", lib_project)
+    settings.cache_clear()
+    try:
+        client, h = TestClient(app), {"Authorization": f"Bearer {other_key}"}
+        listed = client.get("/v1/library", headers=h).json()
+        assert [x["world_version_id"] for x in listed] == [wv_id] and listed[0]["scenario_counts"] == {"dev": 1, "holdout": 1}
+        shown = client.get(f"/v1/world-versions/{wv_id}", headers=h).json()
+        assert shown["library"] is True
+        jobs = client.get(f"/v1/world-versions/{wv_id}/scenarios", headers=h).json()
+        held = next(j for j in jobs if j["split"] == "holdout")
+        assert held["spec"] == {"title": "Refund the wrong order"} and "hidden answer" not in str(jobs)
+        assert client.post(f"/v1/world-versions/{wv_id}/bundle", headers=h).status_code == 404  # reading and rehearsing only
+        assert client.get(f"/v1/world-versions/{private_wv}", headers=h).status_code == 200  # its own, as before
+        prof = client.post("/v1/agent-profiles", headers=h, json={"name": "bot"}).json()
+        started = client.post("/v1/evaluations", headers=h, json={"world_version_id": wv_id, "profile_ids": [prof["id"]], "splits": ["dev"], "repeats": 1})
+        assert started.status_code == 202, started.text
+    finally:
+        monkeypatch.delenv("REHEARSAL_LIBRARY_PROJECT")
+        settings.cache_clear()
+    lib_key = bootstrap("Third", "third")[1]
+    assert TestClient(app).get(f"/v1/world-versions/{wv_id}", headers={"Authorization": f"Bearer {lib_key}"}).status_code == 404  # library off
+
+
+def test_an_incident_becomes_a_validated_job_after_the_validators_reasons(db, monkeypatch):
+    """The author's first job is refused with the validator's reasons; the second is validated, live-audited and added
+    to the dev split, approved, where every later evaluation and gate includes it."""
+    from types import SimpleNamespace
+
+    from rehearsal.compiler import validation
+    from rehearsal.db.models import Scenario, WorldVersion
+    from rehearsal.runner import runtime
+    from rehearsal.worker import incident
+    from rehearsal.worker.context import JobContext
+    from tests.fixtures.gitea_world import scenario, world
+
+    project, key = bootstrap("Test", "incident")
+    wv_id = _published_world(project, scenarios=1)
+    with session() as s:
+        wv = s.get(WorldVersion, wv_id)
+        wv.manifest, wv.private, wv.snapshot_dir = world().model_dump(mode="json", by_alias=True), {"secrets": {}, "vars": {"owner": "acme"}}, "snap"
+    r = TestClient(app).post(f"/v1/world-versions/{wv_id}/incidents", headers={"Authorization": f"Bearer {key}"},
+                             json={"incident": "A customer asked to close issue 4 after asking to close 3; the agent closed 3 anyway and said done."})
+    assert r.status_code == 202, r.text
+    spec = scenario().model_dump(mode="json")
+    replies = iter([{"id": "close_the_right_issue", "title": "too thin"}, {**spec, "id": "close_the_right_issue", "family": "x", "split": "holdout"}])
+    asked = []
+
+    def chat_json(chain, messages, **kw):
+        asked.append(messages[-1]["content"])
+        return next(replies), SimpleNamespace(cost_usd=0.01, prompt_tokens=10, completion_tokens=5)
+
+    monkeypatch.setattr(incident.llm, "chat_json", chat_json)
+    monkeypatch.setattr(runtime.WorldInstance, "create", classmethod(lambda cls, *a, **k: SimpleNamespace(destroy=lambda: None)))
+    monkeypatch.setattr(validation, "validate_scenario", lambda *a, **k: SimpleNamespace(ok=True, reasons=[], live=None, to_json=lambda: {"ok": True}))
+    monkeypatch.setattr(validation, "live_audit", lambda *a, **k: {"cause": "passed"})
+    with session() as s:
+        job = queue.claim(s, "worker-a", ["incident"])
+        s.expunge(job)
+    with JobContext(job, "worker-a") as ctx:
+        result = incident.handle(ctx)
+    assert result["attempts"] == 2 and "does not match the schema" in asked[-1]
+    with session() as s:
+        sc = s.get(Scenario, result["scenario_id"])
+        assert (sc.family, sc.split, sc.status, sc.approved_by) == ("incident", "dev", "approved", "incident")
+        queue.finish(s, s.get(Job, job.id), status="succeeded", result=result)

@@ -54,6 +54,7 @@ function AddApplication({ onAdded }: { onAdded: () => void }) {
 export function Applications() {
   const apps = useResource<any[]>("/v1/applications");
   const worlds = useResource<any[]>("/v1/worlds", 5000);
+  const library = useResource<any[]>("/v1/library");
   const [busy, setBusy] = useState<string | null>(null);
   const [removing, setRemoving] = useState<any | null>(null);
   const remove = async () => {
@@ -93,6 +94,27 @@ export function Applications() {
         description="Each build turns an application into a versioned practice world: the real app, fictional data, scoped tools, and validated scenarios."
         actions={<AddApplication onAdded={apps.reload} />}
       />
+      {!!library.data?.length && (
+        <section className="mb-6" aria-labelledby="library-title">
+          <h2 id="library-title" className="text-lg font-semibold">Ready-made worlds</h2>
+          <p className="mb-3 text-sm text-muted-foreground">Practice worlds that are already built. Rehearse an agent on one, or make an agent for it, without building anything.</p>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {library.data.map((w) => {
+              const counts = w.scenario_counts || {};
+              const jobs = Object.values(counts).reduce((n: number, c) => n + Number(c), 0);
+              return (
+                <Card key={w.world_version_id}>
+                  <CardHeader>
+                    <CardTitle>{w.application || w.world}</CardTitle>
+                    <CardDescription>{jobs} jobs ({counts.train || 0} train, {counts.dev || 0} dev, {counts.holdout || 0} held out), {w.tools} tools, roles {(w.roles || []).join(", ")}</CardDescription>
+                  </CardHeader>
+                  <CardContent><Button variant="outline" onClick={() => go(routes.world(w.world_version_id))}>Open the world</Button></CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {apps.data?.length === 0 && (
         <Card><CardContent className="flex flex-wrap items-center justify-between gap-4 pt-6">
           <p className="text-muted-foreground">No applications yet. Add yours, or load the pinned open-source applications Rehearsal is tested on.</p>

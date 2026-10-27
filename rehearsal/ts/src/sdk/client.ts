@@ -87,6 +87,10 @@ export class Worlds extends Resource {
     return this.c.post("/v1/factory", { world_version_id: worldVersionId, name: options.name ?? "", rounds: options.rounds ?? 3, repeats: options.repeats ?? 1 });
   }
   list(): Promise<Json[]> { return this.c.get("/v1/worlds"); }
+  /** Turns something an agent got wrong in production into a validated job in this world (a job; poll it). */
+  reportIncident(wvId: string, incident: string): Promise<Json> { return this.c.post(`/v1/world-versions/${wvId}/incidents`, { incident }); }
+  /** Ready-made worlds any workspace can rehearse an agent on, or make an agent for, without building one. */
+  library(): Promise<Json[]> { return this.c.get("/v1/library"); }
   version(wvId: string): Promise<Json> { return this.c.get(`/v1/world-versions/${wvId}`); }
   scenarios(wvId: string): Promise<Json[]> { return this.c.get(`/v1/world-versions/${wvId}/scenarios`); }
   validate(wvId: string): Promise<Json> { return this.c.post(`/v1/world-versions/${wvId}/validate`, {}); }

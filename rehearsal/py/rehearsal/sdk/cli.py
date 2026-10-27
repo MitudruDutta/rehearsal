@@ -273,6 +273,11 @@ def _main(argv: list[str] | None = None) -> None:
 
     worlds = actions(cmd("worlds", "list practice worlds, their jobs, re-checks and bundles"))
     worlds.add_parser("list", help="worlds and their versions")
+    worlds.add_parser("library", help="ready-made worlds you can rehearse on without building one")
+    inc = worlds.add_parser("incident", help="turn a production incident into a validated job in a world")
+    inc.add_argument("wv_id")
+    inc.add_argument("--file", required=True, help="the incident: what was asked, what the agent did, what should have happened")
+    inc.add_argument("--watch", action="store_true", help="follow the job until it ends, then print the new job or why none was made")
     worlds.add_parser("show", help="one world version").add_argument("wv_id")
     worlds.add_parser("scenarios", help="the jobs of a world version").add_argument("wv_id")
     worlds.add_parser("validate", help="re-check every job of a published world").add_argument("wv_id")
@@ -517,6 +522,14 @@ def _main(argv: list[str] | None = None) -> None:
         c = _client()
         if args.sub == "list":
             _print(c.worlds.list())
+        elif args.sub == "library":
+            _print(c.worlds.library())
+        elif args.sub == "incident":
+            res = c.worlds.report_incident(args.wv_id, Path(args.file).read_text())
+            _print(res)
+            if args.watch:
+                _watch(c.jobs.events(res["job_id"]))
+                _print(c.jobs.get(res["job_id"]).get("result") or {})
         elif args.sub == "show":
             _print(c.worlds.version(args.wv_id))
         elif args.sub == "scenarios":

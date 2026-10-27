@@ -104,6 +104,19 @@ def _get(s: Any, model: Any, id_: str, p: Principal) -> Any:
     return row
 
 
+def _world(s: Any, wv_id: str, p: Principal) -> Any:
+    """A world version this workspace may rehearse on: its own, or a published one from the world library."""
+    row = s.get(WorldVersion, wv_id)
+    if row is not None and row.project_id != p.project_id and _in_library(row):
+        return row
+    return _get(s, WorldVersion, wv_id, p)
+
+
+def _in_library(wv: Any) -> bool:
+    lib = settings().library_project
+    return bool(lib) and wv.project_id == lib and wv.status == "published"
+
+
 def _cols(row: Any, exclude: tuple[str, ...] = ()) -> dict[str, Any]:
     out = {}
     for c in row.__table__.columns:
@@ -622,17 +635,47 @@ def list_worlds(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
 def get_world_version(wv_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
     p.require("evaluator")
     with session() as s:
-        wv = _get(s, WorldVersion, wv_id, p)
+        wv = _world(s, wv_id, p)
         out = _cols(wv, ("private", "snapshot_dir"))
+        out["library"] = wv.project_id != p.project_id
         out["scenario_counts"] = dict(s.execute(select(Scenario.split, func.count()).where(Scenario.world_version_id == wv.id).group_by(Scenario.split)).all())
         return out
+
+
+@app.get("/v1/library")
+def world_library(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
+    """Ready-made worlds: the latest published version of each world in the library, which any workspace can rehearse an
+    agent on, or make an agent for, without building anything."""
+    lib = settings().library_project
+    if not lib:
+        return []
+    with session() as s:
+        latest: dict[str, Any] = {}
+        for wv in s.scalars(select(WorldVersion).where(WorldVersion.project_id == lib, WorldVersion.status == "published").order_by(WorldVersion.version)):
+            latest[wv.world_id] = wv
+        out = []
+        for wv in latest.values():
+            world = s.get(World, wv.world_id)
+            app_row = s.get(Application, world.application_id) if world else None
+            manifest = wv.manifest or {}
+            out.append({
+                "world_version_id": wv.id, "world": world.name if world else None, "version": wv.version,
+                "application": app_row.name if app_row else None, "notes": app_row.notes if app_row else "",
+                "source": app_row.source if app_row else None, "published_at": wv.created_at.isoformat() if wv.created_at else None,
+                "scenario_counts": dict(s.execute(select(Scenario.split, func.count()).where(Scenario.world_version_id == wv.id, Scenario.status == "approved").group_by(Scenario.split)).all()),
+                "tools": len(manifest.get("tools") or []), "roles": [r.get("name") for r in manifest.get("roles") or []],
+            })
+        return sorted(out, key=lambda r: r["world"] or "")
 
 
 @app.get("/v1/world-versions/{wv_id}/scenarios")
 def list_scenarios(wv_id: str, p: Principal = Depends(principal)) -> list[dict[str, Any]]:
     with session() as s:
-        _get(s, WorldVersion, wv_id, p)
-        return [_cols(sc, ("snapshot_dir",)) for sc in s.scalars(select(Scenario).where(Scenario.world_version_id == wv_id).order_by(Scenario.split, Scenario.slug))]
+        wv = _world(s, wv_id, p)
+        rows = [_cols(sc, ("snapshot_dir",)) for sc in s.scalars(select(Scenario).where(Scenario.world_version_id == wv_id).order_by(Scenario.split, Scenario.slug))]
+        if wv.project_id != p.project_id:  # a library world: held-out jobs stay unseen, so a score on them still means something
+            rows = [r if r["split"] != "holdout" else {**r, "spec": {"title": (r.get("spec") or {}).get("title")}} for r in rows]
+        return rows
 
 
 @app.get("/v1/scenarios/{sc_id}")
@@ -690,6 +733,23 @@ def revalidate(wv_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
         if wv.status != "published":
             raise HTTPException(409, "world version is not published")
         job = queue.enqueue(s, project_id=p.project_id, kind="world_validate", payload={"world_version_id": wv_id})
+        return {"job_id": job.id}
+
+
+class IncidentIn(BaseModel):
+    incident: str = Field(min_length=40, max_length=20000)  # what was asked, what the agent did, what should have happened
+
+
+@app.post("/v1/world-versions/{wv_id}/incidents", status_code=202)
+def report_incident(wv_id: str, body: IncidentIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Turns a production incident into a validated job in this world, so every later evaluation and gate checks for it."""
+    p.require("write")
+    with session() as s:
+        wv = _get(s, WorldVersion, wv_id, p)
+        if wv.status != "published":
+            raise HTTPException(409, "world version is not published")
+        job = queue.enqueue(s, project_id=p.project_id, kind="incident", payload={"world_version_id": wv_id, "incident": body.incident},
+                            budget_usd=1.0, max_attempts=2)
         return {"job_id": job.id}
 
 
@@ -769,7 +829,7 @@ class EvaluationIn(BaseModel):
 @app.post("/v1/evaluations", status_code=202)
 def create_evaluation(body: EvaluationIn, p: Principal = Depends(principal)) -> dict[str, Any]:
     with session() as s:
-        wv = _get(s, WorldVersion, body.world_version_id, p)
+        wv = _world(s, body.world_version_id, p)
         if wv.status != "published":
             raise HTTPException(409, "world version is not published")
         profiles = [_get(s, AgentProfileRow, pid, p) for pid in body.profile_ids]
@@ -1047,7 +1107,7 @@ class FactoryIn(BaseModel):
 def factory(body: FactoryIn, p: Principal = Depends(principal)) -> dict[str, Any]:
     """Agent Factory: draft an agent from the world, harden it with the fix loop, prove it on held-out jobs, package it."""
     with session() as s:
-        wv = _get(s, WorldVersion, body.world_version_id, p)
+        wv = _world(s, body.world_version_id, p)
         if wv.status != "published":
             raise HTTPException(409, "the world version is not published")
         jobs = dict(s.execute(select(Scenario.split, func.count()).where(Scenario.world_version_id == wv.id, Scenario.status == "approved").group_by(Scenario.split)).all())

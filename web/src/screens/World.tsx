@@ -175,6 +175,42 @@ function MakeAgent({ worldVersionId, worldName, jobs }: { worldVersionId: string
 const FINDINGS: [string, string, string][] = [["requests", "request", "What real users ask for"], ["rules", "rule", "Rules the application enforces"], ["pitfalls", "pitfall", "Where people go wrong"]];
 
 /** What the World Compiler learned about real use of the application from the web (Tavily), and which jobs it grounds. */
+/** Turns something an agent got wrong in production into a job in this world, validated like every other. */
+function Incident({ worldVersionId }: { worldVersionId: string }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await post<{ job_id: string }>(`/v1/world-versions/${worldVersionId}/incidents`, { incident: text });
+      toast.success("Writing a job from the incident. Once it validates, it joins the dev split.", { description: r.job_id });
+      setText("");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Turn an incident into a job</CardTitle>
+        <CardDescription>Describe something an agent got wrong in production: what was asked, what it did, what should have happened. A transcript is best. Rehearsal writes a job that puts an agent in the same spot, proves it can be passed and failed, and adds it to the dev split, so every later evaluation and gate checks for it.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={send} className="grid gap-3">
+          <Label htmlFor="incident" className="sr-only">Incident</Label>
+          <textarea id="incident" rows={6} minLength={40} required value={text} onChange={(e) => setText(e.target.value)}
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    placeholder="The customer asked to cancel order 1042, then corrected it to 1043 before the agent acted. The agent cancelled 1042 and said it was done." />
+          <div><Button type="submit" disabled={busy || text.trim().length < 40}>{busy ? "Starting" : "Write the job"}</Button></div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 function Research({ research, jobs }: { research?: any; jobs: any[] }) {
   if (!research?.requests) {
     return (
@@ -255,6 +291,7 @@ export function World({ worldVersionId }: { worldVersionId: string }) {
         <TabsList>
           <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
           <TabsTrigger value="research">Real-world research</TabsTrigger>
+          <TabsTrigger value="incidents">Incidents</TabsTrigger>
           <TabsTrigger value="tools">Tools and roles</TabsTrigger>
           <TabsTrigger value="caps">Capabilities</TabsTrigger>
           <TabsTrigger value="prov">Provenance</TabsTrigger>
@@ -289,6 +326,7 @@ export function World({ worldVersionId }: { worldVersionId: string }) {
           </Card>
         </TabsContent>
         <TabsContent value="research"><Research research={validation.research} jobs={scenarios.data || []} /></TabsContent>
+        <TabsContent value="incidents">{w.library ? <p className="text-sm text-muted-foreground">Incidents can be added to your own worlds; this one is from the world library.</p> : <Incident worldVersionId={worldVersionId} />}</TabsContent>
         <TabsContent value="tools" className="grid gap-4">
           <Card>
             <CardHeader><CardTitle>Roles</CardTitle></CardHeader>

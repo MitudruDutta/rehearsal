@@ -25,6 +25,7 @@ log = logging.getLogger("rehearsal.worker")
 HANDLERS: dict[str, str] = {
     "world_build": "rehearsal.worker.build:handle",
     "world_validate": "rehearsal.worker.build:handle_validate",
+    "incident": "rehearsal.worker.incident:handle",
     "evaluation": "rehearsal.worker.evaluate:handle",
     "improvement": "rehearsal.worker.improve:handle",
     "autofix": "rehearsal.worker.autofix:handle",

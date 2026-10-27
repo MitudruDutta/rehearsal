@@ -158,6 +158,30 @@ The worlds, each with its versions.
 
 Calls `GET /v1/worlds`.
 
+### rh.worlds.report_incident
+
+```python
+rh.worlds.report_incident(wv_id, incident)
+```
+
+Turns a production incident (what was asked, what the agent did, what should have happened) into a job in this world. The job is validated like any other and, once valid, joins the dev split, so later evaluations and gates check for it. Returns the job to follow.
+
+Turns something an agent got wrong in production into a validated job in this world (a job; poll it). Describe what was asked, what the agent did and what should have happened; a transcript is best.
+
+Calls `POST /v1/world-versions/<wv_id>/incidents`.
+
+### rh.worlds.library
+
+```python
+rh.worlds.library()
+```
+
+Ready-made worlds from the world library: the latest published version of each, with its job counts and tools. Any workspace can evaluate an agent on them, or make one, without building a world.
+
+Ready-made worlds any workspace can rehearse an agent on, or make an agent for, without building one.
+
+Calls `GET /v1/library`.
+
 ### rh.worlds.version
 
 ```python

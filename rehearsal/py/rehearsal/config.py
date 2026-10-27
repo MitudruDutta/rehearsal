@@ -44,6 +44,7 @@ class Settings:
     max_active_runs: int = 0
     monthly_allowance_usd: float = 0.0  # self-hosted server-wide model spend per calendar month; 0 = no limit
     allow_private_agent_urls: bool = False  # agent profiles may name endpoints on private networks (a server of your own)
+    library_project: str | None = None  # the project whose published worlds every workspace can rehearse on (the world library)
     plans: bool = False  # enforce the hosted plans (free, pro, team, enterprise); self-hosted servers leave this off
     admin_emails: frozenset[str] = frozenset()  # operator admins (Google sign-in only): see every workspace, set any plan
     quiet_hours_utc: str = "18:00-02:00"  # when free-plan evaluations may start (HH:MM-HH:MM, UTC; may cross midnight)
@@ -122,6 +123,7 @@ def settings() -> Settings:
         max_active_runs=int(env("REHEARSAL_MAX_ACTIVE_RUNS", "0")),
         monthly_allowance_usd=float(env("REHEARSAL_MONTHLY_ALLOWANCE_USD", "0")),
         allow_private_agent_urls=env("REHEARSAL_ALLOW_PRIVATE_AGENT_URLS", "").lower() in ("on", "true", "1"),
+        library_project=env("REHEARSAL_LIBRARY_PROJECT") or None,
         plans=env("REHEARSAL_PLANS", "off").lower() in ("on", "true", "1"),
         admin_emails=frozenset(e.strip().lower() for e in env("REHEARSAL_ADMIN_EMAILS", "").split(",") if e.strip()),
         quiet_hours_utc=quiet,

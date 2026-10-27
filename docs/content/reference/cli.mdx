@@ -308,10 +308,20 @@ List practice worlds, their jobs, re-checks and bundles.
 | Action | What it does |
 |---|---|
 | `rehearsal worlds list` | Worlds and their versions |
+| `rehearsal worlds library` | Ready-made worlds you can rehearse on without building one |
+| `rehearsal worlds incident <wv_id> --file <file> [--watch]` | Turn a production incident into a validated job in a world |
 | `rehearsal worlds show <wv_id>` | One world version |
 | `rehearsal worlds scenarios <wv_id>` | The jobs of a world version |
 | `rehearsal worlds validate <wv_id>` | Re-check every job of a published world |
 | `rehearsal worlds bundle <wv_id> [--include-images]` | Export a portable world bundle |
+
+Arguments of `rehearsal worlds incident`:
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `<wv_id>` | required | World version id, from `rehearsal worlds list`. |
+| `--file <file>` | required | The incident: what was asked, what the agent did, what should have happened. |
+| `--watch` |  | Follow the job until it ends, then print the new job or why none was made. |
 
 Arguments of `rehearsal worlds bundle`:
 
