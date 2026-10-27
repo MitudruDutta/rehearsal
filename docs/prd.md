@@ -6,7 +6,7 @@
 | **Document** | Product requirements (step 2 of 3: [scope](scope.md) → PRD → [spec](spec.md)) |
 | **Version** | 0.1.2 (`rehearsal-kit` on PyPI) |
 | **Status** | Implemented, except where a requirement says "planned" |
-| **Last updated** | 2026-10-19 |
+| **Last updated** | 2026-10-27 |
 
 ## 1. Overview
 
@@ -22,6 +22,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 2. Remove the weeks of hand-built test harness per application.
 3. Make every test trustworthy: no job ships unless it provably separates good behaviour from bad.
 4. Let a team improve an agent and prove the improvement on held-out jobs.
+5. Catch an agent change that makes things worse before it merges.
 
 **Non-goals** (see [scope §6](scope.md#6-out-of-scope-for-this-event)): closed SaaS applications, browser-only worlds, weight training, live-data drift, per-job VM isolation.
 
@@ -38,9 +39,10 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 
 1. **First result:** sign up → add an application (or import a pinned example) → build a world → run an evaluation → read the verdict.
 2. **Diagnose:** open a failed episode → see the actions, messages, injected faults and which database checks failed.
-3. **Improve and compare:** propose a new agent version from train and dev failures → evaluate it on held-out jobs → compare the two runs.
-4. **Bring your own agent:** drive episodes from your own code in any language through the episode API.
-5. **Self-host:** start the stack with Docker Compose, create the first admin, sign in.
+3. **Fix:** start the fix loop from a finished run → watch each round: its reason, its score against the best version, kept or discarded → read the held-out comparison of the best version and the original.
+4. **Guard a change:** open a pull request that edits the agent's instructions → the check rehearses it next to `main` → the pull request fails with a report when the change does worse.
+5. **Bring your own agent:** drive episodes from your own code in any language through the episode API.
+6. **Self-host:** start the stack with Docker Compose, create the first admin, sign in.
 
 ## 5. Functional requirements
 
@@ -90,6 +92,10 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | FR-20 | The improvement agent reads only train and dev episodes (never held-out ones) and edits only the system prompt and per-tool guidance. |
 | FR-21 | Two runs on the same world version can be compared side by side. |
 | FR-22 | Verified train and dev trajectories can be exported as a dataset; held-out jobs and checks are never exported. |
+| FR-35 | The fix loop runs 1 to 5 rounds in one job. Each round proposes a version from the best version's failures, shown the ideas that did not help, rehearses it on every train and dev job, and keeps it only if it verifies more with no more rule violations or false completions. |
+| FR-36 | After the rounds, or when every train and dev job passes, the original and the best version run side by side on held-out jobs. No held-out run happens when nothing beat the original. |
+| FR-37 | The fix loop saves every phase and resumes after a worker restart; stopping it fails its own runs and keeps every version made. It is refused for a bring-your-own agent, an unfinished run, or a run without finished train or dev episodes. |
+| FR-38 | `rehearsal gate` and a GitHub Action rehearse an agent change (a version made from an instructions file, reused when unchanged) next to a baseline, and exit 0 (passed), 1 (failed) or 2 (could not run). The defaults fail on any rule violation and on any regression against the baseline. |
 
 ### 5.6 Interfaces
 
@@ -122,6 +128,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | ID | Requirement |
 |---|---|
 | FR-34 | Every build, episode and improvement run keeps a full timeline (model calls, tool calls, checks, cost), with secrets masked before anything is stored. |
+| FR-39 | Builds, runs and fix loops show model usage by role: model and provider, reasoning on or off, calls, time per call, tokens and spend. |
 
 ## 6. Non-functional requirements
 
@@ -146,6 +153,8 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | S4 | The docs' quickstarts take a new user to a first result. |
 | S5 | rehearsalkit.xyz serves the console, accepts payments, and refuses to start an unpriced job. |
 | S6 | Each role's model calls go to NVIDIA Nemotron models on Nebius Token Factory. |
+| S7 | `rehearsal autofix` returns every round with its score and decision, and the held-out scores of the original and the best version. |
+| S8 | `rehearsal gate` exits 1 with a report when the change verifies less than the baseline or breaks a rule, and exits 2, not 1, when the run cannot start. |
 
 ## 8. Metrics
 
@@ -160,6 +169,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | Area | Status |
 |---|---|
 | World Compiler, validation, evaluation, verdict, improvement, comparison | Shipped |
+| Fix loop, pull request checks, model usage by role | Shipped during the Nebius x NVIDIA hackathon |
 | CLI, SDK, MCP server, agent plugin, console, docs | Shipped (`rehearsal-kit` 0.1.2) |
 | Hosted service with plans and live payments | Shipped (rehearsalkit.xyz) |
 | Weight training, world bundle replay | Planned (`rehearsal train` and `rehearsal run-bundle` report "not implemented") |

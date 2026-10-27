@@ -6,7 +6,7 @@
 | **Document** | Technical specification (step 3 of 3: [scope](scope.md) → [PRD](prd.md) → spec) |
 | **Version** | 0.1.2 |
 | **Status** | Describes the system as built; planned work is marked |
-| **Last updated** | 2026-10-19 |
+| **Last updated** | 2026-10-27 |
 
 ## 1. Architecture
 
@@ -113,6 +113,22 @@ No model judgement is involved. A published world can be re-checked later (`rehe
 - **Ready to pilot** = at least 3 scored episodes on jobs the version never learned from, verified rate ≥ 0.8, no violations, no false completions.
 - The **improvement agent** reads only train and dev episodes and edits only the system prompt and per-tool guidance; the new version is evaluated like any other.
 
+### 7.1 Fix loop (`autofix` job)
+
+One job runs the whole loop, so it never waits on other workers. Its state lives in the job checkpoint under `autofix`: `phase` (`propose`, `rehearse`, `holdout`, `done`), `round`, `original`, `best`, `rounds`, `current` and `holdout`.
+
+1. **Score the start** from the given run's finished train and dev episodes of the agent; refuse when there are none.
+2. **Propose:** the improvement agent writes a version from the best version's failures, with every rejected idea and its score in its input.
+3. **Rehearse:** a new run with only train and dev jobs, whose episodes carry the loop's `job_id`, so no evaluation shard can claim them. The loop runs them itself with the evaluation handler, one sandbox, one episode at a time.
+4. **Keep or discard:** kept only when `success_rate` is higher and `hard_violation_episodes` and `false_completions` are not. Stop early when the best version verifies every job.
+5. **Prove:** when the best version is not the original, one more run puts both on the held-out jobs.
+
+A worker restart resumes at the saved phase. A failed or stopped loop fails its own unfinished runs; a retry reopens them. `GET /v1/jobs/{id}` returns the `autofix` state of a loop, and nothing else of its checkpoint.
+
+### 7.2 Pull request checks (`rehearsal gate`)
+
+The gate runs on the client. It resolves the candidate (a profile id, or a version from an instructions file, reusing the latest version with identical instructions) and the optional baseline the same way, starts one run with both, polls it, and judges `summary.profiles["name@vN"].overall`: optional minimum success rate, at most `max_violations` episodes with a rule violation, and no regression against the baseline beyond `tolerance` in success rate, rule violations, false completions or duplicate effects. Exit codes: 0 passed, 1 failed, 2 could not run. `action.yml` is a composite GitHub Action that installs the client from the action's checkout, reads the baseline from a git ref, and passes every input through environment variables.
+
 ## 8. Job queue
 
 - A job is claimable when queued, or running with an expired lease (its worker died); claims use `FOR UPDATE SKIP LOCKED`.
@@ -125,12 +141,12 @@ No model judgement is involved. A published world can be re-checked later (`rehe
 - **REST** under `/v1`, with live event streams per job and run; OpenAPI at `/api/docs`.
 - **Auth:** API keys (random, shown once, hashed at rest, scoped `read`, `write`, `evaluator`, `agent`, `admin`) for the CLI, SDK and CI; same-origin session cookies for the console; Google sign-in or email and password; browser approval for `rehearsal login`.
 - **CLI and SDK:** `pip install rehearsal-kit`; reference pages are generated from the code and checked in CI.
-- **MCP server:** lets an AI assistant add applications, build worlds, run evaluations, read failures, propose improvements, or act as the agent under test.
+- **MCP server:** lets an AI assistant add applications, build worlds, run evaluations, read failures, fix or improve agents, or act as the agent under test.
 - **Console:** Next.js exported to static files and served by the API.
 
 ## 10. Models and spending
 
-- One OpenAI-compatible client with fallback chains (`provider:model,...`) across 17 providers, including OpenAI, Anthropic, Google, Groq, Nebius, OpenRouter and a LiteLLM proxy. Rate limits, credit errors, server errors and timeouts move to the next entry. Each call has a 180-second limit and a 10-second connect timeout.
+- One OpenAI-compatible client with fallback chains (`provider:model[#think|#nothink],...`) across 17 providers. The default for every role is NVIDIA Nemotron on Nebius Token Factory: `#think` and `#nothink` set `chat_template_kwargs.enable_thinking` per entry. Roles: compiler (`REHEARSAL_MODEL_COMPILER`, Super then Ultra), reasoner for job design, validation investigation, build repair and the live audit (`_REASONER`, Ultra then Super), agent (`_AGENT`, Super then Ultra), simulated customer (`_PARTICIPANT`, Nano then Super, reasoning off), improvement (`_IMPROVER`, the reasoner chain). Rate limits, credit errors, server errors and timeouts move to the next entry. Each call has a 180-second limit and a 10-second connect timeout.
 - Prices come from the provider's reported cost, its price list, a pinned price file, or OpenRouter's listing of the vendor or host. A job does not start if any model in its chain has no known price.
 - Every job has a spending cap and every workspace a monthly allowance.
 
@@ -141,6 +157,7 @@ Plans (Free, Pro, Team, Enterprise) set applications, builds and episodes per mo
 ## 12. Observability
 
 - **Timelines:** every build, episode and improvement run writes its steps to the event log in the same transaction as the change it describes; the console shows them live. Every summary and recorded action passes through secret masking first.
+- **Usage by role:** each model call adds its role, model, reasoning flag, tokens, time and cost to the running job's usage (a context variable shared by compiler lanes); a succeeded job stores it in `result.models`. A run's `models` merges its shards.
 
 ## 13. Deployment
 
@@ -149,8 +166,8 @@ Plans (Free, Pro, Team, Enterprise) set applications, builds and episodes per mo
 
 ## 14. Testing
 
-- **Unit tests** (565): contracts, compiler validation, runtime arguments, billing, pricing, API limits, recovery after crashes.
-- **Integration tests** (40): API and queue against PostgreSQL, CLI sign-in, plans, and a full episode against a real Gitea container.
+- **Unit tests** (581): contracts, compiler validation, model routing, the fix loop, the gate, runtime arguments, billing, pricing, API limits, recovery after crashes.
+- **Integration tests** (43): API and queue against PostgreSQL, the fix loop's endpoint and run ownership, CLI sign-in, plans, and a full episode against a real Gitea container.
 - **CI:** tests and a console build on every push; docs reference pages must match the code, plus lint, build and link checks.
 
 ## 15. Known limitations

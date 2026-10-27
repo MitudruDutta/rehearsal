@@ -8,7 +8,7 @@
 
 **Prove your AI agent works before it ships.**
 
-Rehearsal runs your agent on a working copy of your real application, with fictional data, and decides every outcome by reading the application's own database. No model grades the result.
+Rehearsal is CI for AI agents. It runs your agent on a working copy of your real application, with fictional data, and decides every outcome by reading the application's own database. No model grades the result. When the agent fails, Rehearsal fixes it in rounds and proves the fix on jobs it has never seen; when someone changes the agent, a pull request check catches regressions.
 
 [![PyPI](https://img.shields.io/pypi/v/rehearsal-kit?label=rehearsal-kit&color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/rehearsal-kit?color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
@@ -16,7 +16,7 @@ Rehearsal runs your agent on a working copy of your real application, with ficti
 [![Docs](https://img.shields.io/badge/docs-docs.rehearsalkit.xyz-2b59d9)](https://docs.rehearsalkit.xyz)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b59d9)](LICENSE)
 
-[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Self-hosting](#self-hosting) · [Planning docs](#planning-docs) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
+[Website](https://rehearsalkit.xyz) · [Documentation](https://docs.rehearsalkit.xyz) · [Quickstart](#quickstart) · [Nemotron on Nebius](#nebius-x-nvidia-global-ai-hackathon) · [Self-hosting](#self-hosting) · [Planning docs](#planning-docs) · [Report a bug](https://github.com/MitudruDutta/rehearsal/issues)
 
 <img src=".github/assets/rehearsal-hero.webp" alt="The Rehearsal landing page, replaying a real World Compiler build of Gitea" width="900">
 
@@ -35,10 +35,11 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 - **Simulated customers.** Customers revise their request mid-task, so an agent that finishes the old request gets caught.
 - **Failures on purpose.** Requests time out after the change already went through, so blind retries show up as duplicates.
 - **Readiness verdict.** Ready to pilot, or not yet, with every measure linked to the episodes behind it.
-- **Improve, then compare.** The improvement agent proposes the next agent version from failed training jobs. Compare both versions on held-out jobs neither has seen.
+- **Fix my agent.** A loop that writes the next agent version from failed training jobs, rehearses it, and keeps it only if it verifies more episodes without breaking a rule. Rejected ideas are shown to the next round. The best version is then proved against the original on held-out jobs that no round has seen.
+- **Pull request checks.** `rehearsal gate` and a GitHub Action rehearse a changed agent next to the version on `main` and fail the check on a broken rule or any regression.
 - **Bring your own agent.** Describe an agent with instructions and a model, or drive episodes from your own code in any language through the episode API.
-- **Every step on the record.** Each build, rehearsal and improvement keeps its full timeline in Rehearsal: model calls, tool calls, checks, and what each one cost.
-- **Any model provider.** OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, Nebius, NVIDIA, OpenRouter, a LiteLLM proxy, or any OpenAI-compatible endpoint, with fallback chains and spend caps.
+- **Every step on the record.** Each build, rehearsal and improvement keeps its full timeline in Rehearsal: model calls, tool calls, checks, and what each one cost, broken down by role and model.
+- **NVIDIA Nemotron by default, any provider if you want.** Every role runs on Nemotron through Nebius Token Factory, routed by role, with reasoning switched on only where it pays. OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, OpenRouter, a LiteLLM proxy, or any OpenAI-compatible endpoint also work, with fallback chains and spend caps.
 
 ## How it works
 
@@ -49,13 +50,52 @@ flowchart TD
     C --> D["Episodes: your agent, simulated customer, injected faults"]
     D --> E["Read-only checks on the app's database"]
     E --> F["Readiness verdict"]
-    F --> G["Improve the agent"]
+    F --> G["Fix my agent: rounds of improve and rehearse"]
     G -->|"held-out jobs"| D
+    D --> H["Pull request check: the change against main"]
 ```
 
 1. **Build a practice world.** The World Compiler turns an application into a versioned, resettable world. Each episode starts from the same snapshot.
 2. **Rehearse the agent.** Your agent works through jobs while a simulated customer talks to it and faults are injected.
-3. **Verify and improve.** Checks decide each outcome. Failures feed the next agent version, which is compared on jobs it has never seen.
+3. **Verify and fix.** Checks decide each outcome. The fix loop turns failures into better versions and keeps only the ones that verify more; the best one is proved on jobs it has never seen.
+4. **Guard every change.** A pull request that touches the agent is rehearsed next to `main` before it merges.
+
+## Nebius x NVIDIA Global AI Hackathon
+
+Rehearsal is entered in the Coding and Agentic Engineering track. It existed before the hackathon; what changed during the submission period is listed below.
+
+### How Rehearsal uses NVIDIA Nemotron and Nebius Token Factory
+
+Every model call in Rehearsal goes to an NVIDIA Nemotron open model served by [Nebius Token Factory](https://nebius.com/token-factory), through its OpenAI-compatible API (`https://api.tokenfactory.nebius.com/v1`, `NEBIUS_API_KEY`). There are many roles, and they need different things, so each role has its own model chain:
+
+| Role | What it does | Default chain | Reasoning |
+|---|---|---|---|
+| World Compiler (most roles) | Reads the source, runs the app in a sandbox, seeds data, writes tools and checks | Nemotron 3 Super, then Ultra | on |
+| Hard compiler roles | Designs jobs, investigates failed validations, repairs builds, audits jobs live | Nemotron 3 Ultra, then Super | on |
+| Agent under test | Does the job through the application's tools | Nemotron 3 Super, then Ultra | on |
+| Simulated customer | Talks to the agent, changes its mind mid-task | Nemotron 3 Nano, then Super | off |
+| Improvement step (fix loop) | Writes the next agent version from failures | Nemotron 3 Ultra, then Super | on |
+
+- **Routed by role.** A chain is `provider:model[#think|#nothink]`, so `nebius:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B#nothink` is Nano with reasoning off. The flag becomes `chat_template_kwargs.enable_thinking` on the request. The next model in a chain takes over when one fails.
+- **Reasoning only where it pays.** The simulated customer answers in one or two sentences. With reasoning off, a Nano customer turn went from 2.7 s and 191 output tokens to 0.5 s and 28 tokens in our measurement. Ultra is kept for the roles where a wrong answer costs a whole build: designing jobs and judging them.
+- **Measured per role.** Every call records its role, model, tokens, time and cost. The console shows a "Models by role" table for each build, run and fix loop, and `rehearsal prices` shows the price used for each configured model.
+- **Tool calls on every size.** Tool calling works on Nemotron 3 Nano, Super and Ultra; the agent under test and the compiler roles depend on it.
+
+### What changed during the submission period
+
+- **Nemotron on Nebius Token Factory became the default for every role.** Before, production ran on models behind a LiteLLM proxy and every World Compiler role shared one chain. Now each role has its own Nemotron chain with a reasoning switch, the hardest compiler roles run on Ultra, and usage is recorded per role.
+- **Fix my agent.** Before, the improvement step proposed one new version and left the checking to you. Now an `autofix` job runs rounds of propose, rehearse on train and dev, and keep only if better (more verified, no new rule violation or false completion), feeds rejected ideas to the next round, and proves the best version against the original on held-out jobs. It resumes from its checkpoint after a worker restart. API `POST /v1/autofix`, CLI `rehearsal autofix`, SDK `rh.profiles.autofix`, MCP tool `fix_agent`, and a console page with each round, its reason, its score, and the sentences it changed.
+- **Pull request checks.** `rehearsal gate` and a GitHub Action (`action.yml`) rehearse a changed agent next to the version on `main` and fail on a broken rule or a regression, with a Markdown report in the job summary.
+- **Models by role** in the console, for builds, runs and fix loops.
+- **Cleanup.** Third-party tracing was removed; secret masking now lives in one module. Secret settings no longer appear in printed configuration. Next.js was upgraded to 16.4.2.
+
+### Feedback on Nebius and NVIDIA tools
+
+- **The OpenAI-compatible API made the switch a configuration change.** Rehearsal already spoke the OpenAI chat format, so adding Token Factory was one provider entry: a base URL and a key. Tool calling worked on Nano, Super and Ultra without changes to our tool schemas.
+- **The reasoning switch is the most useful knob.** `enable_thinking` per request let us run the same model family in a fast mode for chatty roles and a careful mode for judging roles. It has to go through `extra_body.chat_template_kwargs`, which is easy to miss; a top-level parameter, or a note in the quickstart, would help.
+- **Model ids are cased differently** (`nvidia/Nemotron-3-Ultra-550b-a55b`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`). We copy them exactly; a consistent scheme would avoid typos in configuration.
+- **Clear per-token prices** let us put a spend cap on every job before it runs, from Nano at $0.06 / $0.24 per million tokens to Ultra at $1 / $3.
+- **Serverless AI Jobs did not fit our builds.** A world build starts the application's own containers in a sandbox, so a worker needs Docker. Serverless Jobs run one container, and the documentation does not describe privileged mode or a Docker socket, so our workers stay on a VM with Docker. Rootless or nested container support in Jobs would let each build run as its own job.
 
 ## Quickstart
 
@@ -76,10 +116,11 @@ rehearsal worlds list                                    # note the published wo
 rehearsal profiles create support-agent                  # add --prompt-file FILE for your own instructions
 rehearsal eval WV_ID --profile PROFILE_ID --split dev --watch
 rehearsal runs episode EPISODE_ID                        # actions, messages, and which checks failed
-rehearsal improve PROFILE_ID RUN_ID                      # propose the next agent version
-rehearsal eval WV_ID --profile NEW_PROFILE_ID --split holdout --watch
-rehearsal compare RUN_A RUN_B
+rehearsal autofix PROFILE_ID RUN_ID --rounds 3 --watch   # fix it in rounds, proved on held-out jobs
+rehearsal gate WV_ID --prompt-file agent.md --name support-agent --baseline-file main-agent.md   # the CI check
 ```
+
+In GitHub Actions, the same check is one step: `uses: MitudruDutta/rehearsal@main`. See [Use Rehearsal in CI](https://docs.rehearsalkit.xyz/guides/use-rehearsal-in-ci).
 
 Add your own application by pinning its source commit and images:
 
@@ -132,7 +173,7 @@ Then ask your assistant to build a world, run an evaluation, or explain a failed
 
 The server, workers and sandboxes run on Linux with Docker. The CLI and SDK run anywhere.
 
-**Requirements:** Python 3.11–3.13, Docker with Compose, PostgreSQL (local or managed, Supabase recommended), and a key for at least one model provider. Node 22 and pnpm 10 are needed only to build the console from source.
+**Requirements:** Python 3.11–3.13, Docker with Compose, PostgreSQL (local or managed, Supabase recommended), and a Nebius Token Factory key (`NEBIUS_API_KEY`) for the default Nemotron models, or a key for any other provider. Node 22 and pnpm 10 are needed only to build the console from source.
 
 ### Docker Compose
 
@@ -151,8 +192,8 @@ Add `--profile public` with `REHEARSAL_DOMAIN` set to serve HTTPS. The worker co
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-python -m pip install -e '.[server,telemetry,dev]'
-cp .env.example .env                                     # set REHEARSAL_SESSION_SECRET and a provider key
+python -m pip install -e '.[server,dev]'
+cp .env.example .env                                     # set REHEARSAL_SESSION_SECRET and NEBIUS_API_KEY
 (cd web && pnpm install --frozen-lockfile && pnpm build) # build the console once
 
 rehearsal up                                             # PostgreSQL in Docker on 127.0.0.1:5433, then migrations
@@ -212,12 +253,13 @@ Rehearsal was planned before it was built, in three documents that build on each
 
 ## Status
 
-Rehearsal is in early release (0.1.x). World builds, evaluations, improvement and comparison work end to end. `rehearsal train` and `rehearsal run-bundle` exist but report that they are not implemented yet. A world build takes one to three hours and spends model budget; every job has a spend cap.
+Rehearsal is in early release (0.1.x). World builds, evaluations, the fix loop, pull request checks and comparison work end to end. `rehearsal train` and `rehearsal run-bundle` exist but report that they are not implemented yet. A world build takes one to three hours and spends model budget; every job has a spend cap.
 
 ## Built with
 
-- [NVIDIA Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) open models run every agent in Rehearsal.
+- [NVIDIA Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) open models (Nano, Super and Ultra) run every role in Rehearsal.
 - [Nebius Token Factory](https://nebius.com/token-factory) serves them.
+- FastAPI, SQLAlchemy and PostgreSQL for the control plane; Docker for sandboxes; Next.js for the console and documentation.
 
 ## Contributing
 
