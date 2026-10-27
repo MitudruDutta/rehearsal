@@ -6,7 +6,7 @@ import { BentoCard, BentoGrid } from "@/components/blocks/bento-grid";
 import { SpotlightCard } from "@/components/blocks/spotlight-card";
 import { Mark } from "@/components/mark";
 import { HeroWindow } from "../landing/HeroWindow";
-import { InstallChip } from "../landing/InstallChip";
+import { InstallPicker } from "../landing/InstallChip";
 import { PixelBackdrop } from "../landing/PixelBackdrop";
 import { PixelTrail } from "../landing/PixelTrail";
 import { PoweredBy } from "../landing/PoweredBy";
@@ -31,10 +31,10 @@ const TIERS = [
 const FAQ = [
   ["Can I train a model on my practice worlds?", "Coming soon. Every episode already ends with a score verified in your application's database, which is the reward reinforcement learning needs. Today you can export verified episodes as a dataset and improve an agent's instructions from its failures."],
   ["Does Rehearsal touch my production data?", "No. It runs your application's published images in a network with no internet access, with fictional data it creates itself. Checks read the sandbox database read-only."],
-  ["Do I need to write code?", "No. Sign in, add your application, build its world, and rehearse an agent from the dashboard. The CLI and Python SDK do the same things for CI pipelines and scripts."],
+  ["Do I need to write code?", "No. Sign in, add your application, build its world, and rehearse an agent from the dashboard. The CLI and the Python and TypeScript SDKs do the same things for CI pipelines and scripts."],
   ["Which applications work?", "Web applications that run in containers and expose an HTTP or GraphQL API, backed by SQLite, PostgreSQL, or MySQL. One catalog application is kept out of development entirely, to test applications the compiler has never seen."],
   ["Which agents can I rehearse?", "Any model behind an OpenAI-compatible API, described as an agent profile, or your own agent in any language through the episode API."],
-  ["How do I install it?", "pip install rehearsal-kit installs the CLI and Python SDK. To run the server, workers, and sandboxes yourself, install rehearsal-kit[server] on a Linux machine with Docker."],
+  ["How do I install it?", "pip install rehearsal-kit installs the CLI and Python SDK; npm install rehearsal-kit (or pnpm or bun) installs the same CLI and the TypeScript SDK. To run the server, workers, and sandboxes yourself, install rehearsal-kit[server] on a Linux machine with Docker."],
   ["How is model cost counted?", "From the cost the provider reports, the serving provider's published price list, or a dated override, with the source recorded for every call."],
 ];
 
@@ -91,7 +91,7 @@ export default function Landing() {
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <StartCta />
-                <InstallChip />
+                <InstallPicker />
               </div>
             </div>
             <div id="live" className="relative mx-auto mt-14 max-w-6xl scroll-mt-24 pb-20">
