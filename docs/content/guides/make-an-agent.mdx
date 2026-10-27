@@ -1,0 +1,104 @@
+---
+title: Make an agent
+description: Let Rehearsal write an agent for your application, harden it, prove it on jobs it has never seen, and hand it to you as a program you can run.
+audience: Agent developers
+last_reviewed: 2026-10-27
+time: 15 to 60 minutes
+cost: About $0.02 per episode it runs
+needs: a published world version
+---
+
+You do not need an agent to start. The Agent Factory writes one for a published world, tests it the way Rehearsal
+tests any agent, improves it, and packages the best version with the proof that it works.
+
+## What it does
+
+1. **Draft.** The agent designer writes the agent's instructions and tool guidance from the world itself: its roles and
+   tools, which changes are safe to retry, your policies, the research on how real people use the application, and the
+   mistakes Rehearsal checks for.
+2. **Rehearse.** The draft runs every `train` and `dev` job, with the default stress layer on.
+3. **Harden.** The [fix loop](/guides/improve-an-agent#fix-it-in-rounds) improves it round by round and keeps only
+   versions that verify more without breaking a rule.
+4. **Prove.** The best version runs the `holdout` jobs, which nothing above has seen. When a round improved it, the draft
+   runs beside it, so you see the gain.
+5. **Package.** A zip you download from the console, the CLI or the SDK.
+
+<Cost amount="about $0.02 per episode">
+
+It runs at most (rounds + 1) × (`train` and `dev` jobs) + 2 × (`holdout` jobs) episodes, times the repeats. The
+console shows the number before you start, and the loop stops early when every job passes.
+
+</Cost>
+
+<Ways items={["Console", "CLI", "Python", "MCP"]}>
+<Tab value="Console">
+
+Open the world and choose **Make an agent**. Give it a name and the number of rounds. The page that opens shows the
+draft, each round, and the held-out result. When it is done, choose **Download the agent**.
+
+</Tab>
+<Tab value="CLI">
+
+```bash
+rehearsal factory <wv_id> --name support-agent --rounds 3 --watch
+rehearsal artifacts download <artifact_id> support-agent.zip
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+job = rh.worlds.make_agent(world_version_id, name="support-agent")
+done = rh.jobs.wait(job["job_id"])
+print(done["result"]["holdout"], done["result"]["artifact_id"])
+```
+
+</Tab>
+<Tab value="MCP">
+
+Ask your assistant to make an agent for the world. It tells you the episode count, calls `make_agent` after you agree,
+then `job_status` until the agent is packaged.
+
+</Tab>
+</Ways>
+
+## What is in the zip
+
+| File | What it is |
+|---|---|
+| `agent.py` | The agent, as one Python program. It runs on NVIDIA Nemotron through Nebius Token Factory and calls your application's real API |
+| `agent.json` | Its instructions, and each tool with the HTTP request it makes |
+| `PROOF.md` | Its scores on `train`, `dev` and `holdout` jobs, how each round went, and the failure causes that remain |
+| `README.md` | How to run it |
+
+```bash
+pip install openai httpx
+export NEBIUS_API_KEY=...
+export APP_URL=https://your-app.example
+export APP_AUTH="Authorization: token ..."
+python agent.py
+```
+
+You type as the customer. The agent uses only the tools of its role, and it asks you before every change it makes in
+your application. Set `CONFIRM_WRITES=0` only when you trust it.
+
+<Caution title="It acts on your real application">
+
+The agent was proved on a sandboxed copy of your application, with fictional data. The program you download calls the
+address in `APP_URL`. Give it an account with only the permissions of its role, start with a staging copy, and keep
+`CONFIRM_WRITES` on until you have watched it work.
+
+</Caution>
+
+## After that
+
+- Keep the agent's instructions in your repository and add the [CI gate](/guides/use-rehearsal-in-ci), so a change that
+  makes it worse fails its pull request.
+- When your application has a new release, build a new world version and make or fix the agent again.
+
+## Next
+
+<LinkCards>
+  <LinkCard href="/guides/read-results" title="Read results">Why each episode passed or failed.</LinkCard>
+  <LinkCard href="/guides/use-rehearsal-in-ci" title="Use Rehearsal in CI">Guard the agent's instructions on every pull request.</LinkCard>
+</LinkCards>

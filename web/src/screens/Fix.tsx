@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, GitCompareArrows, Loader2, RotateCcw, Square, X } from "lucide-react";
+import { Check, Download, GitCompareArrows, Loader2, RotateCcw, Square, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -85,8 +85,21 @@ function Round({ r }: { r: any }) {
   );
 }
 
-function Proof({ st, done }: { st: any; done: boolean }) {
+function Proof({ st, done, made }: { st: any; done: boolean; made?: boolean }) {
   const { original, best, holdout } = st;
+  if (holdout && !holdout.original) { // the Agent Factory's draft needed no round, so it was proved alone
+    return (
+      <Card className="mb-6 border-primary/30">
+        <CardHeader>
+          <CardTitle>v{best.version} verifies {pct(holdout.best.success_rate)} on jobs it never saw</CardTitle>
+          <CardDescription>No round was needed on train and dev jobs, so the draft itself was proved on held-out jobs. This is the result to trust.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <Stat value={pct(holdout.best.success_rate)} label={`v${best.version} on held-out jobs`} hint={`${holdout.best.hard_violation_episodes ?? 0} rule violations, ${holdout.best.false_completions ?? 0} false completions`} />
+        </CardContent>
+      </Card>
+    );
+  }
   if (holdout) {
     const gain = Math.round((holdout.best.success_rate ?? 0) * 100) - Math.round((holdout.original.success_rate ?? 0) * 100); // the same rounding as the percentages shown
     return (
@@ -96,7 +109,7 @@ function Proof({ st, done }: { st: any; done: boolean }) {
           <CardDescription>No round saw these held-out jobs, so this comparison is the result to trust, not the training score.{gain <= 0 ? ` Keep v${original.version}.` : ""}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          <Stat value={pct(holdout.original.success_rate)} label={`v${original.version}, the original`} hint={`${holdout.original.hard_violation_episodes} rule violations, ${holdout.original.false_completions} false completions`} />
+          <Stat value={pct(holdout.original.success_rate)} label={`v${original.version}, ${made ? "the draft" : "the original"}`} hint={`${holdout.original.hard_violation_episodes} rule violations, ${holdout.original.false_completions} false completions`} />
           <Stat value={pct(holdout.best.success_rate)} label={`v${best.version}, the best version`} hint={`${holdout.best.hard_violation_episodes} rule violations, ${holdout.best.false_completions} false completions`} className={gain > 0 ? "border-success/40" : undefined} />
         </CardContent>
       </Card>
@@ -121,7 +134,11 @@ export function Fix({ jobId }: { jobId: string }) {
   const { events } = useEvents(`/v1/jobs/${jobId}/events?restart=${attempt}`);
   const j = job.data;
   const st = j?.result?.original ? j.result : j?.autofix; // a job's result is {} until it succeeds
-  const profile = useResource<any>(j ? `/v1/agent-profiles/${j.payload.profile_id}` : null);
+  const made = j?.kind === "factory"; // the Agent Factory: a drafted agent, then this same loop
+  const fac = j?.factory;
+  const startId = made ? fac?.draft?.profile_id : j?.payload.profile_id;
+  const profile = useResource<any>(startId ? `/v1/agent-profiles/${startId}` : null);
+  const artifact = j?.result?.artifact_id;
   const failed = j?.status === "failed" || j?.status === "cancelled";
   const next = nextStep(j?.status === "cancelled" ? "stopped on request" : j?.error);
   const progress = [...events].reverse().find((e) => e.type === "run.progress")?.summary;
@@ -132,26 +149,32 @@ export function Fix({ jobId }: { jobId: string }) {
     job.reload();
   };
   const working = ["running", "queued", "paused"].includes(j?.status);
-  const now = !st ? "Scoring the starting version" : st.phase === "propose" ? `Writing round ${st.round}'s version from v${st.best.version}'s failures`
+  const now = made && (!fac || fac.phase === "draft") ? "Writing the agent from the world's tools, rules and research"
+    : made && fac.phase === "rehearse" ? `Rehearsing the draft on every train and dev job${progress ? `: ${progress}` : ""}`
+    : made && fac.phase === "prove" ? `Proving v${st?.best?.version ?? 1} on held-out jobs${progress ? `: ${progress}` : ""}`
+    : made && fac.phase === "package" ? "Packaging the agent and its proof report"
+    : !st ? "Scoring the starting version" : st.phase === "propose" ? `Writing round ${st.round}'s version from v${st.best.version}'s failures`
     : st.phase === "rehearse" ? `Rehearsing v${st.current?.version} on every train and dev job${progress ? `: ${progress}` : ""}`
     : st.phase === "holdout" ? `Running v${st.original.version} and v${st.best.version} side by side on held-out jobs${progress ? `: ${progress}` : ""}` : null;
   return (
     <>
       <PageHeader
-        title={<span className="flex flex-wrap items-center gap-3">Fix {profile.data?.name ?? "agent"} {j && <StatusBadge status={j.status} />}</span>}
-        description="Each round writes a new version from the failures, rehearses it on every train and dev job, and keeps it only if it verifies more without breaking a rule or claiming done falsely. The best version is then proved against the original on held-out jobs."
+        title={<span className="flex flex-wrap items-center gap-3">{made ? "Make" : "Fix"} {profile.data?.name ?? j?.payload?.name ?? "agent"} {j && <StatusBadge status={j.status} />}</span>}
+        description={made ? "The Agent Factory writes an agent from the world, rehearses it on every train and dev job, improves it round by round, proves it on held-out jobs, and packages it with its proof report."
+          : "Each round writes a new version from the failures, rehearses it on every train and dev job, and keeps it only if it verifies more without breaking a rule or claiming done falsely. The best version is then proved against the original on held-out jobs."}
         actions={
           <>
             {working && <Button variant="outline" className="text-destructive" onClick={() => command("stop")}><Square /> Stop</Button>}
             {failed && <Button variant={next.restart ? "default" : "outline"} onClick={() => command("retry")}><RotateCcw /> Restart from last round</Button>}
             {st?.holdout && <Button variant="outline" onClick={() => go(routes.compare(st.holdout.run_id))}><GitCompareArrows /> Compare on held-out jobs</Button>}
-            {j?.status === "succeeded" && <Button onClick={() => go(routes.agents)}>Open agents</Button>}
+            {artifact && <Button asChild><a href={`/v1/artifacts/${artifact}/download`}><Download /> Download the agent</a></Button>}
+            {j?.status === "succeeded" && <Button variant={artifact ? "outline" : "default"} onClick={() => go(routes.agents)}>Open agents</Button>}
           </>
         }
       />
       {j?.error && failed && (
         <Alert variant="destructive" className="mb-4">
-          <AlertTitle>The fix loop stopped</AlertTitle>
+          <AlertTitle>{made ? "The Agent Factory stopped" : "The fix loop stopped"}</AlertTitle>
           <AlertDescription>{explainProblem(j.error)} {next.text} Versions made so far are kept on the Agents page.</AlertDescription>
         </Alert>
       )}
@@ -161,23 +184,24 @@ export function Fix({ jobId }: { jobId: string }) {
           <span className="ml-auto whitespace-nowrap text-muted-foreground">Round {Math.min(st?.round ?? 1, j.payload.rounds)} of {j.payload.rounds}, spent ${(j.spent_usd ?? 0).toFixed(2)}</span>
         </div>
       )}
-      {st && <Proof st={st} done={j?.status === "succeeded"} />}
+      {st && <Proof st={st} done={j?.status === "succeeded"} made={made} />}
       <Card>
         <CardHeader>
           <CardTitle>Rounds</CardTitle>
           <CardDescription>Each version is compared with the best one before it. A tie is not kept. Rejected ideas are shown to the next round, so it tries something else.</CardDescription>
         </CardHeader>
         <CardContent>
-          {!st && <p className="text-sm text-muted-foreground">The first round starts once the starting version is scored.</p>}
+          {!st && <p className="text-sm text-muted-foreground">{made && fac?.draft ? `v${fac.draft.version} was drafted: ${fac.draft.rationale || "from the world"}. The first round starts once it is scored.` : "The first round starts once the starting version is scored."}</p>}
           {st && (
             <ol className="relative before:absolute before:bottom-2 before:left-3 before:top-2 before:w-px before:bg-border">
               <li className="relative pb-7 pl-8">
                 <span className="absolute left-0 top-0.5 grid size-6 place-items-center rounded-full border bg-background text-xs font-semibold">v{st.original.version}</span>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <h3 className="font-semibold">Start: v{st.original.version}</h3>
+                  <h3 className="font-semibold">{made ? "Drafted" : "Start"}: v{st.original.version}</h3>
                   <span className="text-sm tabular-nums"><strong>{pct(st.original.score.success_rate)}</strong> verified on train and dev <span className="text-muted-foreground">({st.original.score.successes ?? "?"} of {st.original.score.finished})</span></span>
                 </div>
-                <Button size="sm" variant="ghost" className="mt-2" onClick={() => go(routes.run(st.original.run_id))}>Open the run it learns from</Button>
+                {made && fac?.draft?.rationale && <p className="mt-1.5 max-w-3xl text-sm">{fac.draft.rationale}</p>}
+                <Button size="sm" variant="ghost" className="mt-2" onClick={() => go(routes.run(st.original.run_id))}>{made ? "Open the draft's rehearsal" : "Open the run it learns from"}</Button>
               </li>
               {st.rounds.map((r: any) => <Round key={r.round} r={r} />)}
               {st.current && (

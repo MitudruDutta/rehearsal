@@ -130,6 +130,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | FR-34 | Every build, episode and improvement run keeps a full timeline (model calls, tool calls, checks, cost), with secrets masked before anything is stored. |
 | FR-39 | Builds, runs and fix loops show model usage by role: model and provider, reasoning on or off, calls, time per call, tokens and spend. |
 | FR-40 | With a Tavily key, a build researches real use of the application on the web before planning jobs; at least half the jobs cite pages the researcher was shown, the world page shows the findings, and episodes never use the live web. |
+| FR-41 | The Agent Factory turns a published world into a verified agent: a drafted version, rehearsed, hardened by the fix loop and proved on held-out jobs, packaged as a runnable program that uses only its role's tools and asks before every change, with a proof report of every score. |
 
 ## 6. Non-functional requirements
 
@@ -170,7 +171,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 | Area | Status |
 |---|---|
 | World Compiler, validation, evaluation, verdict, improvement, comparison | Shipped |
-| Fix loop, pull request checks, model usage by role, web research for builds | Shipped (October 2026) |
+| Fix loop, Agent Factory, pull request checks, failure causes, model usage by role, web research for builds | Shipped (October 2026) |
 | CLI, SDK, MCP server, agent plugin, console, docs | Shipped (`rehearsal-kit` 0.1.2) |
 | Hosted service with plans and live payments | Shipped (rehearsalkit.xyz) |
 | Weight training, world bundle replay | Planned (`rehearsal train` and `rehearsal run-bundle` report "not implemented") |

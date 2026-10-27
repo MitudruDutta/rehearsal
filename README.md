@@ -8,7 +8,7 @@
 
 **Prove your AI agent works before it ships.**
 
-Rehearsal is CI for AI agents. It runs your agent on a working copy of your real application, with fictional data, and decides every outcome by reading the application's own database. No model grades the result. When the agent fails, Rehearsal fixes it in rounds and proves the fix on jobs it has never seen; when someone changes the agent, a pull request check catches regressions.
+Rehearsal is CI for AI agents. It runs your agent on a working copy of your real application, with fictional data, and decides every outcome by reading the application's own database. No model grades the result. No agent yet? Rehearsal writes one for your application, hardens it, proves it on jobs it has never seen, and hands it to you as a program you can run. When an agent fails, Rehearsal fixes it in rounds; when someone changes it, a pull request check catches regressions.
 
 [![PyPI](https://img.shields.io/pypi/v/rehearsal-kit?label=rehearsal-kit&color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/rehearsal-kit?color=2b59d9)](https://pypi.org/project/rehearsal-kit/)
@@ -37,6 +37,7 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 - **Failures on purpose.** Requests time out after the change already went through, so blind retries show up as duplicates.
 - **Readiness verdict.** Ready to pilot, or not yet, with every measure linked to the episodes behind it.
 - **Why it failed, in plain words.** Every failed episode gets named causes read from the records ("acted on the old request", "did the same thing twice", "said done but was not"), with counts, the usual fix and the episodes behind each. The fix loop targets the most common ones.
+- **Agent Factory.** From a published world to a verified agent: Rehearsal drafts the agent from the world's tools, your policies and the research on real use, hardens it with the fix loop, proves it on held-out jobs, and packages it as a zip with a standalone `agent.py` (Nemotron on Token Factory, calling your application's real API, asking before every change) and a `PROOF.md` with every score.
 - **Fix my agent.** A loop that writes the next agent version from failed training jobs, rehearses it, and keeps it only if it verifies more episodes without breaking a rule. Rejected ideas are shown to the next round. The best version is then proved against the original on held-out jobs that no round has seen.
 - **Pull request checks.** `rehearsal gate` and a GitHub Action rehearse a changed agent next to the version on `main` and fail the check on a broken rule or any regression.
 - **Bring your own agent.** Describe an agent with instructions and a model, or drive episodes from your own code in any language through the episode API.
@@ -98,6 +99,7 @@ Jobs written from source code alone can drift from what users really do. So ever
 - **Fix my agent.** Before, the improvement step proposed one new version and left the checking to you. Now an `autofix` job runs rounds of propose, rehearse on train and dev, and keep only if better (more verified, no new rule violation or false completion), feeds rejected ideas to the next round, and proves the best version against the original on held-out jobs. It resumes from its checkpoint after a worker restart. API `POST /v1/autofix`, CLI `rehearsal autofix`, SDK `rh.profiles.autofix`, MCP tool `fix_agent`, and a console page with each round, its reason, its score, and the sentences it changed.
 - **Pull request checks.** `rehearsal gate` and a GitHub Action (`action.yml`) rehearse a changed agent next to the version on `main` and fail on a broken rule or a regression, with a Markdown report in the job summary.
 - **Models by role** in the console, for builds, runs and fix loops.
+- **Agent Factory.** A `factory` job drafts an agent from a published world, rehearses it, hardens it with the fix loop, proves it on held-out jobs and packages a runnable agent with its proof report. API `POST /v1/factory`, CLI `rehearsal factory`, SDK `rh.worlds.make_agent`, MCP tool `make_agent`, and a **Make an agent** button on the world page.
 - **Grounded worlds.** A new research phase uses Tavily to base jobs on how real people use the application, with the sources on every job.
 - **Failure analysis.** Named causes for every failed episode, on the run page, in `rehearsal runs failures`, in the MCP `run_results` tool, in the CI gate's report, and as input to the fix loop (train and dev only).
 - **Cleanup.** Third-party tracing was removed; secret masking now lives in one module. Secret settings no longer appear in printed configuration. Next.js was upgraded to 16.4.2.
@@ -129,6 +131,7 @@ rehearsal worlds list                                    # note the published wo
 rehearsal profiles create support-agent                  # add --prompt-file FILE for your own instructions
 rehearsal eval WV_ID --profile PROFILE_ID --split dev --watch
 rehearsal runs episode EPISODE_ID                        # actions, messages, and which checks failed
+rehearsal factory WV_ID --name support-agent --watch     # no agent yet? Rehearsal writes, hardens and proves one
 rehearsal autofix PROFILE_ID RUN_ID --rounds 3 --watch   # fix it in rounds, proved on held-out jobs
 rehearsal gate WV_ID --prompt-file agent.md --name support-agent --baseline-file main-agent.md   # the CI check
 ```
@@ -159,6 +162,23 @@ rh.jobs.wait(build["job_id"])
 ```
 
 To drive episodes with your own agent, read `rh.external.observation(episode_id)` and send tool calls with `rh.external.act(...)`. See [examples/agents/langgraph_react.py](examples/agents/langgraph_react.py) and [PACKAGE.md](PACKAGE.md).
+
+</details>
+
+<details>
+<summary><b>Use it from TypeScript</b></summary>
+
+`sdk/typescript` is a dependency-free client with the same resources as the Python SDK, for Node 18+, Deno, Bun and browsers. It is not on npm yet: build it with `pnpm install && pnpm build` in that folder and add the folder as a dependency.
+
+```ts
+import { Rehearsal } from "rehearsal-kit";
+
+const rh = new Rehearsal(); // REHEARSAL_API_KEY and REHEARSAL_URL
+const job = await rh.worlds.makeAgent(worldVersionId, { name: "support-agent" });
+for await (const ev of rh.jobs.events(job.job_id)) console.log(ev.type, ev.summary);
+```
+
+See the [TypeScript SDK reference](https://docs.rehearsalkit.xyz/reference/typescript-sdk).
 
 </details>
 

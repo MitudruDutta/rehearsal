@@ -63,6 +63,7 @@ Without MCP, use the CLI (`rehearsal ...`) or the Python SDK (`from rehearsal.sd
 |---|---|---|
 | `build_world` | $3-8 (stops itself at its budget) | 1-3 hours |
 | `run_evaluation` | about $0.02 per episode (jobs x agents x repeats) | 2-10 minutes |
+| `make_agent` | (rounds + 1) x (train + dev jobs) + 2 x holdout jobs, about $0.02 each, x repeats | 15-60 minutes |
 | `fix_agent` | rounds x (train + dev jobs) + 2 x holdout jobs, about $0.02 each, x repeats | 10-40 minutes |
 | `improve_agent` | under $0.10 | about 1 minute |
 | `recheck_world` | about $0.03 per job | 5-20 minutes |
@@ -118,6 +119,10 @@ Rules:
    - "In 3 of 4 failures the agent acted on the first request after the customer changed it."
    - "Twice it retried a timed-out write without checking, which created a duplicate."
 4. When the same job fails for every agent, read references/troubleshooting.md, section "Job looks unfair". Say clearly whether you think it is the agent's fault or the job's.
+
+## Workflow: No agent yet
+
+When the user has a world but no agent, offer `make_agent(world_version_id)`: Rehearsal drafts an agent from the world, hardens it with the fix loop, proves it on holdout, and packages a zip (agent.py on Nemotron that calls the app's API, agent.json, PROOF.md). Ask first with the episode count. When the job succeeds, give the held-out score from the result and tell the user to download `artifact_id` (`rehearsal artifacts download ID agent.zip` or the console) and to keep CONFIRM_WRITES on against a real application.
 
 ## Workflow: Improve
 

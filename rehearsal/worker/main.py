@@ -28,6 +28,7 @@ HANDLERS: dict[str, str] = {
     "evaluation": "rehearsal.worker.evaluate:handle",
     "improvement": "rehearsal.worker.improve:handle",
     "autofix": "rehearsal.worker.autofix:handle",
+    "factory": "rehearsal.worker.factory:handle",
     "dataset_export": "rehearsal.worker.export:handle_dataset",
     "bundle_export": "rehearsal.worker.export:handle_bundle",
     "training": "rehearsal.training.expert_iteration:handle",
@@ -52,7 +53,7 @@ def _mark_owner_failed(s: Session, job: Job, message: str, status: str = "failed
         run = s.get(Run, job.payload.get("run_id"))
         if run and run.status != "finished":
             run.status, run.finished_at = status, now()
-    elif job.kind == "autofix":
+    elif job.kind in ("autofix", "factory"):
         for run in s.scalars(select(Run).where(Run.job_id == job.id, Run.status != "finished")):  # its own rehearsals
             run.status, run.finished_at = status, now()
     elif job.kind == "training":

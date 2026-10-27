@@ -1,12 +1,16 @@
 "use client";
 
-import { Download, PlayCircle, ShieldCheck } from "lucide-react";
+import { Bot, Download, PlayCircle, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -129,6 +133,45 @@ function ScenarioSheet({ sc, onClose, onChange }: { sc: any | null; onClose: () 
   );
 }
 
+/** Agent Factory: Rehearsal writes an agent for this world, hardens it, proves it on held-out jobs and packages it. */
+function MakeAgent({ worldVersionId, worldName, jobs }: { worldVersionId: string; worldName: string; jobs: any[] }) {
+  const slug = `${worldName} agent`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const [name, setName] = useState(slug);
+  const [rounds, setRounds] = useState("3");
+  const [busy, setBusy] = useState(false);
+  const count = (split: string) => jobs.filter((j) => j.status === "approved" && j.split === split).length;
+  const practice = count("train") + count("dev");
+  const most = (Number(rounds) + 1) * practice + 2 * count("holdout");
+  const start = async () => {
+    setBusy(true);
+    try {
+      const r = await post("/v1/factory", { world_version_id: worldVersionId, name, rounds: Number(rounds) });
+      go(routes.fix(r.job_id));
+    } catch (e) {
+      toast.error((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog>
+      <DialogTrigger asChild><Button variant="outline"><Bot /> Make an agent</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Make a verified agent for this world</DialogTitle>
+          <DialogDescription>Rehearsal writes the agent from the world&apos;s tools, the owner&apos;s rules and the research on real use, rehearses it on every train and dev job, improves it round by round, proves it on held-out jobs, and packages it: a program that runs on Nemotron and calls your application&apos;s API, with its proof report.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2"><Label htmlFor="agent-name">Name</Label><Input id="agent-name" value={name} onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))} /></div>
+        <div className="grid gap-2">
+          <Label>Rounds of improvement</Label>
+          <Select value={rounds} onValueChange={setRounds}><SelectTrigger className="w-28"><SelectValue /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select>
+        </div>
+        <p className="text-sm text-muted-foreground">At most {most} episodes, about ${(most * 0.02).toFixed(2)}: the draft and each round on {practice} train and dev jobs, then the held-out proof on {count("holdout")} jobs. It stops early when every job passes.</p>
+        <DialogFooter><Button disabled={!practice || !name || busy} onClick={start}>Make the agent</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const FINDINGS: [string, string, string][] = [["requests", "request", "What real users ask for"], ["rules", "rule", "Rules the application enforces"], ["pitfalls", "pitfall", "Where people go wrong"]];
 
 /** What the World Compiler learned about real use of the application from the web (Tavily), and which jobs it grounds. */
@@ -193,7 +236,7 @@ export function World({ worldVersionId }: { worldVersionId: string }) {
       <PageHeader
         title={`${manifest.name} world, version ${w.version}`}
         description={manifest.description}
-        actions={<><Button onClick={() => go(routes.runs(worldVersionId))}><PlayCircle /> Run an evaluation</Button><Button variant="outline" onClick={recheck} disabled={!!rechecking}><ShieldCheck /> {rechecking ? "Re-checking…" : "Re-check jobs"}</Button><Button variant="outline" onClick={exportBundle}><Download /> Export bundle</Button></>}
+        actions={<><Button onClick={() => go(routes.runs(worldVersionId))}><PlayCircle /> Run an evaluation</Button>{w.status === "published" && <MakeAgent worldVersionId={worldVersionId} worldName={manifest.name || "world"} jobs={scenarios.data || []} />}<Button variant="outline" onClick={recheck} disabled={!!rechecking}><ShieldCheck /> {rechecking ? "Re-checking…" : "Re-check jobs"}</Button><Button variant="outline" onClick={exportBundle}><Download /> Export bundle</Button></>}
       />
       {rechecking && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm">

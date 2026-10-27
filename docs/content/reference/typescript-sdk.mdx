@@ -1,0 +1,69 @@
+---
+title: TypeScript SDK
+description: The TypeScript client, with the same resources and methods as the Python SDK, for Node, Deno, Bun and browsers.
+audience: Agent developers
+last_reviewed: 2026-10-27
+---
+
+The TypeScript client lives in `sdk/typescript` in the repository. It has no dependencies: it uses the platform's
+`fetch`, so it runs in Node 18 or newer, Deno, Bun and browsers. Its resources and methods match the
+[Python SDK](/reference/python-sdk), in camelCase.
+
+## Install
+
+The package is not on npm yet. Build it from the repository and depend on the folder:
+
+```bash
+git clone https://github.com/MitudruDutta/rehearsal
+cd rehearsal/sdk/typescript && pnpm install && pnpm build
+cd /your/project && pnpm add /path/to/rehearsal/sdk/typescript
+```
+
+## Connect
+
+```ts
+import { Rehearsal } from "rehearsal-kit";
+
+const rh = new Rehearsal(); // REHEARSAL_API_KEY and REHEARSAL_URL
+const local = new Rehearsal({ apiKey: "rh_...", baseUrl: "http://127.0.0.1:7800" });
+```
+
+Without a key in the options or in `REHEARSAL_API_KEY`, the constructor throws. A request that the server refuses
+throws `RehearsalError`, with `status` and the server's `detail`.
+
+## Methods
+
+| Resource | Methods |
+|---|---|
+| `rh.applications` | `create(name, source, images, policies)`, `importCatalog()`, `list()`, `get(appId)` |
+| `rh.worlds` | `build(applicationId, options)`, `makeAgent(worldVersionId, { name, rounds, repeats })`, `list()`, `version(wvId)`, `scenarios(wvId)`, `validate(wvId)`, `bundle(wvId, includeImages)` |
+| `rh.jobs` | `get(jobId)`, `command(jobId, command)`, `events(jobId, cursor)`, `wait(jobId, { timeoutMs, pollMs })` |
+| `rh.profiles` | `create(name, systemPrompt, fields)`, `list()`, `autofix(profileId, runId, { rounds, repeats })` |
+| `rh.evaluations` | `create(worldVersionId, profileIds, { splits, repeats })`, `compare(runA, runB)` |
+| `rh.runs` | `get(runId)`, `episodes(runId)`, `failures(runId)`, `episode(episodeId)`, `events(runId, cursor)`, `intervene(episodeId, body)`, `command(runId, command)` |
+| `rh.external` | `observation(episodeId)`, `act(episodeId, actor, tool, args, idempotencyKey, waitMs)` |
+
+`rh.get(path, params)` and `rh.post(path, body)` reach any other endpoint of the [API](/reference/api).
+
+## Follow a job
+
+`events` is an async iterator over the job's or run's events. It reconnects from the last event after a dropped
+connection, and ends when the job ends. Leaving the loop early closes the connection.
+
+```ts
+const job = await rh.worlds.makeAgent(worldVersionId, { name: "support-agent", rounds: 3 });
+for await (const ev of rh.jobs.events(job.job_id)) console.log(ev.type, ev.summary);
+const done = await rh.jobs.wait(job.job_id);
+console.log(done.result.holdout, done.result.artifact_id);
+```
+
+## Drive your own agent
+
+For a profile created with `driver: "external"`, read each turn and send one action.
+
+```ts
+const obs = await rh.external.observation(episodeId);
+const result = await rh.external.act(episodeId, "agent", "close_ticket", { id: 7 }, crypto.randomUUID());
+```
+
+The same idempotency key returns the same result, so a retry after a timeout never acts twice.

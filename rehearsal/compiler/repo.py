@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
+import time
 from pathlib import Path
 
 SKIP_DIRS = {".git", "node_modules", "vendor", "__pycache__", ".venv", "venv", "dist", "build", ".next", "coverage", "tmp", "log", ".cache"}
@@ -12,6 +13,10 @@ NOTABLE = re.compile(
     r"(?i)(^readme|docker-?compose.*\.ya?ml$|^dockerfile|\.env\.example$|\.env\.sample$|^env\.example|swagger.*\.(json|ya?ml)$|openapi.*\.(json|ya?ml)$|schema\.graphql$|\.graphql$|^procfile$|^makefile$|app\.ini|settings\.py$|config\.php$|routes\.rb$|^package\.json$|^gemfile$|^go\.mod$|^pyproject\.toml$|^composer\.json$|policy|policies|contributing)"
 )
 MAX_READ = 24_000
+# The source tree is untrusted input: bound what reading and searching it can cost.
+MAX_FILE_BYTES = 40_000_000  # a file larger than this is not read whole (use grep)
+MAX_LINE = 2_000  # a search looks at the first characters of a line only (minified bundles have megabyte lines)
+SEARCH_SECONDS = 25.0  # a search that takes longer returns what it found so far
 
 
 class RepoError(Exception):
@@ -84,6 +89,8 @@ class Repo:
         path = self._resolve(rel)
         if not path.is_file():
             raise RepoError(f"{rel} is not a file")
+        if path.stat().st_size > MAX_FILE_BYTES:
+            raise RepoError(f"{rel} is larger than {MAX_FILE_BYTES // 1_000_000} MB; search it with grep instead")
         return path.read_text(errors="replace")
 
     def read_file(self, rel: str, start: int = 1, end: int | None = None) -> str:
@@ -101,8 +108,11 @@ class Repo:
         except re.error as exc:
             raise RepoError(f"bad regex: {exc}") from exc
         hits = []
+        deadline = time.monotonic() + SEARCH_SECONDS
         for dirpath, dirnames, filenames in os.walk(self.root, followlinks=False):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+            if time.monotonic() > deadline:
+                return "\n".join(hits + [f"... search stopped after {SEARCH_SECONDS:.0f} s; use a narrower glob or pattern"])
             for f in filenames:
                 if not fnmatch.fnmatch(f, glob):
                     continue
@@ -112,7 +122,7 @@ class Repo:
                     if not p.is_file() or p.stat().st_size > 2_000_000:
                         continue
                     for n, line in enumerate(p.read_text(errors="ignore").splitlines(), 1):
-                        if rx.search(line):
+                        if rx.search(line[:MAX_LINE]):
                             hits.append(f"{rel}:{n}: {line.strip()[:200]}")
                             if len(hits) >= max_hits:
                                 return "\n".join(hits) + "\n... more hits truncated"
@@ -122,8 +132,11 @@ class Repo:
 
     def find(self, name_glob: str, max_hits: int = 100) -> str:
         hits = []
+        deadline = time.monotonic() + SEARCH_SECONDS
         for dirpath, dirnames, filenames in os.walk(self.root, followlinks=False):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+            if time.monotonic() > deadline:
+                return "\n".join(hits + [f"... search stopped after {SEARCH_SECONDS:.0f} s; use a narrower pattern"])
             for f in filenames:
                 if fnmatch.fnmatch(f, name_glob):
                     rel = str((Path(dirpath) / f).relative_to(self.root))

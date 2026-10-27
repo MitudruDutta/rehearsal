@@ -484,8 +484,9 @@ def get_job(job_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
         j = _get(s, Job, job_id, p)
         out = _cols(j, ("checkpoint",))
         out["completed_phases"] = (j.checkpoint or {}).get("done", [])
-        if j.kind == "autofix":  # the loop's rounds so far: versions, reasons and scores, nothing private
+        if j.kind in ("autofix", "factory"):  # the loop's rounds so far: versions, reasons and scores, nothing private
             out["autofix"] = (j.checkpoint or {}).get("autofix")
+            out["factory"] = (j.checkpoint or {}).get("factory")
         return out
 
 
@@ -499,7 +500,7 @@ def _reopen_owner(s: Any, job: Job) -> None:
         run = s.get(Run, job.payload.get("run_id"))
         if run and run.status in ("failed", "cancelled"):
             run.status, run.finished_at = "running", None
-    elif job.kind == "autofix":  # the rehearsal it stopped in resumes from the loop's checkpoint
+    elif job.kind in ("autofix", "factory"):  # the rehearsal it stopped in resumes from the loop's checkpoint
         for run in s.scalars(select(Run).where(Run.job_id == job.id, Run.status.in_(("failed", "cancelled")))):
             run.status, run.finished_at = "running", None
 
@@ -1006,6 +1007,34 @@ def autofix(body: AutofixIn, p: Principal = Depends(principal)) -> dict[str, Any
         job = queue.enqueue(s, project_id=p.project_id, kind="autofix", max_attempts=5, not_before=grant.not_before,
                             budget_usd=budget if left is None else min(budget, left),
                             payload={**body.model_dump(), "world_version_id": wv.id, "default_stress": True})
+        return {"job_id": job.id, "episodes": n}
+
+
+class FactoryIn(BaseModel):
+    world_version_id: str
+    name: str = Field(default="", max_length=60, pattern=r"^[a-z0-9-]*$")  # empty: "<world>-agent"
+    rounds: int = Field(default=3, ge=1, le=5)
+    repeats: int = Field(default=1, ge=1, le=5)
+
+
+@app.post("/v1/factory", status_code=202)
+def factory(body: FactoryIn, p: Principal = Depends(principal)) -> dict[str, Any]:
+    """Agent Factory: draft an agent from the world, harden it with the fix loop, prove it on held-out jobs, package it."""
+    with session() as s:
+        wv = _get(s, WorldVersion, body.world_version_id, p)
+        if wv.status != "published":
+            raise HTTPException(409, "the world version is not published")
+        jobs = dict(s.execute(select(Scenario.split, func.count()).where(Scenario.world_version_id == wv.id, Scenario.status == "approved").group_by(Scenario.split)).all())
+        practice = jobs.get("train", 0) + jobs.get("dev", 0)
+        if not practice:
+            raise HTTPException(422, "the world has no approved train or dev jobs to rehearse on")
+        n = body.repeats * ((body.rounds + 1) * practice + 2 * jobs.get("holdout", 0))  # the draft, each round, then the held-out proof
+        _room(s, p.project_id, "factory", settings().max_active_runs, "agent factories")
+        grant = billing.check_evaluation(s, p.project_id, n)
+        left = queue.allowance_left(s, p.project_id)
+        budget = n * billing.EPISODE_BUDGET_USD + (body.rounds + 1) * billing.DEFAULT_BUDGET_USD["improvement"]
+        job = queue.enqueue(s, project_id=p.project_id, kind="factory", max_attempts=5, not_before=grant.not_before,
+                            budget_usd=budget if left is None else min(budget, left), payload={**body.model_dump(), "default_stress": True})
         return {"job_id": job.id, "episodes": n}
 
 

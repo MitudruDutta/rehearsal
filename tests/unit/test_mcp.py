@@ -69,3 +69,10 @@ def test_fix_agent_starts_the_loop_and_links_to_it():
     out = call(build_server(client), "fix_agent", {"agent_id": "prof_1", "run_id": "run_0", "rounds": 2})
     assert out["console"] == "https://rehearsal.example/app/fix/?job=job_1" and out["episodes"] == 4
     assert client.posts == [("/v1/autofix", {"profile_id": "prof_1", "run_id": "run_0", "rounds": 2, "repeats": 1})]
+
+
+def test_make_agent_starts_the_factory_and_links_to_it():
+    client = FakeClient()
+    out = call(build_server(client), "make_agent", {"world_version_id": "wv_1", "rounds": 2})
+    assert out["console"] == "https://rehearsal.example/app/fix/?job=job_1"
+    assert client.posts == [("/v1/factory", {"world_version_id": "wv_1", "name": "", "rounds": 2, "repeats": 1})]

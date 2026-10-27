@@ -103,8 +103,15 @@ def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dic
         raise
     ctx.add_cost(reply.cost_usd, reply.prompt_tokens + reply.completion_tokens)
     ctx.check()
+    out = save_version(ctx, profile, data, parent_id=prof_row.id, created_by="improver", summary=f"proposed from {len(failures)} failed train/dev episodes")
+    return {**out, "failures_used": len(failures)}
+
+
+def save_version(ctx: JobContext, profile: AgentProfile, data: Any, *, parent_id: str | None, created_by: str, summary: str) -> dict[str, Any]:
+    """Saves a model-written {system_prompt, tool_guidance, rationale} as the next version of the profile's name.
+    The prompt keeps the {actor_id}, {role} and {instructions} placeholders the episode engine fills."""
     if not isinstance(data, dict):
-        raise ValueError("improver must return a JSON object")
+        raise ValueError(f"{created_by} must return a JSON object")
     prompt = str(data.get("system_prompt", "")).strip()
     for ph in ("{actor_id}", "{role}", "{instructions}"):
         if ph not in prompt:
@@ -112,7 +119,7 @@ def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dic
     try:
         prompt.format(actor_id="a", role="r", instructions="i")
     except (KeyError, IndexError, ValueError) as exc:
-        raise ValueError(f"revised prompt has invalid placeholders: {exc}") from exc
+        raise ValueError(f"the written prompt has invalid placeholders: {exc}") from exc
     guidance = {k: str(v)[:600] for k, v in (data.get("tool_guidance") or {}).items() if isinstance(k, str)}
     with session() as s:
         ctx.owned(s)
@@ -122,11 +129,11 @@ def propose(ctx: JobContext, profile_id: str, run_id: str, *, rejected: list[dic
 
         version = (s.scalar(select(func.max(AgentProfileRow.version)).where(AgentProfileRow.project_id == ctx.project_id, AgentProfileRow.name == profile.name)) or 0) + 1
         spec = profile.model_copy(update={"version": version, "system_prompt": prompt, "tool_guidance": guidance})
-        row = AgentProfileRow(project_id=ctx.project_id, name=profile.name, version=version, spec=spec.model_dump(), parent_id=prof_row.id, created_by="improver", rationale=str(data.get("rationale", ""))[:4000])
+        row = AgentProfileRow(project_id=ctx.project_id, name=profile.name, version=version, spec=spec.model_dump(), parent_id=parent_id, created_by=created_by, rationale=str(data.get("rationale", ""))[:4000])
         s.add(row)
         s.flush()
-        emit(s, project_id=ctx.project_id, stream=ctx.job_id, type="profile.proposed", summary=f"{profile.name} v{version} proposed from {len(failures)} failed train/dev episodes", data={"profile_id": row.id, "rationale": row.rationale[:1000]})
-        return {"profile_id": row.id, "version": version, "failures_used": len(failures), "rationale": row.rationale[:500]}
+        emit(s, project_id=ctx.project_id, stream=ctx.job_id, type="profile.proposed", summary=f"{profile.name} v{version} {summary}", data={"profile_id": row.id, "rationale": row.rationale[:1000]})
+        return {"profile_id": row.id, "version": version, "rationale": row.rationale[:500]}
 
 
 def score(run_id: str, profile_id: str, splits: tuple[str, ...]) -> dict[str, Any]:

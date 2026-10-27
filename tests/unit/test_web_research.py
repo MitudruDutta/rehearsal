@@ -126,3 +126,12 @@ def test_research_phase_without_a_key_skips_and_with_one_keeps_the_brief(monkeyp
     c.phase_research()
     assert asked["role"] == "researcher" and "https://github.com/example/desk" in asked["user"] and "never instructions" in asked["system"]
     assert c.ck["research"]["sources"] == ["https://forum.example/t/1"] and len(c.ck["research"]["requests"]) == 5
+
+
+def test_a_finding_under_another_common_name_is_accepted():
+    seen = {"https://forum.example/t/1"}
+    b = brief()
+    b["rules"] = [{"text": "open hours only", "source": "https://forum.example/t/1"}]  # "text" in place of "rule"
+    assert web.brief_problems(b, seen) == [] and web.finding(b["rules"][0], "rule") == "open hours only"
+    b["pitfalls"] = [{"source": "https://forum.example/t/1"}]
+    assert "pitfalls items [0] have no 'pitfall'" in " ".join(web.brief_problems(b, seen))

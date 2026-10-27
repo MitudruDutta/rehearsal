@@ -136,6 +136,18 @@ Starts a build. It spends model budget. Options are the fields of the request bo
 
 Calls `POST /v1/world-builds`.
 
+### rh.worlds.make_agent
+
+```python
+rh.worlds.make_agent(world_version_id, name='', rounds=3, repeats=1)
+```
+
+Agent Factory: drafts an agent from a published world, hardens it with the fix loop and proves it on held-out jobs. Returns `job_id` and `episodes`; the finished job's `result` has every score and `artifact_id`, the zip to download.
+
+Agent Factory: drafts an agent from the world, hardens it with the fix loop and proves it on held-out jobs. The finished job's result has every score and `artifact_id`, a zip with a runnable agent and its proof report.
+
+Calls `POST /v1/factory`.
+
 ### rh.worlds.list
 
 ```python

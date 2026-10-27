@@ -22,10 +22,10 @@ INSTRUCTIONS = (
     "Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who "
     "changes their mind, and injected faults; results are checked against the application's own database. Typical flow: "
     "list_applications or add_application -> build_world (1-3 hours; check with job_status) -> list_worlds -> list_agents "
-    "or create_agent -> run_evaluation -> run_results -> episode_details for failures -> fix_agent (rounds of improve and "
+    "or create_agent (no agent yet? make_agent writes, hardens and proves one) -> run_evaluation -> run_results -> episode_details for failures -> fix_agent (rounds of improve and "
     "rehearse, proven on held-out jobs; or improve_agent for one proposal) -> job_status. Builds and evaluations spend "
     "model money from the workspace's monthly allowance: say what you are about to start and ask the user before "
-    "build_world, run_evaluation, fix_agent, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with "
+    "build_world, run_evaluation, make_agent, fix_agent, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with "
     "it, then loop: waiting_turns -> read the new messages -> take_action with one of the offered tools."
 )
 
@@ -182,6 +182,14 @@ def build_server(client: Rehearsal | None = None) -> Any:
         """Propose the next version of an agent from its failed train and dev episodes in a run. Ask first. Then
         evaluate both versions on the holdout split and compare_runs before keeping the new one."""
         return c.post("/v1/improvements", {"profile_id": agent_id, "run_id": run_id})
+
+    @mcp.tool()
+    def make_agent(world_version_id: str, name: str = "", rounds: int = 3, repeats: int = 1) -> dict[str, Any]:
+        """Agent Factory: write a new agent for a published world, rehearse it, harden it with the fix loop, prove it on
+        held-out jobs, and package it as a zip (a runnable agent on Nemotron that calls the application's API, plus a proof
+        report). Spends money: say the episode count and ask first. Follow it with job_status; the result has artifact_id."""
+        res = c.post("/v1/factory", {"world_version_id": world_version_id, "name": name, "rounds": rounds, "repeats": repeats})
+        return {**res, "console": link(f"/app/fix/?job={res['job_id']}")}
 
     @mcp.tool()
     def fix_agent(agent_id: str, run_id: str, rounds: int = 3, repeats: int = 1) -> dict[str, Any]:

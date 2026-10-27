@@ -39,14 +39,32 @@ class Operation:
         return {"op_id": self.op_id, "method": self.method, "path": self.path, "summary": self.summary, "params": self.params, "body": self.body}
 
 
+# libyaml when installed (PyYAML's wheels bundle it): a large description (a few MB of YAML) loads in under a
+# second with it, and takes minutes with the pure-Python loader, long enough to stall a build's discovery step.
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+# An application's API description is untrusted input: bound everything it can make us do.
+MAX_SPEC_BYTES = 40_000_000  # the largest description read; real ones are a few MB
+MAX_OPERATIONS = 3000  # operations kept from one description
+RESOLVE_BUDGET = 2000  # schema nodes one $ref expansion may produce: wide references and YAML alias bombs stay cheap
+
+
 def parse_spec(text: str) -> dict[str, Any]:
+    if len(text) > MAX_SPEC_BYTES:
+        raise ValueError(f"API description is larger than {MAX_SPEC_BYTES // 1_000_000} MB")
     text = text.strip()
-    return json.loads(text) if text.startswith("{") else yaml.safe_load(text)
+    return json.loads(text) if text.startswith("{") else yaml.load(text, Loader=_YAML_LOADER)  # noqa: S506 - a safe loader
 
 
-def _resolve(spec: dict[str, Any], node: Any, hops: int = 0) -> Any:
+def _resolve(spec: dict[str, Any], node: Any, hops: int = 0, budget: list[int] | None = None) -> Any:
     """Inlines local $refs. Only ref hops count toward the limit (it stops cycles);
-    plain nesting such as requestBody.content.<media>.schema must not truncate the schema."""
+    plain nesting such as requestBody.content.<media>.schema must not truncate the schema. One call produces at most
+    RESOLVE_BUDGET nodes, so a wide or self-multiplying schema becomes a plain object instead of exponential work."""
+    budget = [RESOLVE_BUDGET] if budget is None else budget
+    if isinstance(node, (dict, list)):
+        budget[0] -= 1
+        if budget[0] < 0:
+            return {"type": "object"}
     if isinstance(node, dict):
         if "$ref" in node and isinstance(node["$ref"], str) and node["$ref"].startswith("#/"):
             if hops >= 4:
@@ -54,10 +72,10 @@ def _resolve(spec: dict[str, Any], node: Any, hops: int = 0) -> Any:
             target: Any = spec
             for part in node["$ref"][2:].split("/"):
                 target = target.get(part, {}) if isinstance(target, dict) else {}
-            return _resolve(spec, target, hops + 1)
-        return {k: _resolve(spec, v, hops) for k, v in node.items() if k not in ("example", "examples", "xml")}
+            return _resolve(spec, target, hops + 1, budget)
+        return {k: _resolve(spec, v, hops, budget) for k, v in node.items() if k not in ("example", "examples", "xml")}
     if isinstance(node, list):
-        return [_resolve(spec, v, hops) for v in node[:50]]
+        return [_resolve(spec, v, hops, budget) for v in node[:50]]
     return node
 
 
@@ -79,9 +97,13 @@ def operations(spec: dict[str, Any]) -> list[Operation]:
         for method, op in (item or {}).items():
             if method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE"} or not isinstance(op, dict):
                 continue
-            op_id = _slugify(op.get("operationId") or f"{method}_{path}")
-            while op_id in seen:
-                op_id = (op_id + "_x")[:48]
+            if len(ops) >= MAX_OPERATIONS:
+                return ops
+            op_id = base_id = _slugify(op.get("operationId") or f"{method}_{path}")
+            n = 2
+            while op_id in seen:  # a numbered suffix that fits the 48-character limit; appending and cutting could repeat forever
+                op_id = f"{base_id[:48 - len(str(n)) - 1]}_{n}"
+                n += 1
             seen.add(op_id)
             params, body = [], None
             for raw in [*shared, *op.get("parameters", [])]:

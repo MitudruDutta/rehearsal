@@ -45,7 +45,7 @@ from ..runner.gateway import Gateway
 from ..runner.runtime import InstanceRecord, RuntimeError_, WorldInstance, new_secrets
 from ..runner.seed import SeedError, run_seed
 from .agent import AgentRun, CompilerAgentError, Rejected, Tool, params, run_agent
-from .apispec import INTROSPECTION, SPEC_PATHS, GraphQLSchema, Operation, operations, parse_spec, to_tool
+from .apispec import INTROSPECTION, MAX_SPEC_BYTES, SPEC_PATHS, GraphQLSchema, Operation, operations, parse_spec, to_tool
 from .repo import Repo
 from .tools import api_tools, dumps, image_tools, live_tools, repo_tools, role_call_tool, schema_tools
 from . import stress, web
@@ -463,7 +463,7 @@ class Compiler:
             brief = a.get("brief")
             if problems := web.brief_problems(brief, seen):
                 raise Rejected("; ".join(problems))
-            out = {k: [{f: str(i[f])[:600], "source": str(i["source"])} for i in brief[k]][:15] for k, f in web.BRIEF_KEYS.items()}
+            out = {k: [{f: web.finding(i, f)[:600], "source": str(i["source"])} for i in brief[k]][:15] for k, f in web.BRIEF_KEYS.items()}
             return {**out, "sources": sorted({i["source"] for k in web.BRIEF_KEYS for i in out[k]})}
 
         shape = {"requests": [{"request": "what a real user or customer asks for, in plain words", "source": "URL"}],
@@ -546,7 +546,15 @@ class Compiler:
             "commands; prefer the image's own entrypoint and documented env variables. (11) Every service gets its own data volumes, so a "
             "oneshot that must change another service's state (migrations into an SQLite file or data directory, creating the first admin) "
             "sets volumes_from to that service and leaves data_paths empty; for client/server databases, connecting over the network is enough. "
-            "(12) Run processes as the user the image expects; many images refuse to run their main binary as root."
+            "(12) Run processes as the user the image expects; many images refuse to run their main binary as root. "
+            "(13) Building from source: when the repository has no Dockerfile, write one in build.dockerfile_inline; never name a "
+            "dockerfile that the repository does not contain. Read the project manifest first and use the runtime version it declares "
+            "(engines.node in package.json, requires-python or python_requires, the go directive in go.mod). Use the package manager its "
+            "lockfile and config imply: yarn.lock with .yarnrc.yml or a packageManager field means Yarn 2 or later through corepack "
+            "(corepack enable); pnpm-lock.yaml means pnpm; package-lock.json means npm ci; poetry.lock, uv.lock or requirements.txt for "
+            "Python. Copy the package manager's config files (.yarnrc.yml, .yarn/, .npmrc, .python-version) together with the manifest "
+            "and lockfile before installing, install, then copy the rest and build. Dependencies download while the image builds; once the "
+            "world runs it has no internet. (14) Service names use only lowercase letters, digits and underscores, starting with a letter."
         )
 
     def phase_plan(self) -> None:
@@ -609,7 +617,7 @@ class Compiler:
             for path in SPEC_PATHS:
                 try:
                     r = inst.http(svc.name, "GET", path, timeout=20)
-                    if r.status_code == 200 and "paths" in r.text[:200000]:
+                    if r.status_code == 200 and len(r.content) <= MAX_SPEC_BYTES and "paths" in r.text[:200000]:
                         spec = r.json()
                         n = len(operations(spec))
                         if n and (best is None or n > best[0]):
@@ -619,6 +627,8 @@ class Compiler:
             for gpath in ("/graphql/", "/graphql", "/api/graphql"):
                 try:
                     r = inst.http(svc.name, "POST", gpath, json_body={"query": INTROSPECTION}, timeout=60)
+                    if len(r.content) > MAX_SPEC_BYTES:
+                        continue
                     data = r.json()
                     if r.status_code == 200 and data.get("data", {}).get("__schema"):
                         (self.workdir / "graphql.json").write_text(json.dumps(data))

@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Every rehearsal command, with its arguments and an example. The 30 commands, grouped by task.
+description: Every rehearsal command, with its arguments and an example. The 31 commands, grouped by task.
 generated: true
 ---
 
@@ -49,6 +49,7 @@ server's message and a hint: see [Errors](/reference/errors).
 | [`rehearsal compare`](#rehearsal-compare) | Compare agents within a run, or two runs on one world version |
 | [`rehearsal improve`](#rehearsal-improve) | Propose a revised agent profile from train/dev failures |
 | [`rehearsal autofix`](#rehearsal-autofix) | Fix an agent in rounds, keep only versions that verify more, prove the best on held-out jobs |
+| [`rehearsal factory`](#rehearsal-factory) | Make a verified agent for a world: draft it, harden it, prove it on held-out jobs, package it |
 | [`rehearsal gate`](#rehearsal-gate) | Pass or fail an agent change in CI: rehearse it, next to a baseline, and judge the result |
 
 **Data**
@@ -550,6 +551,36 @@ rehearsal autofix <profile_id> <run_id> --rounds 3 --watch
 ```
 
 The command prints a `job_id` and the most episodes the loop can run, then follows each round. The result names the best version and its held-out score next to the original's.
+
+### rehearsal factory
+
+Make a verified agent for a world: draft it, harden it, prove it on held-out jobs, package it.
+
+This spends model budget for every rehearsal: (rounds + 1) × (train and dev jobs) plus two versions on the held-out jobs, times `--repeats`. The agent is drafted from the world, hardened by the fix loop and proved on held-out jobs. See [Make an agent](/guides/make-an-agent).
+
+<Cost>
+
+This command spends model budget.
+
+</Cost>
+
+```text
+rehearsal factory <wv_id> [--name <name>] [--rounds <rounds>] [--repeats <repeats>] [--watch]
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `<wv_id>` | required | A published world version. |
+| `--name <name>` |  | The agent's name: lowercase letters, digits and dashes. Default: the world's name followed by `-agent`. |
+| `--rounds <rounds>` | `3` | Rounds of improvement, 1 to 5. The loop stops early when every train and dev job passes. |
+| `--repeats <repeats>` | `1` | Attempts at each job in every rehearsal, 1 to 5. |
+| `--watch` |  | Stay attached, print each phase, then print the result and the download command. |
+
+```bash
+rehearsal factory <wv_id> --name support-agent --rounds 3 --watch
+```
+
+It prints the job and the most episodes it can run, follows each phase, then prints the scores and the command that downloads the agent: a zip with agent.py, agent.json, PROOF.md and README.md.
 
 ### rehearsal gate
 

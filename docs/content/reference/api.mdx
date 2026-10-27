@@ -1,6 +1,6 @@
 ---
 title: REST API
-description: Every operation of the Rehearsal API, 74 in all, with the access it needs, its parameters and its request body.
+description: Every operation of the Rehearsal API, 75 in all, with the access it needs, its parameters and its request body.
 generated: true
 ---
 
@@ -84,6 +84,7 @@ Each operation below shows the least access it accepts. `admin` is accepted ever
 | [`GET /v1/compare`](#get-v1compare) | Compares profiles within one run, or two runs on the same pinned world version |
 | [`POST /v1/improvements`](#post-v1improvements) | Proposes the next version of an agent from its failed train and dev episodes in a run |
 | [`POST /v1/autofix`](#post-v1autofix) | Fix-my-agent: propose, rehearse and keep only versions that verify more, then prove the best on held-out jobs |
+| [`POST /v1/factory`](#post-v1factory) | Agent Factory: draft an agent from the world, harden it with the fix loop, prove it on held-out jobs, package it |
 | [`GET /v1/episodes/{ep_id}`](#get-v1episodesep_id) | One episode in full: the job, each action, each message and the result of each check |
 | [`POST /v1/episodes/{ep_id}/interventions`](#post-v1episodesep_idinterventions) | Changes a running episode by hand: a message from the customer, a new version of the request, a fault, or a tool taken from or given to a role |
 | [`GET /v1/episodes/{ep_id}/observation`](#get-v1episodesep_idobservation) | The turn that waits for a bring-your-own agent, if one does |
@@ -573,6 +574,23 @@ Request body, as JSON:
 |---|---|---|
 | `profile_id` | string | required |
 | `run_id` | string | required |
+| `rounds` | integer, 1 to 5 | `3` |
+| `repeats` | integer, 1 to 5 | `1` |
+
+**Answers** `202`.
+
+### POST /v1/factory
+
+<Operation method="POST" path="/v1/factory" access="write" />
+
+Agent Factory: draft an agent from the world, harden it with the fix loop, prove it on held-out jobs, package it.
+
+Request body, as JSON:
+
+| Field | Type | Default |
+|---|---|---|
+| `world_version_id` | string | required |
+| `name` | string | `""` |
 | `rounds` | integer, 1 to 5 | `3` |
 | `repeats` | integer, 1 to 5 | `1` |
 

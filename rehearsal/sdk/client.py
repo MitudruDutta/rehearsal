@@ -82,6 +82,11 @@ class Worlds(_Resource):
     def build(self, application_id: str, **options: Any) -> dict[str, Any]:
         return self.c.post("/v1/world-builds", {"application_id": application_id, **options})
 
+    def make_agent(self, world_version_id: str, name: str = "", rounds: int = 3, repeats: int = 1) -> dict[str, Any]:
+        """Agent Factory: drafts an agent from the world, hardens it with the fix loop and proves it on held-out jobs.
+        The finished job's result has every score and `artifact_id`, a zip with a runnable agent and its proof report."""
+        return self.c.post("/v1/factory", {"world_version_id": world_version_id, "name": name, "rounds": rounds, "repeats": repeats})
+
     def list(self) -> list[dict[str, Any]]:
         return self.c.get("/v1/worlds")
 

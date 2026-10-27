@@ -147,3 +147,13 @@ def test_autofix_command_posts_the_loop_and_prints_the_job(api, monkeypatch, cap
     assert requests[0].url.path == "/v1/autofix"
     assert json.loads(requests[0].content) == {"profile_id": "prof_1", "run_id": "run_0", "rounds": 2, "repeats": 1}
     assert '"job_1"' in capsys.readouterr().out
+
+
+def test_factory_command_starts_the_agent_factory(api, monkeypatch, capsys):
+    client, responses, requests = api
+    responses.append(httpx.Response(202, json={"job_id": "job_9", "episodes": 11}))
+    monkeypatch.setattr(cli, "_client", lambda: client)
+    cli.main(["factory", "wv_1", "--name", "desk-agent", "--rounds", "2"])
+    assert requests[0].url.path == "/v1/factory"
+    assert json.loads(requests[0].content) == {"world_version_id": "wv_1", "name": "desk-agent", "rounds": 2, "repeats": 1}
+    assert '"job_9"' in capsys.readouterr().out

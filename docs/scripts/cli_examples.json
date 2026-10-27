@@ -71,6 +71,7 @@
   ],
   "compare": [{ "cmd": "rehearsal compare <run_a> <run_b>" }],
   "improve": [{ "cmd": "rehearsal improve <profile_id> <run_id>", "note": "The command prints a `job_id`. Follow it with `rehearsal jobs show <job_id>`." }],
+  "factory": [{ "cmd": "rehearsal factory <wv_id> --name support-agent --rounds 3 --watch", "note": "It prints the job and the most episodes it can run, follows each phase, then prints the scores and the command that downloads the agent: a zip with agent.py, agent.json, PROOF.md and README.md." }],
   "autofix": [{ "cmd": "rehearsal autofix <profile_id> <run_id> --rounds 3 --watch", "note": "The command prints a `job_id` and the most episodes the loop can run, then follows each round. The result names the best version and its held-out score next to the original's." }],
   "gate": [
     { "cmd": "rehearsal gate <wv_id> --prompt-file agent/instructions.md --name support-agent --baseline-file main-instructions.md --min-success 0.6", "note": "It prints the run's progress, then a Markdown report, and exits 0 when the change passes, 1 when it fails, and 2 when the run did not finish." },

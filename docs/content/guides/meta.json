@@ -10,6 +10,7 @@
     "evaluate-an-agent",
     "read-results",
     "improve-an-agent",
+    "make-an-agent",
     "compare-agents-and-runs",
     "---Your own agent---",
     "bring-your-own-agent",

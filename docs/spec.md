@@ -44,7 +44,7 @@ One database holds control flow (jobs) and domain state, so there is one source 
 | `rehearsal/api/` | REST API, live event streams, auth, request limits, static console |
 | `rehearsal/billing.py`, `rehearsal/pricing.py` | Plans and Dodo Payments; model price catalog and spend caps |
 | `rehearsal/redaction.py` | Secret masking for everything stored or shown |
-| `rehearsal/sdk/` | Python client, CLI (30 commands), MCP server (19 tools) |
+| `rehearsal/sdk/` | Python client, CLI (31 commands), MCP server (20 tools) |
 | `web/` | Console (Next.js static export, served by the API) |
 | `docs/` | Documentation site (Fumadocs) and these planning documents |
 | `infra/` | Docker Compose stack, Caddy, AWS CloudFormation |
@@ -128,7 +128,11 @@ One job runs the whole loop, so it never waits on other workers. Its state lives
 
 A worker restart resumes at the saved phase. A failed or stopped loop fails its own unfinished runs; a retry reopens them. `GET /v1/jobs/{id}` returns the `autofix` state of a loop, and nothing else of its checkpoint.
 
-### 7.2 Pull request checks (`rehearsal gate`)
+### 7.2 Agent Factory (`factory` job)
+
+`POST /v1/factory` quotes at most repeats × ((rounds + 1) × train and dev jobs + 2 × held-out jobs) episodes. The job's checkpoint holds `factory.phase` (`draft`, `rehearse`, `harden`, `prove`, `package`, `done`). Draft: the agent designer (reasoner chain, role `factory.designer`) writes `{system_prompt, tool_guidance, rationale}` from the manifest's roles and tools, the idempotent tools, the owner's policies, the research digest and the failure causes; it is saved as a new profile version (`created_by: factory`). Rehearse: one owned run on train and dev. Harden: the fix loop (§7.1) with the draft and that run. Prove: when no round beat the draft, one owned run on held-out jobs for the draft alone. Package: a zip artifact (`kind: agent`) with `agent.json` (the instructions with placeholders filled for the customer-facing role, and that role's tools with their HTTP mapping), `agent.py` (an OpenAI-compatible tool loop on Nemotron that maps tool calls to requests on `APP_URL` with `APP_AUTH`, and asks before every write unless `CONFIRM_WRITES=0`), `PROOF.md` and `README.md`.
+
+### 7.3 Pull request checks (`rehearsal gate`)
 
 The gate runs on the client. It resolves the candidate (a profile id, or a version from an instructions file, reusing the latest version with identical instructions) and the optional baseline the same way, starts one run with both, polls it, and judges `summary.profiles["name@vN"].overall`: optional minimum success rate, at most `max_violations` episodes with a rule violation, and no regression against the baseline beyond `tolerance` in success rate, rule violations, false completions or duplicate effects. Exit codes: 0 passed, 1 failed, 2 could not run. `action.yml` is a composite GitHub Action that installs the client from the action's checkout, reads the baseline from a git ref, and passes every input through environment variables.
 

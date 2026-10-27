@@ -89,6 +89,12 @@ def tools(seen: set[str], add_cost: Callable[[float, int], None] | None = None) 
 
 
 BRIEF_KEYS = {"requests": "request", "rules": "rule", "pitfalls": "pitfall"}
+ALSO = ("text", "description", "summary", "finding", "detail")  # names models use for the same field
+
+
+def finding(item: dict[str, Any], field: str) -> str:
+    """An item's text under its own field name, or under a name models often use instead."""
+    return str(next((item[k] for k in (field, *ALSO) if str(item.get(k) or "").strip()), "")).strip()
 
 
 def brief_problems(brief: Any, seen: set[str], min_requests: int = 5) -> list[str]:
@@ -101,7 +107,7 @@ def brief_problems(brief: Any, seen: set[str], min_requests: int = 5) -> list[st
         if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
             problems.append(f"{key} must be a list of objects with '{field}' and 'source'")
             continue
-        if empty := [n for n, i in enumerate(items) if not str(i.get(field, "")).strip()]:
+        if empty := [n for n, i in enumerate(items) if not finding(i, field)]:
             problems.append(f"{key} items {empty} have no '{field}'")
         if unseen := sorted({str(i.get("source")) for i in items if str(i.get("source")) not in seen}):
             problems.append(f"{key} cite pages you were not shown (use a URL from web_search or read_page): {unseen[:5]}")
@@ -117,5 +123,5 @@ def digest(research: dict[str, Any] | None) -> str:
     lines = []
     for key, field in BRIEF_KEYS.items():
         for item in research.get(key) or []:
-            lines.append(f"- [{field}] {str(item[field])[:400]} (source: {item['source']})")
+            lines.append(f"- [{field}] {finding(item, field)[:400]} (source: {item['source']})")
     return "\n".join(lines)

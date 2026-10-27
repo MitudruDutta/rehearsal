@@ -74,3 +74,23 @@ def test_login_session_tokens_are_recognised_by_their_expiry():
 
     assert 500 < token_ttl(jwt({"exp": time.time() + 600})) <= 600  # ten-minute session
     assert token_ttl(jwt({"sub": "1"})) is None and token_ttl("Bearer tk_1234567890abcdef") is None
+
+
+def test_yaml_specs_load_with_libyaml_when_it_is_installed():
+    import pytest
+    import yaml
+
+    from rehearsal.compiler import apispec
+    assert apispec._YAML_LOADER is (yaml.CSafeLoader if yaml.__with_libyaml__ else yaml.SafeLoader)
+    assert apispec.parse_spec("openapi: 3.0.0\npaths: {}\n") == {"openapi": "3.0.0", "paths": {}}
+    with pytest.raises(yaml.YAMLError):
+        apispec.parse_spec("!!python/object/apply:os.system ['true']")  # still a safe loader
+
+
+def test_long_operation_ids_that_collide_get_unique_names_and_never_loop():
+    from rehearsal.compiler import apispec
+    long_id = "PostResourcesIdChildrenChildIdActionsWithAVeryLongOperationName"
+    spec = {"paths": {f"/admin/orders/{i}": {"post": {"operationId": long_id}} for i in range(3)}}
+    names = [o.op_id for o in apispec.operations(spec)]
+    assert len(set(names)) == 3 and all(len(n) <= 48 for n in names)
+    assert names[1].endswith("_2") and names[2].endswith("_3")

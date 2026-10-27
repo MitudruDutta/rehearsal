@@ -310,6 +310,13 @@ def _main(argv: list[str] | None = None) -> None:
     imp.add_argument("profile_id")
     imp.add_argument("run_id")
 
+    fac = cmd("factory", "make a verified agent for a world: draft it, harden it, prove it on held-out jobs, package it")
+    fac.add_argument("wv_id", help="a published world version")
+    fac.add_argument("--name", default="", help="the agent's name, lowercase with dashes (default: <world>-agent)")
+    fac.add_argument("--rounds", type=int, default=3, help="fix rounds, 1 to 5 (default 3)")
+    fac.add_argument("--repeats", type=int, default=1, help="episodes per job in each rehearsal, 1 to 5 (default 1)")
+    fac.add_argument("--watch", action="store_true")
+
     fix = cmd("autofix", "fix an agent in rounds, keep only versions that verify more, prove the best on held-out jobs")
     fix.add_argument("profile_id")
     fix.add_argument("run_id", help="a finished run with train/dev episodes for this agent")
@@ -367,7 +374,7 @@ def _main(argv: list[str] | None = None) -> None:
     groups = [
         ("Start", ["login", "whoami", "logout"]),
         ("Applications and worlds", ["apps", "build", "worlds", "jobs"]),
-        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve", "autofix", "gate"]),
+        ("Agents and evaluations", ["profiles", "eval", "runs", "compare", "improve", "autofix", "factory", "gate"]),
         ("Data", ["export", "artifacts", "export-example", "export-replay"]),
         ("AI assistants", ["mcp", "skill"]),
         ("Run your own server", ["serve", "worker", "up", "migrate", "bootstrap", "users", "openapi", "prices"]),
@@ -548,6 +555,16 @@ def _main(argv: list[str] | None = None) -> None:
         _print(_client().evaluations.compare(args.run_a, args.run_b))
     elif args.cmd == "improve":
         _print(_client().post("/v1/improvements", {"profile_id": args.profile_id, "run_id": args.run_id}))
+    elif args.cmd == "factory":
+        c = _client()
+        res = c.worlds.make_agent(args.wv_id, name=args.name, rounds=args.rounds, repeats=args.repeats)
+        _print(res)
+        if args.watch:
+            _watch(c.jobs.events(res["job_id"]))
+            result = c.jobs.get(res["job_id"]).get("result") or {}
+            _print(result)
+            if result.get("artifact_id"):
+                print(f"Download the agent: rehearsal artifacts download {result['artifact_id']} agent.zip")
     elif args.cmd == "autofix":
         c = _client()
         res = c.profiles.autofix(args.profile_id, args.run_id, rounds=args.rounds, repeats=args.repeats)

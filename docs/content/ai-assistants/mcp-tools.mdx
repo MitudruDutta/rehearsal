@@ -1,6 +1,6 @@
 ---
 title: MCP tool reference
-description: The 19 tools of the Rehearsal MCP server. For each one, its arguments, what it returns, and whether it spends money.
+description: The 20 tools of the Rehearsal MCP server. For each one, its arguments, what it returns, and whether it spends money.
 generated: true
 ---
 
@@ -12,7 +12,7 @@ access of that key and nothing more. To install the tools, see [AI assistants](/
 
 ## Tools that spend money
 
-4 of the 19 tools start work that spends model budget from the workspace's monthly allowance. The
+4 of the 20 tools start work that spends model budget from the workspace's monthly allowance. The
 assistant must say what it will start and what it will cost, and wait for a clear yes. Every other tool is free.
 
 | Tool | Typical cost | Typical time |
@@ -29,7 +29,7 @@ stop whatever the assistant decides: see [What costs money](/get-started/what-co
 
 The server gives every assistant these instructions when it connects:
 
-> Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who changes their mind, and injected faults; results are checked against the application's own database. Typical flow: list_applications or add_application -> build_world (1-3 hours; check with job_status) -> list_worlds -> list_agents or create_agent -> run_evaluation -> run_results -> episode_details for failures -> fix_agent (rounds of improve and rehearse, proven on held-out jobs; or improve_agent for one proposal) -> job_status. Builds and evaluations spend model money from the workspace's monthly allowance: say what you are about to start and ask the user before build_world, run_evaluation, fix_agent, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with it, then loop: waiting_turns -> read the new messages -> take_action with one of the offered tools.
+> Rehearsal tests AI agents on a sandboxed copy of a real application, with fictional data, a simulated customer who changes their mind, and injected faults; results are checked against the application's own database. Typical flow: list_applications or add_application -> build_world (1-3 hours; check with job_status) -> list_worlds -> list_agents or create_agent (no agent yet? make_agent writes, hardens and proves one) -> run_evaluation -> run_results -> episode_details for failures -> fix_agent (rounds of improve and rehearse, proven on held-out jobs; or improve_agent for one proposal) -> job_status. Builds and evaluations spend model money from the workspace's monthly allowance: say what you are about to start and ask the user before build_world, run_evaluation, make_agent, fix_agent, improve_agent and recheck_world. To act as the agent under test yourself, create_agent(bring_your_own=True), start run_evaluation with it, then loop: waiting_turns -> read the new messages -> take_action with one of the offered tools.
 
 ## Errors
 
@@ -282,6 +282,25 @@ episode_details(episode_id)
 **Returns:** `scenario`, `goals` (the request and its revisions), `status`, `ending`, `verified`, `environment_error`, `failed_checks` (each with `check`, `observed`, `wanted`), `duplicate_effects`, `false_completion`, `actions`, the last 30 `messages`, and a console link.
 
 **The same from elsewhere:** CLI [`rehearsal runs episode`](/reference/cli#rehearsal-runs); Python `rh.runs.episode(episode_id)`.
+
+### make_agent
+
+Agent Factory: write a new agent for a published world, rehearse it, harden it with the fix loop, prove it on held-out jobs, and package it as a zip (a runnable agent on Nemotron that calls the application's API, plus a proof report). Spends money: say the episode count and ask first. Follow it with job_status; the result has artifact_id.
+
+```python
+make_agent(world_version_id, name="", rounds=3, repeats=1)
+```
+
+| Argument | Type | Default | Meaning |
+|---|---|---|---|
+| `world_version_id` | string | required | A published world version, from `list_worlds`. |
+| `name` | string | `""` | The agent's name: lowercase letters, digits and dashes. Empty: the world's name followed by `-agent`. |
+| `rounds` | integer | `3` | Rounds of improvement, 1 to 5. |
+| `repeats` | integer | `1` | Attempts at each job in every rehearsal, 1 to 5. |
+
+**Returns:** `job_id`, `episodes` (the most it can run) and a console link. When the job succeeds, its `result` has the draft, every round, the held-out scores and `artifact_id`: a zip with a runnable agent and its proof report.
+
+**The same from elsewhere:** CLI [`rehearsal factory`](/reference/cli#rehearsal-factory); Python `rh.worlds.make_agent(world_version_id)`.
 
 ### fix_agent
 
