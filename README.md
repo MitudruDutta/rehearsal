@@ -41,7 +41,10 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 - **Agent Factory.** From a published world to a verified agent: Rehearsal drafts the agent from the world's tools, your policies and the research on real use, hardens it with the fix loop, proves it on held-out jobs, and packages it as a zip with a standalone `agent.py` (Nemotron on Token Factory, calling your application's real API, asking before every change) and a `PROOF.md` with every score.
 - **Fix my agent.** A loop that writes the next agent version from failed training jobs, rehearses it, and keeps it only if it verifies more episodes without breaking a rule. Rejected ideas are shown to the next round. The best version is then proved against the original on held-out jobs that no round has seen.
 - **Pull request checks.** `rehearsal gate` and a GitHub Action rehearse a changed agent next to the version on `main` and fail the check on a broken rule or any regression.
-- **Bring your own agent.** Describe an agent with instructions and a model, or drive episodes from your own code in any language through the episode API.
+- **Bring your own agent.** Describe an agent with instructions and a model, give the URL of your own agent (any OpenAI-compatible endpoint), or drive episodes from your own code in any language through the episode API.
+- **Incidents become tests.** Describe something an agent got wrong in production; Rehearsal writes a validated job that puts an agent in the same spot, so every later evaluation and CI check catches it.
+- **Ready-made worlds.** A world library lets any workspace rehearse agents on worlds that are already built, without building anything.
+- **Builds that do not burn money.** Tools are checked one at a time, a stuck step pauses itself, the build page shows what each step cost and why it is stuck, and a deploy that restarts workers never costs a build an attempt.
 - **Every step on the record.** Each build, rehearsal and improvement keeps its full timeline in Rehearsal: model calls, tool calls, checks, and what each one cost, broken down by role and model.
 - **NVIDIA Nemotron by default, any provider if you want.** Every role runs on Nemotron through Nebius Token Factory, routed by role, with reasoning switched on only where it pays. OpenAI, Anthropic, Google, Mistral, xAI, DeepSeek, Groq, Together, Fireworks, Cerebras, OpenRouter, a LiteLLM proxy, or any OpenAI-compatible endpoint also work, with fallback chains and spend caps.
 
@@ -103,6 +106,8 @@ Jobs written from source code alone can drift from what users really do. So ever
 - **Agent Factory.** A `factory` job drafts an agent from a published world, rehearses it, hardens it with the fix loop, proves it on held-out jobs and packages a runnable agent with its proof report. API `POST /v1/factory`, CLI `rehearsal factory`, SDK `rh.worlds.make_agent`, MCP tool `make_agent`, and a **Make an agent** button on the world page.
 - **Grounded worlds.** A new research phase uses Tavily to base jobs on how real people use the application, with the sources on every job.
 - **Failure analysis.** Named causes for every failed episode, on the run page, in `rehearsal runs failures`, in the MCP `run_results` tool, in the CI gate's report, and as input to the fix loop (train and dev only).
+- **Test any agent by URL, incidents, world library.** An agent profile can name your own agent's OpenAI-compatible endpoint (its key stored sealed, internal addresses refused); `POST /v1/world-versions/{id}/incidents` turns a production incident into a validated job; `REHEARSAL_LIBRARY_PROJECT` shares a project's worlds with every workspace.
+- **Builds that stop wasting money.** Tools verified one at a time, a no-progress brake that pauses a stuck step, spend per step and "why it is stuck" on the build page, early checks for host settings and unfinished installs, and workers that hand jobs back on restart.
 - **Cleanup.** Third-party tracing was removed; secret masking now lives in one module. Secret settings no longer appear in printed configuration. Next.js was upgraded to 16.4.2.
 
 ### Feedback on Nebius and NVIDIA tools
