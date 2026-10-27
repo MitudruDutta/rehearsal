@@ -80,8 +80,8 @@ def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dic
             except json.JSONDecodeError as exc:
                 if k not in structured:
                     continue
-                try:  # the common slip in long JSON: an object closed with ] (or the reverse); balance the closers once
-                    out[k] = json.loads(_balance(v))
+                try:  # the common slips in long JSON: an object closed with ] (or the reverse), or a } left out
+                    out[k] = json.loads(_reclose(_balance(v)))
                     continue
                 except json.JSONDecodeError:
                     pass
@@ -89,6 +89,22 @@ def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dic
                 raise Rejected(f"'{k}' was sent as text that is not valid JSON: {exc.msg} at character {exc.pos}, near ...{near}... "
                                f"Send '{k}' as a JSON value, not as a string, and check its brackets.") from exc
     return out
+
+
+def _reclose(text: str, limit: int = 20) -> str:
+    """Closes objects a model left open in a list of objects: where the parser meets ``{`` but expects a property name,
+    the object before it lacks its ``}``, so one goes before the comma. Each fix moves the error on; the result is only
+    used when it parses, and the submit validator still checks its shape."""
+    for _ in range(limit):
+        try:
+            json.loads(text)
+            return text
+        except json.JSONDecodeError as exc:
+            comma = text.rfind(",", 0, exc.pos)
+            if not exc.msg.startswith("Expecting property name") or not text[exc.pos:].lstrip().startswith("{") or comma < 0:
+                return text
+            text = _balance(text[:comma] + "}" + text[comma:])
+    return text
 
 
 def _balance(text: str) -> str:
