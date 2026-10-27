@@ -166,6 +166,8 @@ jobs:
           npx rehearsal --help > /dev/null
           npx rehearsal skill print > /dev/null
           node --input-type=module -e 'const m = await import("rehearsal-kit"); const s = await import("rehearsal-kit/mcp"); if (!m.Rehearsal || !s.buildServer) process.exit(1)'
+      - name: The publish command accepts the package (dry run)
+        run: npm publish ./npm-dist/*.tgz --access public --dry-run
       - name: Save the verified package
         uses: actions/upload-artifact@v6
         with:
@@ -194,8 +196,9 @@ jobs:
         with:
           name: npm-package
           path: npm-dist/
+      # The ./ matters: npm reads "npm-dist/<file>.tgz" as a GitHub repository (owner/name) and tries to clone it
       - name: Publish using npm trusted publishing
-        run: npm publish npm-dist/*.tgz --access public --provenance
+        run: npm publish ./npm-dist/*.tgz --access public --provenance
 
   publish:
     name: Publish to PyPI
