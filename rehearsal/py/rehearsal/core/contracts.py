@@ -154,6 +154,8 @@ class SeedStep(Strict):
     path: str = "/"
     headers: dict[str, str] = Field(default_factory=dict)
     json_body: Any | None = None
+    form: dict[str, str] | None = None  # a form post (application/x-www-form-urlencoded), as setup pages expect
+    query: dict[str, str] | None = None  # URL query parameters
     command: list[str] | None = None
     user: str | None = None  # exec: container user
     basic_auth: list[str] | None = None  # [username, password] templates for HTTP Basic

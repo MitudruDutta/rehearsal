@@ -405,12 +405,13 @@ class WorldInstance:
         headers: dict[str, str] | None = None,
         json_body: Any = None,
         params: dict[str, Any] | None = None,
+        form: dict[str, str] | None = None,
         timeout: float = 60.0,
     ) -> httpx.Response:
         if not path.startswith("/"):
             path = "/" + path
         return self.edge_client().request(
-            method, f"/__svc/{service}{path}", headers=headers or {}, json=json_body, params=params, timeout=timeout
+            method, f"/__svc/{service}{path}", headers=headers or {}, json=json_body, data=form, params=params, timeout=timeout
         )
 
     def journal(self) -> list[dict[str, Any]]:

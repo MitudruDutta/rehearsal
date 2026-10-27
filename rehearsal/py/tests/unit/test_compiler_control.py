@@ -610,9 +610,10 @@ def test_rejections_group_by_kind_without_their_particulars():
 
     a = rejection_kind("seed step 4 (http POST /graphql/) failed: HTTP 400: DisallowedHost at /graphql/")
     b = rejection_kind("seed step 6 (http POST /graphql/) failed: HTTP 400: {\"errors\": []}")
-    assert a == b == "seed step # (http POST /graphql/) failed"
+    assert a == "seed step 4 (http POST /graphql/) failed" and b == "seed step 6 (http POST /graphql/) failed"  # a later step is progress
+    assert rejection_kind("seed step 4 (http POST /graphql/) failed: HTTP 500") == a
     c = rejection_kind("seed step 0 (exec ['python', 'manage.py', 'createsuperuser']) failed: exit 2: usage")
-    assert c == "seed step # (exec […]) failed"
+    assert c == "seed step 0 (exec […]) failed"
     j1 = rejection_kind("'tools' was sent as text that is not valid JSON: Expecting ',' delimiter at character 573, near ...")
     j2 = rejection_kind("'tools' was sent as text that is not valid JSON: Expecting property name at character 721")
     assert j1 == j2 == "… was sent as text that is not valid JSON"

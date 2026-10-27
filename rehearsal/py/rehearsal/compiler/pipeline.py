@@ -184,7 +184,7 @@ def rejection_kind(text: str) -> str:
     line = (text.strip().splitlines() or [""])[0]
     line = re.sub(r"'[^']*'|\"[^\"]*\"", "…", line)
     line = re.sub(r"\[[^\]]*\]", "[…]", line)
-    line = re.sub(r"\d+", "#", line)
+    line = re.sub(r"(?<!step )\d+", "#", line)  # a step's number stays: failing at a later step is progress, not a repeat
     cut = line.find(": ", 15)
     return (line[:cut] if cut > 0 else line)[:90].strip()
 
@@ -921,7 +921,9 @@ class Compiler:
             try:
                 variables = run_seed(inst, steps, {}, log=lambda m: self.log("compiler.seed", m, {}))
             except SeedError as exc:
-                raise Rejected(f"{exc}\nRemember: replay starts from a clean state, so steps cannot depend on anything you created while exploring.") from exc
+                raise Rejected(f"{exc}\nRemember: replay starts from a clean state, so steps cannot depend on anything you created while exploring. "
+                               "If the failure is about how the application is installed or configured (it asks to be installed first, a "
+                               "setting is missing) rather than about your data, call runtime_needs_change with what must change.") from exc
             gw = Gateway(inst, self.manifest(seed=False, tools=False).model_copy(update={"roles": roles}), variables)
             for r in roles:
                 try:
@@ -948,7 +950,8 @@ class Compiler:
             "customer needs to use it, captured as a customer role; and enough fictional business records (customers, products, orders, "
             "conversations, repositories, issues, appointments...) for several workflows, with a few variations (different statuses, owners). "
             "Use example.test emails and obviously fictional names. Prefer HTTP steps; use exec steps (CLI, rails runner, manage.py) only for "
-            "bootstrapping the app offers no API for. An exec step's save reads the last JSON line of stdout, or \"$stdout\" for the last line. "
+            "bootstrapping the app offers no API for. An http step sends json_body as JSON, form as a form post (what web setup and "
+            "install pages expect), and query as URL parameters. An exec step's save reads the last JSON line of stdout, or \"$stdout\" for the last line. "
             "Templates: {{secret.NAME}} for generated secrets, {{vars.NAME}} for values saved by earlier steps. Each role needs a credential "
             "(header + template using vars, or basic [user, password]); set customer_channel=true on staff roles that handle customer requests "
             "(a customer role itself has customer_channel=false). Save IDs of important records as vars with descriptive names."

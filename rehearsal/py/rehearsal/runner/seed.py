@@ -75,7 +75,9 @@ def run_seed(instance: WorldInstance, steps: list[SeedStep], variables: dict[str
                     user, pw = (render_template(x, scopes) for x in step.basic_auth)
                     headers["Authorization"] = basic_header(user, pw)
                 body = render_value(step.json_body, scopes) if step.json_body is not None else None
-                resp = instance.http(step.service, step.method, render_template(step.path, scopes), headers=headers, json_body=body)
+                form = {k: render_template(str(v), scopes) for k, v in step.form.items()} if step.form else None
+                query = {k: render_template(str(v), scopes) for k, v in step.query.items()} if step.query else None
+                resp = instance.http(step.service, step.method, render_template(step.path, scopes), headers=headers, json_body=body, form=form, params=query)
                 if resp.status_code not in step.expect_status:
                     detail = f"HTTP {resp.status_code}: {readable(resp.text)}"
                     if resp.status_code >= 500:  # the response body rarely says why; the server log does
