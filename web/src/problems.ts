@@ -52,3 +52,23 @@ const ENDINGS: Record<string, string> = {
 export function describeEnding(termination?: string | null): string {
   return termination ? ENDINGS[termination] ?? termination.replace(/_/g, " ") : "running";
 }
+
+/** What a kind of compiler rejection means, for the build page's "why it is stuck". The kinds are Rehearsal's own
+ * rejection messages, grouped by the server (rejection_kind). */
+const REJECTIONS: [RegExp, string][] = [
+  [/host check|DisallowedHost|ALLOWED_HOSTS|Invalid HTTP_HOST|Blocked host/i, "The application refuses requests addressed to its sandbox hostname. The build goes back to the runtime step to allow it."],
+  [/not valid JSON/i, "The model wrote broken JSON, such as a bracket too many or too few. Common slips are repaired; the rest go back to the model."],
+  [/example calls? did not succeed/i, "Tool example calls failed against the seeded data: usually the seed has no records for them to act on, or a field has the wrong shape for the application's API."],
+  [/seed step .* failed/i, "A step that creates the fictional data failed when replayed from a clean start."],
+  [/token that expires|login session/i, "A role signs in with a short-lived login token. A world is replayed for weeks, so each role needs a credential that lasts."],
+  [/missing value/i, "A seed step saved a value from the wrong place in the response."],
+  [/validation error/i, "The model's answer did not match the required format."],
+  [/you submitted .* tools/i, "The tool list had too few or too many tools."],
+  [/at least|got #/i, "The answer was incomplete: it had fewer items than the step requires."],
+  [/sandbox start failed|could not be started/i, "The application did not start in the sandbox; the builder is repairing the runtime."],
+];
+
+export function explainRejection(kind: string): string {
+  for (const [pattern, text] of REJECTIONS) if (pattern.test(kind)) return text;
+  return "The model's answer was sent back with the reason shown.";
+}

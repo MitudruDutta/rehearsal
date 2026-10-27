@@ -61,7 +61,7 @@ export function ActorAvatar({ id, className }: { id: string | null; className?: 
 export const PHASES = ["Read the source", "Research real use", "Plan the runtime", "Start the sandbox", "Find the API", "Seed fictional data", "Choose agent tools", "Write scenarios", "Validate and repair", "Publish"];
 export const PHASE_KEYS = ["inspect", "research", "plan", "materialize", "discover", "seed", "adapt", "author", "validate", "package"];
 
-export function PhaseStepper({ done, active, failed, compact }: { done: Set<string> | string[]; active?: string; failed?: boolean; compact?: boolean }) {
+export function PhaseStepper({ done, active, failed, compact, spend }: { done: Set<string> | string[]; active?: string; failed?: boolean; compact?: boolean; spend?: Record<string, number> }) {
   const d = new Set(done);
   return (
     // each step shares the list's rows (bar, name, status), so a name that wraps to two lines keeps every status level
@@ -77,7 +77,7 @@ export function PhaseStepper({ done, active, failed, compact }: { done: Set<stri
             {!compact && (
               <>
                 <div className={cn("mt-2 text-[13px] font-medium leading-snug text-pretty", (state === "todo" || state === "skipped") && "text-muted-foreground")}>{i + 1}. {label}</div>
-                <div className="text-xs text-muted-foreground">{state === "done" ? "done" : state === "active" ? (failed ? "stopped" : "in progress") : state === "skipped" ? "skipped" : "waiting"}</div>
+                <div className="text-xs text-muted-foreground">{state === "done" ? "done" : state === "active" ? (failed ? "stopped" : "in progress") : state === "skipped" ? "skipped" : "waiting"}{spend?.[key] ? `, $${spend[key].toFixed(2)}` : ""}</div>
               </>
             )}
           </li>

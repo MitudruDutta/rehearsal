@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Inspector } from "@/components/inspector";
+import { Stuck } from "@/components/stuck";
 import { ActivityFeed, ModelsByRole, NowCaption, PageHeader, PhaseStepper, StatusBadge } from "@/components/rh";
 import { post, useEvents, useResource, type RhEvent } from "../api";
 import { go, routes } from "../nav";
@@ -28,6 +29,8 @@ export function Build({ jobId }: { jobId: string }) {
     return { done, active: started[started.length - 1] };
   }, [events]);
   const j = job.data;
+  const guard = [...events].reverse().find((e) => e.type === "job.guard" || e.type === "job.resumed")?.type === "job.guard"
+    ? [...events].reverse().find((e) => e.type === "job.guard")?.summary : null;  // the brake's reason, until the build is resumed
   const failed = j?.status === "failed" || j?.status === "cancelled";
   const next = nextStep(j?.status === "cancelled" ? "stopped on request" : j?.error);
   const command = async (c: string) => {
@@ -55,7 +58,7 @@ export function Build({ jobId }: { jobId: string }) {
       />
       <Card className="mb-4">
         <CardContent className="pt-6">
-          <PhaseStepper done={phases.done} active={phases.active} failed={failed} />
+          <PhaseStepper done={phases.done} active={phases.active} failed={failed} spend={j?.spend_by_step} />
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
             <span>Attempt {j?.attempts ?? 0}</span>
             <span>Model spend ${(j?.spent_usd ?? 0).toFixed(4)}{j?.tokens ? `, ${Number(j.tokens).toLocaleString()} tokens` : ""}</span>
@@ -64,6 +67,7 @@ export function Build({ jobId }: { jobId: string }) {
           </div>
         </CardContent>
       </Card>
+      <Stuck stuck={j?.stuck} phase={phases.active} status={j?.status} guard={guard} onPause={() => command("pause")} />
       {j?.error && failed && (
         <Alert variant="destructive" className="mb-4">
           <AlertTitle>The build stopped</AlertTitle>
@@ -77,7 +81,7 @@ export function Build({ jobId }: { jobId: string }) {
         </div>
         <ActivityFeed events={events} onPick={(id) => pick({ kind: "actor", id })} height="calc(min(54vw, 60vh) + 70px)" />
       </div>
-      {j?.result?.models && <div className="mt-6"><ModelsByRole models={j.result.models} what="build" /></div>}
+      {j?.models && <div className="mt-6"><ModelsByRole models={j.models} what="build" /></div>}
       <Inspector open={!!selection} onOpenChange={(o) => !o && setSelection(null)} selection={selection} mode="compiler" events={events} />
     </>
   );
