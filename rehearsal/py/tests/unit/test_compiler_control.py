@@ -428,3 +428,45 @@ def test_a_save_path_written_as_if_the_response_were_wrapped_gets_the_right_path
     assert _rooted(response, "json.body.data.tokenCreate.token") == "data.tokenCreate.token"
     assert _rooted(response, "$.body.data.tokenCreate.errors[0]") is None  # nothing to find: no suggestion
     assert _rooted(response, "data.missing") is None
+
+
+def test_a_host_check_is_found_when_the_sandbox_starts_not_after_seeding(tmp_path, monkeypatch):
+    """One request right after the runtime starts finds a framework's host check, so the runtime is repaired before
+    API discovery and seeding are spent on an application that refuses every request."""
+    from types import SimpleNamespace
+
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    destroyed, asked = [], []
+    c = Compiler(app=AppInput("t", tmp_path, {}, "", {}),
+                 checkpoint={"done": ["inspect", "research", "plan"], "inspection": {},
+                             "runtime": {"secrets": [], "services": [{"name": "db"}, {"name": "shop", "port": 8000}]}},
+                 workdir=tmp_path / "b", chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None,
+                 destroy=lambda inst: destroyed.append(inst))
+    page = ("<html><head><title>DisallowedHost at /</title><style>body{}</style></head><body>Invalid HTTP_HOST header: "
+            "'shop.world.test:8000'. You may need to add 'shop.world.test' to ALLOWED_HOSTS.</body></html>")
+    answers = iter([SimpleNamespace(status_code=400, text=page), SimpleNamespace(status_code=200, text="<html>shop</html>")])
+
+    def create(cls, *a, **kw):
+        inst = SimpleNamespace(manifest=SimpleNamespace(services=[SimpleNamespace(name="db", port=None), SimpleNamespace(name="shop", port=8000)]),
+                               http=lambda *a, **kw: next(answers), record=SimpleNamespace(to_json=lambda: {}), snapshot=lambda path: None)
+        return inst
+
+    monkeypatch.setattr(c, "manifest", lambda **kw: None)
+    monkeypatch.setattr(pipeline.WorldInstance, "create", classmethod(create))
+    monkeypatch.setattr(c, "agent", lambda **kw: asked.append(kw["user"]) or c.ck["runtime"])
+    c.phase_materialize()
+    assert len(destroyed) == 1 and len(asked) == 1  # the refusing sandbox is torn down, the builder repairs once
+    assert "GET / on shop answered HTTP 400" in asked[0] and "add 'shop.world.test' to ALLOWED_HOSTS" in asked[0]
+    assert "Host headers shop.world.test:8000" in asked[0] and "style" not in asked[0].split("Earlier failed")[0]
+    assert c.ck["instance"] == {}
+
+
+def test_a_long_rejection_keeps_its_reason_in_the_build_log():
+    from rehearsal.compiler.agent import _excerpt
+
+    text = "seed step 0 (exec manage.py) failed: exit 1: " + "WARNING noisy\n" * 200 + "TypeError: create_user() missing 1 required argument: 'password'"
+    out = _excerpt(text)
+    assert out.startswith("seed step 0 (exec manage.py) failed") and out.endswith("missing 1 required argument: 'password'") and len(out) <= 603
+    assert _excerpt("short") == "short"

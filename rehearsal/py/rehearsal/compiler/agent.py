@@ -67,6 +67,12 @@ def _trim(messages: list[dict[str, Any]]) -> None:
             messages[i]["content"] = content[:500] + "\n...[older result elided]"
 
 
+def _excerpt(text: str, limit: int = 600) -> str:
+    """A rejection for the build log: its start says what failed, and its end usually says why (a traceback's last line,
+    a usage error), so both are kept when it is long."""
+    return text if len(text) <= limit else f"{text[:limit // 2]} … {text[-(limit // 2):]}"
+
+
 def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dict[str, Any]:
     """Some models send nested arrays/objects as JSON text ("tools": "[{...}]"); validators expect the value. For a
     field the schema declares as an object or array, text that does not parse is refused with the parse error, so the
@@ -199,12 +205,12 @@ def run_agent(
                     repeats = repeats + 1 if key == re.sub(r"\d+", "#", last_reason)[:200] else 1
                     last_reason = str(exc)
                     if repeats >= STUCK_AFTER:  # more tries would spend budget on the same wall; another attempt would too
-                        log("compiler.submit.rejected", str(exc)[:600], {"role": role, "attempt": run.attempts})
+                        log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts})
                         stuck = CompilerAgentError(f"{role}: the same problem came back {repeats} times in a row; last reason: {exc}", run)
                         stuck.terminal = True
                         raise stuck from exc
                     out = f"REJECTED: {exc}\nFix the problems and call {submit.name} again."
-                    log("compiler.submit.rejected", str(exc)[:600], {"role": role, "attempt": run.attempts})
+                    log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts})
                     if run.attempts >= max_submits:
                         raise CompilerAgentError(f"{role}: output rejected {run.attempts} times; last reason: {exc}", run) from exc
             else:

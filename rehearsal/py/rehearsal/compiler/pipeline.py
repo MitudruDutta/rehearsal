@@ -43,7 +43,7 @@ from ..config import settings
 from ..evaluator.probes import Prober, ProbeError
 from ..runner.gateway import Gateway
 from ..runner.runtime import InstanceRecord, RuntimeError_, WorldInstance, hostnames, new_secrets
-from ..runner.seed import SeedError, run_seed
+from ..runner.seed import SeedError, readable, run_seed
 from .agent import AgentRun, CompilerAgentError, Rejected, Tool, params, run_agent
 from .apispec import INTROSPECTION, MAX_SPEC_BYTES, SPEC_PATHS, GraphQLSchema, Operation, operations, parse_spec, to_tool
 from .repo import Repo
@@ -468,19 +468,34 @@ class Compiler:
             self.ck.pop(key, None)
         self.ck.setdefault("rewound", []).append("materialize")
         self.ck["done"] = [p for p in self.ck.get("done", []) if PHASES.index(p) < PHASES.index("materialize")]
+        self.ck["runtime_feedback"] = self._host_feedback(f"in the {phase} step", reason)
+        self.save()
+        self.log("compiler.repair", f"the application refused Rehearsal's requests in the {phase} step (host check); going back to the runtime with that evidence", {"phase": "materialize"})
+        return True
+
+    def _host_feedback(self, where: str, reason: str) -> str:
         served = [x for x in self.ck["runtime"].get("services", []) if x.get("port")]
         headers = ", ".join(f"{hostnames(x['name'])[1]}:{x['port']}" for x in served)
         names = ", ".join(dict.fromkeys(n for x in served for n in hostnames(x["name"])[1:]))
-        self.ck["runtime_feedback"] = (
-            f"The application started, but refused Rehearsal's requests in the {phase} step because of its host check:\n{reason[:1500]}\n"
+        return (
+            f"The application started, but refused Rehearsal's requests {where} because of its host check:\n{reason[:1500]}\n"
             f"Rehearsal sends Host headers {headers}. Allow the hostnames {names} in the setting the framework checks incoming Host "
             "headers against (for example ALLOWED_HOSTS in Django, config.hosts in Rails), not in CORS, client or redirect URL settings. "
             "Find where the application reads that setting (an environment variable or a settings file) and set it there; keep "
             "everything else that already works."
         )
-        self.save()
-        self.log("compiler.repair", f"the application refused Rehearsal's requests in the {phase} step (host check); going back to the runtime with that evidence", {"phase": "materialize"})
-        return True
+
+    def _host_refusal(self, inst: WorldInstance) -> str | None:
+        """Asks each served service for its front page the way every later step will reach it. A framework's host check
+        refuses every path alike, so one request finds it here, before API discovery and seeding are spent on it."""
+        for svc in [s for s in inst.manifest.services if s.port]:
+            try:
+                r = inst.http(svc.name, "GET", "/", timeout=20)
+            except Exception:  # noqa: BLE001  (an unreachable service is the health check's business, not this one's)
+                continue
+            if r.status_code >= 400 and HOST_REJECTED.search(text := readable(r.text)):
+                return self._host_feedback(f"(GET / on {svc.name} answered HTTP {r.status_code})", text)
+        return None
 
     # ------------------------------------------------------------------ 1. inspect
 
@@ -624,8 +639,8 @@ class Compiler:
             "a supplied image. (3) Reference generated credentials as {{secret.NAME}} and list every NAME in secrets; never hard-code passwords. "
             "(4) Point outbound email (SMTP) at host {{provider.host}} port {{provider.smtp_port}} with no TLS and no auth; point webhooks at "
             "{{provider.sink}}/<name>; never point anything at the internet. (5) Services reach each other by service name. Each service also answers at its "
-            "name with underscores replaced by hyphens, and at <hyphenated-name>.world.test; Rehearsal reaches the application with "
-            "Host <hyphenated-name>:<port>. Underscores are invalid in hostnames, and some URL validators (Django's) require a top-level "
+            "name with underscores replaced by hyphens, and at <hyphenated-name>.world.test; Rehearsal's requests carry the Host header "
+            "<hyphenated-name>:<port> or <hyphenated-name>.world.test:<port>. Underscores are invalid in hostnames, and some URL validators (Django's) require a top-level "
             "domain, so use http://<hyphenated-name>.world.test:<port> for public/base URL settings and allow both hostnames in allowed-host "
             "settings. (6) List every directory holding "
             "persistent state in data_paths. (7) Migrations or one-time setup go in a oneshot service (same image, setup command) that "
@@ -685,6 +700,9 @@ class Compiler:
                 inst = WorldInstance.create(
                     self.manifest(seed=False, tools=False), secrets=secrets, source_dir=self.app.source_dir, world_key=self.world_key(), log=lambda m: self.log("compiler.sandbox", m, {})
                 )
+                if refused := self._host_refusal(inst):
+                    self.destroy(inst)
+                    raise RuntimeError_(refused)
                 break
             except RuntimeError_ as exc:
                 pending = None
