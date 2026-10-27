@@ -33,6 +33,10 @@ class JobPaused(Exception):
     pass
 
 
+class Handover(Exception):
+    """The worker is stopping (a deploy or restart): give the job back at a safe point instead of losing its lease."""
+
+
 SPENDING = {"world_build", "evaluation", "improvement", "world_validate"}  # job kinds that call models on the server's keys
 
 
@@ -198,6 +202,14 @@ def pause(s: Session, job: Job) -> None:
     job.status, job.lease_owner, job.lease_expires_at, job.pause_requested = "paused", None, None, False
     job.attempts = max(0, job.attempts - 1)  # pausing is not a failed attempt
     emit(s, project_id=job.project_id, stream=job.id, type="job.paused", summary="paused; resumes from last checkpoint")
+
+
+def hand_back(s: Session, job: Job) -> None:
+    """Returns a job to the queue from a stopping worker. Like a pause, it is not a failed attempt, so restarting workers
+    during a deploy never uses up a build's attempts."""
+    job.status, job.lease_owner, job.lease_expires_at = "queued", None, None
+    job.attempts = max(0, job.attempts - 1)
+    emit(s, project_id=job.project_id, stream=job.id, type="job.handed_back", summary="the worker stopped; another worker resumes from the last checkpoint")
 
 
 def command(s: Session, job: Job, cmd: str) -> None:

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..db import queue
 from ..db.models import Job, Run, TrainingJob, WorldVersion, now
 from ..db.session import session
-from .context import BudgetExceeded, JobContext
+from .context import STOPPING, BudgetExceeded, JobContext
 
 log = logging.getLogger("rehearsal.worker")
 
@@ -82,6 +82,9 @@ def _run_one(worker_id: str, kinds: list[str] | None = None) -> bool:
     except queue.JobPaused:
         with session() as s:
             queue.pause(s, queue.owned(s, job.id, worker_id, job.attempts))  # type: ignore[arg-type]
+    except queue.Handover:
+        with session() as s:
+            queue.hand_back(s, queue.owned(s, job.id, worker_id, job.attempts))  # type: ignore[arg-type]
     except queue.JobCancelled as exc:
         with session() as s:
             row = queue.owned(s, job.id, worker_id, job.attempts)
@@ -153,7 +156,8 @@ def run_worker(kinds: list[str] | None = None, once: bool = False) -> None:
 
     def stop(*_: Any) -> None:
         stopping["flag"] = True
-        log.info("stopping after the current job")
+        STOPPING.set()  # a running job is handed back at its next safe point, not left to lose its lease
+        log.info("stopping: handing back the current job at its next safe point")
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)

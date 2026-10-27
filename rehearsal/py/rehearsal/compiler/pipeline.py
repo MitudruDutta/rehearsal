@@ -44,7 +44,7 @@ from ..evaluator.probes import Prober, ProbeError
 from ..runner.gateway import Gateway, without_traces
 from ..runner.runtime import InstanceRecord, RuntimeError_, WorldInstance, hostnames, new_secrets
 from ..runner.seed import SeedError, readable, run_seed
-from .agent import AgentRun, CompilerAgentError, Rejected, Tool, params, run_agent
+from .agent import AgentRun, CompilerAgentError, Rejected, Tool, _unstring, params, run_agent
 from .apispec import INTROSPECTION, MAX_SPEC_BYTES, SPEC_PATHS, GraphQLSchema, Operation, operations, parse_spec, to_tool
 from .repo import Repo
 from .tools import api_tools, dumps, image_tools, live_tools, repo_tools, role_call_tool, schema_tools
@@ -167,6 +167,22 @@ def _brief(error: str, limit: int) -> str:
 
 
 
+# The no-progress brake: a build pauses when one step gets this many rejections of one kind, or spends this share of
+# its budget, without finishing. A resume grants the step the same again.
+GUARD_REPEATS = 10
+GUARD_SHARE = 0.4
+
+
+def rejection_kind(text: str) -> str:
+    """What a rejection is about, without its particulars (numbers, quoted values, commands), so repeats group together."""
+    line = (text.strip().splitlines() or [""])[0]
+    line = re.sub(r"'[^']*'|\"[^\"]*\"", "…", line)
+    line = re.sub(r"\[[^\]]*\]", "[…]", line)
+    line = re.sub(r"\d+", "#", line)
+    cut = line.find(": ", 15)
+    return (line[:cut] if cut > 0 else line)[:90].strip()
+
+
 def _example_args(item: dict[str, Any]) -> dict[str, Any]:
     """A tool's example call. For a GraphQL tool it belongs beside "graphql"; it is also read from inside, where a model
     that left out the } after the variables put it, so the example is not lost as an empty call."""
@@ -251,6 +267,8 @@ class Compiler:
         add_cost: Callable[[float, int], None],
         options: BuildOptions | None = None,
         destroy: Callable[[WorldInstance], None] | None = None,
+        budget: float | None = None,
+        pause: Callable[[str], None] | None = None,
     ):
         self.app = app
         self.ck = checkpoint
@@ -259,10 +277,13 @@ class Compiler:
         self._lock = threading.RLock()
         self.chain = chain
         self.reasoner = reasoner or chain
-        self.log = log
+        self._log = log
         self._save = save
         self.heartbeat = heartbeat
-        self.add_cost = lambda usd, tokens=0: self._locked(add_cost, usd, tokens)
+        self._add_cost = add_cost
+        self.add_cost = lambda usd, tokens=0: self._locked(self._spend, usd, tokens)
+        self.budget, self.pause = budget, pause
+        self._phase: str | None = None
         self.destroy = destroy or (lambda inst: inst.destroy())
         self.options = options or BuildOptions()
         self.repo = Repo(app.source_dir)
@@ -276,6 +297,42 @@ class Compiler:
     def save(self) -> None:
         with self._lock:
             self._save(self.ck)
+
+    def log(self, type: str, summary: str, data: dict[str, Any]) -> None:
+        if type == "compiler.submit.rejected" and self._phase:
+            with self._lock:  # what keeps going wrong in this step, across attempts: the build page's "why it is stuck"
+                kinds = self.ck.setdefault("stuck", {}).setdefault(self._phase, {})
+                row = kinds.setdefault(rejection_kind(summary), {"count": 0, "role": data.get("role")})
+                row["count"] += 1
+                row["last"] = summary[:600]
+                self._guard()
+        self._log(type, summary, data)
+
+    def _spend(self, usd: float, tokens: int = 0) -> None:
+        self._add_cost(usd, tokens)
+        if usd and self._phase:
+            steps = self.ck.setdefault("spend_by_step", {})
+            steps[self._phase] = round(steps.get(self._phase, 0.0) + usd, 6)
+            self._guard()
+
+    def _guard(self) -> None:
+        """Pauses the build when a step keeps spending without finishing: the same kind of rejection over and over
+        (across attempts, resumes and rewinds), or a large share of the budget. Resuming grants the step another round."""
+        if self.pause is None or not self._phase:
+            return
+        phase = self._phase
+        spent = self.ck.get("spend_by_step", {}).get(phase, 0.0)
+        worst = max((r["count"] for r in self.ck.get("stuck", {}).get(phase, {}).values()), default=0)
+        allowance = self.ck.setdefault("guard", {}).get(phase) or {"repeats": GUARD_REPEATS, "spend": GUARD_SHARE * self.budget if self.budget else None}
+        why = None
+        if worst >= allowance["repeats"]:
+            why = f"the same kind of rejection came back {worst} times"
+        elif allowance["spend"] is not None and spent >= allowance["spend"]:
+            why = f"it spent ${spent:.2f}, {spent / self.budget:.0%} of the ${self.budget:.2f} budget, without finishing"
+        if why:
+            self.ck["guard"][phase] = {"repeats": worst + GUARD_REPEATS, "spend": spent + GUARD_SHARE * self.budget if self.budget else None}
+            self._save(self.ck)
+            self.pause(f"Paused to save money: in the {phase} step {why}. See why it is stuck on the build page; resume to give the step another round.")
 
     def _locked(self, fn: Callable[..., Any], *args: Any) -> Any:
         with self._lock:
@@ -428,6 +485,7 @@ class Compiler:
         for phase in PHASES:
             if self.done(phase):
                 continue
+            self._phase = phase
             self.log("compiler.phase.started", f"{phase} started", {"phase": phase})
             self.heartbeat()
             try:
@@ -451,6 +509,7 @@ class Compiler:
         if phase != "adapt" or not (blocked or missing) or "seed" in self.ck.get("rewound", []) or "seed" not in self.ck:
             return False
         seed = self.ck.pop("seed")
+        self.ck.pop("adapt_verified", None)  # their examples used the old seed's records
         self.ck.setdefault("rewound", []).append("seed")
         self.ck["done"] = [p for p in self.ck.get("done", []) if PHASES.index(p) < PHASES.index("seed")]
         memory = self.ck.setdefault("rejected", {})
@@ -476,7 +535,7 @@ class Compiler:
         elif self.ck.get("instance"):
             self.destroy(WorldInstance(InstanceRecord.from_json(self.ck["instance"])))
         self._inst = None
-        for key in ("instance", "clean_snapshot", "base_snapshot", "api", "seed"):
+        for key in ("instance", "clean_snapshot", "base_snapshot", "api", "seed", "adapt_verified"):
             self.ck.pop(key, None)
         self.ck.setdefault("rewound", []).append("materialize")
         self.ck["done"] = [p for p in self.ck.get("done", []) if PHASES.index(p) < PHASES.index("materialize")]
@@ -941,22 +1000,10 @@ class Compiler:
         ops, gql = self.api()
         variables = self.variables()
         holder: dict[str, Any] = {}
+        # tools verified one at a time with add_tool, kept in the checkpoint so a resumed build does not redo them
+        verified: dict[str, dict[str, Any]] = self.ck.setdefault("adapt_verified", {})
 
-        def accept(a: dict[str, Any]) -> dict[str, Any]:
-            items = a.get("tools", [])
-            if not isinstance(items, list) or not 3 <= len(items) <= 40:
-                n = len(items) if isinstance(items, list) else 0
-                raise Rejected(
-                    f"you submitted {n} tools; submit between 3 and 40. "
-                    + ("Keep the 25 to 35 that the inspected workflows need most and drop the rest; the submission itself was well formed." if n > 40
-                       else "Put the tool objects in the \"tools\" array.")
-                )
-            specs = self._build_tools(items)
-            try:
-                manifest = self.manifest(tools=False).model_copy(update={"tools": specs})
-                WorldManifest.model_validate(manifest.model_dump(mode="json", by_alias=True))
-            except ValidationError as exc:
-                raise Rejected(str(exc)[:3000]) from exc
+        def failures_of(items: list[dict[str, Any]], specs: list[ToolSpec], manifest: WorldManifest) -> list[str]:
             inst.restore(Path(self.ck["base_snapshot"]))
             gw = Gateway(inst, manifest, variables)
             failures = []
@@ -971,7 +1018,47 @@ class Compiler:
                     res = gw.execute(role, spec.name, args, f"op_adapt_{spec.name}_{role}")
                     if res.status != "SUCCEEDED":
                         failures.append(f"{spec.name} as {role} with {json.dumps(args)[:300]} -> {res.status}: {json.dumps(without_traces(res.visible))[:600]}")
-            if failures:
+            return failures
+
+        def add_tool(a: dict[str, Any]) -> str:
+            item = a.get("tool")
+            if isinstance(item, str):
+                item = _unstring({"tool": item}, {"properties": {"tool": {"type": "object"}}})["tool"]
+            if not isinstance(item, dict) or not item.get("name"):
+                raise Rejected("give one tool object in \"tool\", with a name")
+            spec = self._build_tools([item])
+            others = [s for s in self._build_tools(list(verified.values())) if s.name != spec[0].name] if verified else []
+            try:
+                manifest = self.manifest(tools=False).model_copy(update={"tools": [*others, *spec]})
+                WorldManifest.model_validate(manifest.model_dump(mode="json", by_alias=True))
+            except ValidationError as exc:
+                raise Rejected(str(exc)[:3000]) from exc
+            if failures := failures_of([item], spec, manifest):
+                raise Rejected("Its example call did not succeed against the seeded state:\n" + "\n".join(failures))
+            verified[spec[0].name] = item
+            self.save()
+            return (f"{spec[0].name} verified. Verified so far ({len(verified)}): {', '.join(verified)}. Add the next tool, or call "
+                    "submit_tools with {} when the set covers the workflows (3 to 40 tools).")
+
+        def accept(a: dict[str, Any]) -> dict[str, Any]:
+            items = a.get("tools") or []
+            if isinstance(items, list) and verified:  # the verified tools, with any sent here added or replaced by name
+                items = list({**verified, **{it.get("name"): it for it in items if isinstance(it, dict)}}.values())
+            if not isinstance(items, list) or not 3 <= len(items) <= 40:
+                n = len(items) if isinstance(items, list) else 0
+                raise Rejected(
+                    f"you submitted {n} tools; submit between 3 and 40. "
+                    + ("Keep the 25 to 35 that the inspected workflows need most and drop the rest; the submission itself was well formed." if n > 40
+                       else "Put the tool objects in the \"tools\" array.")
+                )
+            specs = self._build_tools(items)
+            try:
+                manifest = self.manifest(tools=False).model_copy(update={"tools": specs})
+                WorldManifest.model_validate(manifest.model_dump(mode="json", by_alias=True))
+            except ValidationError as exc:
+                raise Rejected(str(exc)[:3000]) from exc
+            examples = {it["name"]: _example_args(it) for it in items}
+            if failures := failures_of(items, specs, manifest):
                 raise Rejected("These example calls did not succeed against the seeded state (reads run first, then writes in order):\n" + "\n".join(failures))
             holder["examples"] = examples
             return {"tools": [t.model_dump(mode="json", by_alias=True) for t in specs], "examples": examples}
@@ -987,18 +1074,24 @@ class Compiler:
             "required, description}]. For GraphQL tools write a complete document using variables and list every variable with a "
             "JSON schema. Give every tool example_args that succeed against the seeded state ({{vars.NAME}} templates allowed); the validator "
             "runs every read as each listed role, then every write once as its first role, in the order given. Use call_as_role to try calls first. "
+            "Build the set one tool at a time with add_tool: each is checked on its own the moment you add it (its definition and its "
+            "example call), so a mistake costs one tool, not the whole set. Then call submit_tools with {} to submit every verified tool. "
             "Customer-facing operations (if the app has a customer API) get the customer role only."
         )
         user = (
             f"Inspection workflows:\n{dumps(self.ck['inspection'].get('workflows'))}\n\nRoles:\n{dumps(self.ck['seed']['roles'])}\n\n"
             f"Seed variables:\n{dumps(variables)}\n\n{self.api_summary()}\n\n"
-            "Call submit_tools with {\"tools\": [{\"name\", \"description\", \"roles\", \"service\"?, \"op_id\" | (\"method\", \"path\", \"params\") | \"graphql\": {\"document\", \"variables\": "
-            "[{\"name\",\"schema\",\"required\",\"description\"}], \"mutating\"}, \"body_fields\"?, \"example_args\"}]}."
+            "Call add_tool with {\"tool\": {\"name\", \"description\", \"roles\", \"service\"?, \"op_id\" | (\"method\", \"path\", \"params\") | \"graphql\": {\"document\", \"variables\": "
+            "[{\"name\",\"schema\",\"required\",\"description\"}], \"mutating\"}, \"body_fields\"?, \"example_args\"}} for each tool, then submit_tools with {}."
+            + (f"\n\nAlready verified in an earlier attempt (kept; add others or replace one by name): {', '.join(verified)}" if verified else "")
         )
         tools = [*api_tools(ops, gql), role_call_tool(inst, lambda: self.manifest(tools=False), variables), *schema_tools(prober), *live_tools(inst, prober, self.ck["secrets"])[2:4]]
         if not ops and not gql:
             tools += repo_tools(self.repo)  # without a specification the routes have to be read from the source
-        submit = Tool("submit_tools", "Submit the agent tool set.", params({"tools": {"type": "array", "items": {"type": "object"}}}), accept)
+        tools.append(Tool("add_tool", "Check one tool now (its definition and example call against the seeded state) and keep it if it works.",
+                          params({"tool": {"type": "object"}}, ["tool"]), add_tool))
+        submit = Tool("submit_tools", "Submit the agent tool set: every tool verified with add_tool, plus any given here.",
+                      params({"tools": {"type": "array", "items": {"type": "object"}}}, []), accept)
         result = self.agent(role="adapter", system=system, user=user, tools=tools, submit=submit, max_steps=70, max_submits=8)
         self.ck["tools"] = result["tools"]
         self.ck["tool_examples"] = result["examples"]

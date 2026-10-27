@@ -14,6 +14,8 @@ from ..db.events import emit
 from ..db.models import Job
 from ..db.session import session
 
+STOPPING = threading.Event()  # set when the worker is told to stop: running jobs are handed back at their next safe point
+
 log = logging.getLogger(__name__)
 
 
@@ -35,7 +37,8 @@ class JobContext:
         self._stop: BaseException | None = None
         self._halt = threading.Event()
         self._thread = threading.Thread(target=self._beat, daemon=True)
-        self.models: dict[str, dict[str, Any]] = {}  # model calls, tokens, cost and latency per role (llm.usage)
+        # model calls, tokens, cost and latency per role (llm.usage), carried over from earlier attempts in the checkpoint
+        self.models: dict[str, dict[str, Any]] = dict(self.checkpoint.get("_models") or {})
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -72,9 +75,11 @@ class JobContext:
                 log.warning("heartbeat failed for %s: %s", self.job_id, exc)
 
     def check(self) -> None:
-        """Raises at a safe point if the job was paused, cancelled, or over budget."""
+        """Raises at a safe point if the job was paused, cancelled, or over budget, or this worker is stopping."""
         if self._stop is not None:
             raise self._stop
+        if STOPPING.is_set():
+            raise queue.Handover("worker stopping")
         try:
             self._heartbeat()
         except (queue.JobCancelled, queue.JobPaused, queue.LeaseLost) as exc:
@@ -91,9 +96,17 @@ class JobContext:
             emit(s, project_id=self.project_id, stream=self.job_id, type=type, summary=summary, data=data or {})
 
     def save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        checkpoint["_models"] = self.models  # usage by role so far, shown while the job runs and kept across attempts
         self.checkpoint = checkpoint
         with session() as s:
             queue.save_checkpoint(s, self.job_id, checkpoint, worker_id=self.worker_id, attempt=self.attempt)
+
+    def request_pause(self, reason: str) -> None:
+        """Asks for this job to pause at its next safe point, as the Pause button does, and says why."""
+        with session() as s:
+            job = self.owned(s)
+            job.pause_requested = True
+            emit(s, project_id=self.project_id, stream=self.job_id, type="job.guard", summary=reason)
 
     def add_cost(self, usd: float, tokens: int = 0) -> None:
         if not usd and not tokens:

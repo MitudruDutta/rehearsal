@@ -320,3 +320,37 @@ def _allowance_flow():
     app_id = client.post("/v1/applications", headers=auth, json={"name": "a", "source": {"kind": "git", "url": "https://example.test/x"}}).json()["id"]
     refused = client.post("/v1/world-builds", headers=auth, json={"application_id": app_id})
     assert refused.status_code == 402 and "allowance" in refused.json()["detail"]
+
+
+def test_a_stopping_worker_hands_its_job_back_without_using_an_attempt(db):
+    """A deploy that restarts workers mid-build used to cost the build an attempt each time, and after three it failed
+    with "gave up after repeated worker loss". A stopping worker now gives the job back at a safe point."""
+    from rehearsal.worker.context import STOPPING, JobContext
+
+    project, key = bootstrap("Test", "handover")
+    with session() as s:
+        job_id = queue.enqueue(s, project_id=project, kind="unit_test_handover", payload={}, max_attempts=3).id
+    for _ in range(4):  # more restarts than attempts
+        with session() as s:
+            job = queue.claim(s, "worker-a", ["unit_test_handover"])
+            s.expunge(job)
+        with JobContext(job, "worker-a") as ctx:
+            ctx.models["compiler.adapter"] = {"calls": 2, "prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.01, "latency_ms": 9, "models": {}}
+            ctx.save_checkpoint({"done": ["inspect"], "spend_by_step": {"adapt": 0.01}, "stuck": {"adapt": {"k": {"count": 3}}}})
+            STOPPING.set()
+            try:
+                ctx.check()
+                raise AssertionError("a stopping worker kept running its job")
+            except queue.Handover:
+                with session() as s:
+                    queue.hand_back(s, queue.owned(s, job_id, "worker-a", job.attempts))
+            finally:
+                STOPPING.clear()
+    with session() as s:
+        row = s.get(Job, job_id)
+        assert (row.status, row.attempts, row.lease_owner) == ("queued", 0, None)
+    shown = TestClient(app).get(f"/v1/jobs/{job_id}", headers={"Authorization": f"Bearer {key}"}).json()
+    assert shown["spend_by_step"] == {"adapt": 0.01} and shown["stuck"]["adapt"]["k"]["count"] == 3
+    assert shown["models"]["compiler.adapter"]["calls"] == 2  # usage by role while the job has no result yet
+    with session() as s:
+        queue.finish(s, s.get(Job, job_id), status="cancelled")

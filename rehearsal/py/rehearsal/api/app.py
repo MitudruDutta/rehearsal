@@ -483,7 +483,12 @@ def get_job(job_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
     with session() as s:
         j = _get(s, Job, job_id, p)
         out = _cols(j, ("checkpoint",))
-        out["completed_phases"] = (j.checkpoint or {}).get("done", [])
+        ck = j.checkpoint or {}
+        out["completed_phases"] = ck.get("done", [])
+        # what the build page shows while a job runs: spend per role and per step, and what keeps being rejected
+        out["models"] = (j.result or {}).get("models") or ck.get("_models")
+        out["spend_by_step"] = ck.get("spend_by_step") or {}
+        out["stuck"] = ck.get("stuck") or {}
         if j.kind in ("autofix", "factory"):  # the loop's rounds so far: versions, reasons and scores, nothing private
             out["autofix"] = (j.checkpoint or {}).get("autofix")
             out["factory"] = (j.checkpoint or {}).get("factory")

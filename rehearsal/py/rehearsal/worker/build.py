@@ -44,11 +44,13 @@ def handle(ctx: JobContext) -> dict:
         add_cost=ctx.add_cost,
         options=options,
         destroy=destroy_owned,
+        budget=ctx.budget,
+        pause=ctx.request_pause,
     )
     try:
         pkg = compiler.run()
     except BaseException as exc:
-        if not isinstance(exc, (queue.LeaseLost, queue.JobPaused)) and p.get("keep_sandbox_on_failure") is not True:
+        if not isinstance(exc, (queue.LeaseLost, queue.JobPaused, queue.Handover)) and p.get("keep_sandbox_on_failure") is not True:
             compiler.cleanup()
         raise
     publish(ctx, pkg, p)

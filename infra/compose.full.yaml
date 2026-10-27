@@ -108,6 +108,8 @@ services:
       - /var/lib/rehearsal:/var/lib/rehearsal
     user: "root:rehearsal"
     restart: unless-stopped
+    # on stop, a running job is handed back at its next safe point (after the current model call); give it time to get there
+    stop_grace_period: 3m
     depends_on: { migrate: { condition: service_completed_successfully } }
 
   # "Ask AI" on the docs site: answers from the pages in docs/content, through Caddy at /assistant. It gets the model

@@ -543,3 +543,103 @@ def test_stack_traces_are_left_out_of_error_bodies():
     body = {"errors": [{"message": "Unknown type \"RefundCreateInput\".", "extensions": {"exception": {"code": "GraphQLError", "stacktrace": ["Traceback"] * 50}}}]}
     assert without_traces(body) == {"errors": [{"message": "Unknown type \"RefundCreateInput\".", "extensions": {"exception": {"code": "GraphQLError"}}}]}
     assert "Traceback" not in graphql_failed(body) and "RefundCreateInput" in graphql_failed(body)
+
+
+def test_tools_are_verified_one_at_a_time_and_survive_a_resume(tmp_path, monkeypatch):
+    """A broken tool costs one add_tool call, not the whole set; verified tools are kept in the checkpoint, so a
+    resumed adapter starts from them; submit_tools with {} submits them."""
+    from types import SimpleNamespace
+
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.agent import Rejected
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    ck = {"done": ["inspect", "research", "plan", "materialize", "discover", "seed"], "inspection": {"workflows": []},
+          "runtime": {"secrets": [], "services": []}, "secrets": {}, "seed": {"roles": [{"name": "admin"}], "vars": {"pid": "P1"}}, "base_snapshot": "x"}
+    saved = []
+    c = Compiler(app=AppInput("t", tmp_path, {}, "", {}), checkpoint=ck, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: None, save=lambda d: saved.append(sorted(d.get("adapt_verified", {}))), heartbeat=lambda: None, add_cost=lambda *a: None)
+    inst = SimpleNamespace(restore=lambda path: None)
+    monkeypatch.setattr(c, "instance", lambda: inst)
+    monkeypatch.setattr(c, "api", lambda: ([], None))
+    monkeypatch.setattr(c, "api_summary", lambda: "")
+    monkeypatch.setattr(c, "_probe_capabilities", lambda inst, examples: {})
+    monkeypatch.setattr(c, "_build_tools", lambda items: [SimpleNamespace(name=it["name"], mutating=bool(it.get("mutating")), roles=["admin"],
+                                                                          model_dump=lambda it=it, **kw: {"name": it["name"]}) for it in items])
+    monkeypatch.setattr(c, "manifest", lambda **kw: SimpleNamespace(model_copy=lambda update: SimpleNamespace(model_dump=lambda **k: {}, tools=update["tools"])))
+    monkeypatch.setattr(pipeline.WorldManifest, "model_validate", staticmethod(lambda d: None))
+    monkeypatch.setattr(pipeline, "Prober", lambda inst: None)
+    for name in ("api_tools", "schema_tools", "live_tools"):
+        monkeypatch.setattr(pipeline, name, lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "role_call_tool", lambda *a, **k: SimpleNamespace(name="call_as_role"))
+
+    class Gateway:
+        def __init__(self, *a): pass
+
+        def execute(self, role, name, args, op):
+            ok = args.get("id") == "P1"
+            return SimpleNamespace(status="SUCCEEDED" if ok else "FAILED", visible={"errors": [{"message": "Invalid ID", "stacktrace": ["x"] * 9}]})
+
+    monkeypatch.setattr(pipeline, "Gateway", Gateway)
+    seen = {}
+
+    def agent(**kw):
+        add = next(t for t in kw["tools"] if t.name == "add_tool")
+        seen["user"] = kw["user"]
+        for n in ("get_product", "list_products"):
+            assert "verified" in add.fn({"tool": {"name": n, "example_args": {"id": "{{vars.pid}}"}}})
+        with pytest.raises(Rejected) as bad:
+            add.fn({"tool": '{"name": "update_product", "mutating": true, "example_args": {"id": "U:1"}}'})
+        assert "Invalid ID" in str(bad.value) and "stacktrace" not in str(bad.value)
+        if len(ck["adapt_verified"]) < 3:  # the first attempt stops here, as if the worker restarted
+            raise RuntimeError("worker lost")
+        return kw["submit"].fn({})
+
+    monkeypatch.setattr(c, "agent", lambda **kw: agent(**kw))
+    with pytest.raises(RuntimeError):
+        c.phase_adapt()
+    assert sorted(ck["adapt_verified"]) == ["get_product", "list_products"] and saved[-1] == ["get_product", "list_products"]
+    ck["adapt_verified"]["delete_product"] = {"name": "delete_product", "mutating": True, "example_args": {"id": "{{vars.pid}}"}}
+    c.phase_adapt()  # resumed: the earlier tools are still there, and named in the brief
+    assert "Already verified in an earlier attempt" in seen["user"] and "get_product" in seen["user"]
+    assert sorted(t["name"] for t in ck["tools"]) == ["delete_product", "get_product", "list_products"]
+
+
+def test_rejections_group_by_kind_without_their_particulars():
+    from rehearsal.compiler.pipeline import rejection_kind
+
+    a = rejection_kind("seed step 4 (http POST /graphql/) failed: HTTP 400: DisallowedHost at /graphql/")
+    b = rejection_kind("seed step 6 (http POST /graphql/) failed: HTTP 400: {\"errors\": []}")
+    assert a == b == "seed step # (http POST /graphql/) failed"
+    c = rejection_kind("seed step 0 (exec ['python', 'manage.py', 'createsuperuser']) failed: exit 2: usage")
+    assert c == "seed step # (exec […]) failed"
+    j1 = rejection_kind("'tools' was sent as text that is not valid JSON: Expecting ',' delimiter at character 573, near ...")
+    j2 = rejection_kind("'tools' was sent as text that is not valid JSON: Expecting property name at character 721")
+    assert j1 == j2 == "… was sent as text that is not valid JSON"
+    assert rejection_kind("These example calls did not succeed against the seeded state (reads run first):\nproduct_create ...").startswith("These example calls")
+
+
+def test_a_step_that_keeps_failing_pauses_the_build_and_resuming_grants_another_round(tmp_path):
+    """The no-progress brake: the same kind of rejection over and over, or a large share of the budget, pauses the build
+    with the reason; spend is kept per step."""
+    from rehearsal.compiler.pipeline import GUARD_REPEATS, GUARD_SHARE, AppInput, Compiler, rejection_kind
+
+    paused, logged, costs = [], [], []
+    c = Compiler(app=AppInput("t", tmp_path, {}, "", {}), checkpoint={"done": []}, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: logged.append(a[0]), save=lambda d: None, heartbeat=lambda: None, add_cost=lambda usd, tokens=0: costs.append(usd),
+                 budget=10.0, pause=paused.append)
+    c._phase = "adapt"
+    for n in range(GUARD_REPEATS - 1):
+        c.log("compiler.submit.rejected", f"These example calls did not succeed (attempt {n}):\nx -> FAILED", {"role": "adapter"})
+    kind = rejection_kind("These example calls did not succeed (attempt 7):\nx")
+    assert not paused and c.ck["stuck"]["adapt"][kind]["count"] == GUARD_REPEATS - 1 and c.ck["stuck"]["adapt"][kind]["role"] == "adapter"
+    c.log("compiler.submit.rejected", "These example calls did not succeed (attempt 99):\ny", {"role": "adapter"})
+    assert len(paused) == 1 and f"came back {GUARD_REPEATS} times" in paused[0] and "adapt step" in paused[0]
+    c.log("compiler.submit.rejected", "These example calls did not succeed (attempt 100):\nz", {"role": "adapter"})
+    assert len(paused) == 1  # resuming grants another round before the next pause
+    c._phase = "seed"
+    c.add_cost(GUARD_SHARE * 10.0 - 0.01)
+    assert len(paused) == 1 and c.ck["spend_by_step"]["seed"] == round(GUARD_SHARE * 10.0 - 0.01, 6) and costs
+    c.add_cost(0.02)
+    assert len(paused) == 2 and "40% of the $10.00 budget" in paused[1]
+    assert "compiler.submit.rejected" in logged  # the events still reach the build log
