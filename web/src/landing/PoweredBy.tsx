@@ -1,12 +1,14 @@
 /* "Powered by": the services Rehearsal runs on, as a strip of logos that slides slowly and pauses under the pointer.
    Logos are the companies' own files (public/landing/partners/), grey until hovered; each opens the company's site.
    dodo-payments.svg is Dodo's logo with its lettering recoloured white, for this dark band. NVIDIA (Simple Icons, in NVIDIA
-   green) and Nebius ship square marks, so those two show their name beside the mark.
+   green) and Nebius ship square marks, so those two show their name beside the mark. tavily.svg is Tavily's full logo
+   (tavily.com/logos/tavily-full.svg) recoloured white, like Dodo's.
    The list is drawn twice so the strip can loop without a gap; the second copy is hidden from screen readers. */
 
 const PARTNERS: { name: string; href: string; src: string; height: number; label?: string }[] = [
   { name: "NVIDIA Nemotron", href: "https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/", src: "/landing/partners/nvidia.svg", height: 34, label: "NVIDIA Nemotron" },
   { name: "Nebius Token Factory", href: "https://nebius.com/token-factory", src: "/landing/partners/nebius.svg", height: 34, label: "Nebius Token Factory" },
+  { name: "Tavily", href: "https://tavily.com/", src: "/landing/partners/tavily.svg", height: 36 },
   { name: "AWS", href: "https://aws.amazon.com/", src: "/landing/partners/aws.svg", height: 40 },
   { name: "Dodo Payments", href: "https://dodopayments.com/", src: "/landing/partners/dodo-payments.svg", height: 30 },
 ];
