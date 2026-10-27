@@ -42,7 +42,7 @@ from ..core.contracts import (
 from ..config import settings
 from ..evaluator.probes import Prober, ProbeError
 from ..runner.gateway import Gateway
-from ..runner.runtime import InstanceRecord, RuntimeError_, WorldInstance, new_secrets
+from ..runner.runtime import InstanceRecord, RuntimeError_, WorldInstance, hostnames, new_secrets
 from ..runner.seed import SeedError, run_seed
 from .agent import AgentRun, CompilerAgentError, Rejected, Tool, params, run_agent
 from .apispec import INTROSPECTION, MAX_SPEC_BYTES, SPEC_PATHS, GraphQLSchema, Operation, operations, parse_spec, to_tool
@@ -94,6 +94,11 @@ def plan_problems(briefs: Any, target: int, tools: dict[str, bool] | None = None
         if (grounded := sum(bool(b.get("sources")) for b in briefs)) < (len(briefs) + 1) // 2:
             problems.append(f"base at least half the scenarios on the real-world research and list its URLs in 'sources' (now {grounded})")
     return problems + stress.coverage(briefs, target, tools)
+
+
+# The application's own host check refusing Rehearsal's Host header (Django, Rails, dev servers and proxies word it so)
+HOST_REJECTED = re.compile(r"DisallowedHost|Invalid HTTP_HOST header|Blocked hosts?\b|Host not (?:allowed|permitted)|Invalid Host header|"
+                           r"not in ALLOWED_HOSTS|host header is not allowed", re.I)
 
 
 def failing_service(error: str) -> str | None:
@@ -429,7 +434,10 @@ class Compiler:
 
     def _rewind(self, phase: str, reason: str) -> bool:
         """Tool adaptation cannot repair what the seed step made. When it is stopped by sign-in or permission errors,
-        the seed step runs again with that evidence instead of the build failing. Once per build."""
+        the seed step runs again with that evidence instead of the build failing. Once per build. Likewise, when the
+        application refuses Rehearsal's requests because of its own host check, the runtime is repaired."""
+        if phase in ("discover", "seed", "adapt") and HOST_REJECTED.search(reason) and self.ck.get("rewound", []).count("materialize") < 2:
+            return self._rewind_to_runtime(phase, reason)
         blocked = re.search(r"\b40[13]\b|unauthori[sz]ed|forbidden|invalid token|expired|credential|permission", reason, re.I)
         if phase != "adapt" or not blocked or "seed" in self.ck.get("rewound", []) or "seed" not in self.ck:
             return False
@@ -445,6 +453,33 @@ class Compiler:
         }
         self.save()
         self.log("compiler.repair", "tool adaptation was blocked by sign-in or permission errors; going back to the seed step with that evidence", {"phase": "seed"})
+        return True
+
+    def _rewind_to_runtime(self, phase: str, reason: str) -> bool:
+        """Only the runtime can change which hosts the application accepts: tear the sandbox down, drop what was built
+        on it, and start the runtime again with this evidence as its first error. At most twice per build: a first repair
+        can change the wrong setting."""
+        if self._inst is not None:
+            self.destroy(self._inst)
+        elif self.ck.get("instance"):
+            self.destroy(WorldInstance(InstanceRecord.from_json(self.ck["instance"])))
+        self._inst = None
+        for key in ("instance", "clean_snapshot", "base_snapshot", "api", "seed"):
+            self.ck.pop(key, None)
+        self.ck.setdefault("rewound", []).append("materialize")
+        self.ck["done"] = [p for p in self.ck.get("done", []) if PHASES.index(p) < PHASES.index("materialize")]
+        served = [x for x in self.ck["runtime"].get("services", []) if x.get("port")]
+        headers = ", ".join(f"{hostnames(x['name'])[1]}:{x['port']}" for x in served)
+        names = ", ".join(dict.fromkeys(n for x in served for n in hostnames(x["name"])[1:]))
+        self.ck["runtime_feedback"] = (
+            f"The application started, but refused Rehearsal's requests in the {phase} step because of its host check:\n{reason[:1500]}\n"
+            f"Rehearsal sends Host headers {headers}. Allow the hostnames {names} in the setting the framework checks incoming Host "
+            "headers against (for example ALLOWED_HOSTS in Django, config.hosts in Rails), not in CORS, client or redirect URL settings. "
+            "Find where the application reads that setting (an environment variable or a settings file) and set it there; keep "
+            "everything else that already works."
+        )
+        self.save()
+        self.log("compiler.repair", f"the application refused Rehearsal's requests in the {phase} step (host check); going back to the runtime with that evidence", {"phase": "materialize"})
         return True
 
     # ------------------------------------------------------------------ 1. inspect
@@ -632,6 +667,7 @@ class Compiler:
         window = len(attempts)
         # The last runtime whose images built (a later step failed): repairs start from it instead of losing what worked.
         furthest = self.ck.get("materialize_furthest")
+        pending = self.ck.pop("runtime_feedback", None)  # a later step found a runtime problem: repair it before starting again
         while True:
             secrets = self.ck.get("secrets", {})
             for name in self.ck["runtime"]["secrets"]:
@@ -639,11 +675,14 @@ class Compiler:
             self.ck["secrets"] = secrets
             self.save()
             try:
+                if pending:
+                    raise RuntimeError_(pending)
                 inst = WorldInstance.create(
                     self.manifest(seed=False, tools=False), secrets=secrets, source_dir=self.app.source_dir, world_key=self.world_key(), log=lambda m: self.log("compiler.sandbox", m, {})
                 )
                 break
             except RuntimeError_ as exc:
+                pending = None
                 error = str(exc)
                 attempts.append(_brief(error, 3000))
                 if "image build for" not in error:  # every image built; only starting the services failed

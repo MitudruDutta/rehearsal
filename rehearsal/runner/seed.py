@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import html
 import json
+import re
 from typing import Any
 
 from ..core.contracts import SeedStep, dig, render_template, render_value
 from .gateway import basic_header, graphql_failed
 from .runtime import WorldInstance
+
+
+def readable(body: str, limit: int = 1500) -> str:
+    """A response body for an error message. An HTML error page becomes its visible text: a framework's debug page is
+    mostly styles, and the reason it gives (such as which host to allow) comes after them."""
+    if "<html" not in body[:1000].lower():
+        return body[:limit]
+    text = re.sub(r"(?is)<(style|script)\b.*?</\1>|<[^>]+>", " ", body)
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()[:limit]
 
 
 class SeedError(Exception):
@@ -53,7 +64,7 @@ def run_seed(instance: WorldInstance, steps: list[SeedStep], variables: dict[str
                 body = render_value(step.json_body, scopes) if step.json_body is not None else None
                 resp = instance.http(step.service, step.method, render_template(step.path, scopes), headers=headers, json_body=body)
                 if resp.status_code not in step.expect_status:
-                    detail = f"HTTP {resp.status_code}: {resp.text[:1500]}"
+                    detail = f"HTTP {resp.status_code}: {readable(resp.text)}"
                     if resp.status_code >= 500:  # the response body rarely says why; the server log does
                         detail += f"\n--- {step.service} log tail ---\n{instance.logs(step.service, 40)[-3000:]}"
                     raise SeedError(i, step, detail)

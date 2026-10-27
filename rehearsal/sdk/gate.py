@@ -41,7 +41,8 @@ def verdict(summary: dict[str, Any], candidate: str, baseline: str | None = None
     base = (profiles.get(baseline) or {}).get("overall") if baseline else None
     if base and base.get("success_rate") is not None:
         slack = f", {tolerance:.0%} tolerance" if tolerance else ""
-        checks.append((rate >= base["success_rate"] - tolerance, f"verified success {_pct(rate)} vs {_pct(base['success_rate'])} for the baseline{slack}"))
+        checks.append((rate >= base["success_rate"] - tolerance - 1e-9,  # 0.8 - 0.1 is not quite 0.7 in floating point
+                       f"verified success {_pct(rate)} vs {_pct(base['success_rate'])} for the baseline{slack}"))
         for key, what in ROWS[1:4]:
             checks.append((cand[key] <= base[key], f"{what.lower()}: {cand[key]} vs {base[key]} for the baseline"))
     return all(ok for ok, _ in checks), checks

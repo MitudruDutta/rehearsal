@@ -20,6 +20,7 @@ def test_thresholds_and_baseline_decide():
     assert not gate.verdict(s, "agent@v2", "agent@v1", min_success=0.8)[0]
     assert not gate.verdict(summary(agent_v2=agg(0.5), agent_v1=agg(0.67)), "agent@v2", "agent@v1")[0]  # a regression
     assert gate.verdict(summary(agent_v2=agg(0.5), agent_v1=agg(0.67)), "agent@v2", "agent@v1", tolerance=0.2)[0]
+    assert gate.verdict(summary(agent_v2=agg(0.7), agent_v1=agg(0.8)), "agent@v2", "agent@v1", tolerance=0.1)[0]  # exactly at the edge passes
     ok, checks = gate.verdict(summary(agent_v2=agg(0.83, dupes=1), agent_v1=agg(0.5)), "agent@v2", "agent@v1")
     assert not ok and any(not passed and "duplicate" in text for passed, text in checks)  # more verified, but a new duplicate
     assert not gate.verdict(summary(agent_v2=agg(1.0, violations=1)), "agent@v2")[0]  # rule violations: none allowed by default

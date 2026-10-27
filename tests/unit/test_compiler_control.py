@@ -363,3 +363,43 @@ def test_a_repair_that_leaves_the_failing_service_unchanged_is_refused(tmp_path,
     with pytest.raises(pipeline.BuildFailed):
         c.phase_materialize()
     assert "service worker is the one that failed, and it is unchanged" in outcomes[0]
+
+
+def test_a_host_check_refusal_sends_the_build_back_to_the_runtime_with_the_real_host_names(tmp_path, monkeypatch):
+    """The seeder cannot change which hosts an application accepts; the runtime can, so the build goes back there."""
+    from rehearsal.compiler import pipeline
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    destroyed = []
+    c = Compiler(app=AppInput("t", tmp_path, {}, "", {}),
+                 checkpoint={"done": ["inspect", "research", "plan", "materialize", "discover"], "runtime": {"secrets": [], "services": [{"name": "db"}, {"name": "web_api", "port": 8000}]},
+                             "inspection": {}, "instance": None, "api": {}, "clean_snapshot": "x"},
+                 workdir=tmp_path / "b", chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    c._inst = object()
+    monkeypatch.setattr(c, "destroy", lambda inst: destroyed.append(inst))
+    django = "seed step 4 (http POST /graphql/) failed: HTTP 400: <title>DisallowedHost at /graphql/</title>"
+    assert c._rewind("seed", django) is True
+    assert c.ck["done"] == ["inspect", "research", "plan"] and "api" not in c.ck and "clean_snapshot" not in c.ck and len(destroyed) == 1
+    assert c._rewind("seed", django) is True  # a first repair can change the wrong setting
+    assert c._rewind("seed", django) is False  # at most twice per build
+    assert c._rewind("seed", "HTTP 500 server error") is False  # only the host check sends it back
+
+    asked = []
+    monkeypatch.setattr(c, "manifest", lambda **kw: None)
+    monkeypatch.setattr(pipeline.WorldInstance, "create", classmethod(lambda cls, *a, **kw: (_ for _ in ()).throw(pipeline.RuntimeError_("image build for x failed"))))
+    monkeypatch.setattr(c, "agent", lambda **kw: asked.append(kw["user"]) or {"secrets": [], "services": []})
+    with pytest.raises(pipeline.BuildFailed):
+        c.phase_materialize()
+    assert "refused Rehearsal's requests in the seed step" in asked[0] and "DisallowedHost" in asked[0]
+    assert "Host headers web-api:8000" in asked[0] and "hostnames web-api, web-api.world.test" in asked[0]
+
+
+def test_an_html_error_page_is_reported_as_its_visible_text():
+    from rehearsal.runner.seed import readable
+
+    page = ("<!DOCTYPE html><html><head><title>DisallowedHost at /graphql/</title><style>" + "body { color:#000; }" * 200 +
+            "</style></head><body><pre class=\"exception_value\">Invalid HTTP_HOST header: &#x27;saleor:8000&#x27;. You may need to add "
+            "&#x27;saleor&#x27; to ALLOWED_HOSTS.</pre></body></html>")
+    text = readable(page)
+    assert text.startswith("DisallowedHost at /graphql/") and "add 'saleor' to ALLOWED_HOSTS." in text and "color" not in text
+    assert readable('{"detail": "bad"}') == '{"detail": "bad"}' and len(readable("x" * 5000)) == 1500
