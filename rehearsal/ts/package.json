@@ -1,6 +1,6 @@
 {
   "name": "rehearsal-kit",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Rehearse AI agents on a sandboxed copy of your own application before they reach production. The TypeScript edition of rehearsal-kit: SDK, `rehearsal` CLI and MCP server.",
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,8 @@
     "./mcp": {
       "types": "./dist/sdk/mcp.d.ts",
       "import": "./dist/sdk/mcp.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
