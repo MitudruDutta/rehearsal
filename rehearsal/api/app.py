@@ -57,6 +57,7 @@ from ..db.models import (
     now,
 )
 from ..db.session import session
+from ..agents.llm import merge_usage
 from ..worker.evaluate import summarize_run
 from .auth import (
     COOKIE,
@@ -785,7 +786,9 @@ def list_runs(p: Principal = Depends(principal)) -> list[dict[str, Any]]:
 @app.get("/v1/runs/{run_id}")
 def get_run(run_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
     with session() as s:
-        return _cols(_get(s, Run, run_id, p))
+        out = _cols(_get(s, Run, run_id, p))
+        out["models"] = merge_usage((j.result or {}).get("models") for j in queue.run_jobs(s, run_id))  # per role, over every shard
+        return out
 
 
 @app.post("/v1/runs/{run_id}/commands")

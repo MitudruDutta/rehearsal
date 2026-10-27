@@ -125,13 +125,17 @@ usage: ContextVar[dict[str, dict[str, Any]] | None] = ContextVar("model_usage", 
 _usage_lock = threading.Lock()
 
 
+def _row() -> dict[str, Any]:
+    return {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0, "latency_ms": 0, "models": {}}
+
+
 def _record(role: str | None, reply: "LLMReply") -> None:
     """Adds one answered call to the running job's per-role usage (compiler lanes share one dict across threads)."""
     acc = usage.get()
     if acc is None or not role:
         return
     with _usage_lock:
-        row = acc.setdefault(role, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0, "latency_ms": 0, "models": {}})
+        row = acc.setdefault(role, _row())
         row["calls"] += 1
         row["prompt_tokens"] += reply.prompt_tokens
         row["completion_tokens"] += reply.completion_tokens
@@ -139,6 +143,20 @@ def _record(role: str | None, reply: "LLMReply") -> None:
         row["latency_ms"] += reply.latency_ms
         name = f"{reply.provider}:{reply.model}" + ("" if reply.thinking is None else "#think" if reply.thinking else "#nothink")
         row["models"][name] = row["models"].get(name, 0) + 1
+
+
+def merge_usage(parts: Any) -> dict[str, dict[str, Any]]:
+    """Sums per-role usage from several jobs, for example the shards of one run."""
+    out: dict[str, dict[str, Any]] = {}
+    for part in parts:
+        for role, row in (part or {}).items():
+            acc = out.setdefault(role, _row())
+            for k in ("calls", "prompt_tokens", "completion_tokens", "latency_ms"):
+                acc[k] += row.get(k, 0)
+            acc["cost_usd"] = round(acc["cost_usd"] + row.get("cost_usd", 0), 6)
+            for name, n in row.get("models", {}).items():
+                acc["models"][name] = acc["models"].get(name, 0) + n
+    return out
 
 
 _clients: dict[str, Any] = {}

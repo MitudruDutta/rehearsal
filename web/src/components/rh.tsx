@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { actorOf, describe } from "../describe";
 import type { RhEvent } from "../api";
@@ -131,5 +133,55 @@ export function NowCaption({ ev, fallback }: { ev: RhEvent | null; fallback: str
       <ActorAvatar id={ev ? actorOf(ev) : null} className="size-9" />
       <span className="min-w-0 text-[15px] font-medium break-words">{ev ? describe(ev) : fallback}</span>
     </div>
+  );
+}
+
+const ROLES: Record<string, string> = { agent: "Agent under test", customer: "Simulated customer", improver: "Improvement step", "compiler.auditor": "Compiler: live audit" };
+const PROVIDERS: Record<string, string> = { nebius: "Nebius Token Factory", openrouter: "OpenRouter", litellm: "LiteLLM", groq: "Groq", local: "local", custom: "custom endpoint" };
+
+/** Model calls, average time, tokens and spend for each role of a job or run, from its `models` usage record. */
+export function ModelsByRole({ models, what }: { models?: Record<string, any> | null; what: string }) {
+  const rows = Object.entries(models || {}).sort(([, a], [, b]) => b.cost_usd - a.cost_usd || b.calls - a.calls);
+  if (!rows.length) return null;
+  const sum = (k: string) => rows.reduce((t, [, r]) => t + (r[k] || 0), 0);
+  const tokens = (n: number) => n >= 10_000 ? `${Math.round(n / 1000)}k` : n.toLocaleString();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Models by role</CardTitle>
+        <CardDescription>Each role runs on its own model chain, with reasoning on only where it helps. What this {what} used, role by role.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader><TableRow><TableHead>Role</TableHead><TableHead>Model</TableHead><TableHead className="text-right">Calls</TableHead><TableHead className="text-right">Time per call</TableHead><TableHead className="text-right">Tokens in / out</TableHead><TableHead className="text-right">Spend</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {rows.map(([role, r]) => (
+              <TableRow key={role}>
+                <TableCell className="font-medium">{ROLES[role] ?? (role.startsWith("compiler.") ? `Compiler: ${role.slice(9).replace(/_/g, " ")}` : role)}</TableCell>
+                <TableCell>
+                  {Object.entries(r.models as Record<string, number>).sort(([, a], [, b]) => b - a).map(([name, n]) => {
+                    const [chain, flag] = name.split("#");
+                    const provider = chain.split(":")[0];
+                    const model = chain.slice(provider.length + 1);
+                    return (
+                      <div key={name} className="flex flex-wrap items-center gap-1.5" title={name}>
+                        <span className="font-mono text-xs">{model.split("/").pop()}</span>
+                        {flag === "think" && <Tone tone="info">reasoning</Tone>}
+                        <span className="text-xs text-muted-foreground">{PROVIDERS[provider] ?? provider}{Object.keys(r.models).length > 1 ? `, ${n} calls` : ""}</span>
+                      </div>
+                    );
+                  })}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{r.calls}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.calls ? `${(r.latency_ms / r.calls / 1000).toFixed(1)} s` : "–"}</TableCell>
+                <TableCell className="text-right tabular-nums">{tokens(r.prompt_tokens)} / {tokens(r.completion_tokens)}</TableCell>
+                <TableCell className="text-right tabular-nums">${r.cost_usd.toFixed(4)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter><TableRow><TableCell colSpan={2}>Total</TableCell><TableCell className="text-right tabular-nums">{sum("calls")}</TableCell><TableCell /><TableCell className="text-right tabular-nums">{tokens(sum("prompt_tokens"))} / {tokens(sum("completion_tokens"))}</TableCell><TableCell className="text-right tabular-nums">${sum("cost_usd").toFixed(4)}</TableCell></TableRow></TableFooter>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Inspector } from "@/components/inspector";
-import { ActivityFeed, NowCaption, PageHeader, Stat, StatusBadge, Tone } from "@/components/rh";
+import { ActivityFeed, ModelsByRole, NowCaption, PageHeader, Stat, StatusBadge, Tone } from "@/components/rh";
 import { pct, post, useEvents, useResource, type RhEvent } from "../api";
 import { humanTool } from "../describe";
 import { go, routes } from "../nav";
@@ -256,6 +256,7 @@ export function RunView({ runId, episodeId }: { runId: string; episodeId?: strin
           </CardContent>
         </Card>
         {selected && <EpisodeTabs episodeId={selected} />}
+        <ModelsByRole models={r?.models} what="run" />
       </div>
       <Inspector open={!!selection} onOpenChange={(o) => !o && setSelection(null)} selection={selection} mode="episode" events={epEvents} episodeId={selected} />
     </>

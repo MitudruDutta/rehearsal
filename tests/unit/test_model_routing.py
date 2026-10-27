@@ -74,3 +74,13 @@ def test_hard_compiler_roles_run_on_the_reasoner_chain(monkeypatch, tmp_path):
         c.agent(role=role, system="", user="", tools=[], submit=submit)
     assert used == {"inspector": "nebius:super", "builder": "nebius:super", "scenario_designer": "nebius:ultra",
                     "validation_investigator": "nebius:ultra", "builder_repair": "nebius:ultra"}
+
+
+def test_usage_from_several_jobs_adds_up_per_role():
+    a = {"agent": {"calls": 2, "prompt_tokens": 10, "completion_tokens": 4, "cost_usd": 0.001, "latency_ms": 900, "models": {"nebius:m#nothink": 2}}}
+    b = {"agent": {"calls": 1, "prompt_tokens": 5, "completion_tokens": 2, "cost_usd": 0.0005, "latency_ms": 300, "models": {"nebius:m#nothink": 1}},
+         "customer": {"calls": 1, "prompt_tokens": 3, "completion_tokens": 1, "cost_usd": 0.0001, "latency_ms": 100, "models": {"nebius:n#nothink": 1}}}
+    merged = llm.merge_usage([a, None, b])
+    assert merged["agent"]["calls"] == 3 and merged["agent"]["latency_ms"] == 1200 and merged["agent"]["models"] == {"nebius:m#nothink": 3}
+    assert merged["agent"]["cost_usd"] == 0.0015 and set(merged) == {"agent", "customer"}
+    assert a["agent"]["calls"] == 2  # the inputs are not changed

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader, Stat, StatusBadge, Tone } from "@/components/rh";
+import { ModelsByRole, PageHeader, Stat, StatusBadge, Tone } from "@/components/rh";
 import { pct, post, useEvents, useResource } from "../api";
 import { go, routes } from "../nav";
 import { explainProblem, nextStep } from "../problems";
@@ -192,6 +192,7 @@ export function Fix({ jobId }: { jobId: string }) {
           )}
         </CardContent>
       </Card>
+      {j?.result?.models && <div className="mt-6"><ModelsByRole models={j.result.models} what="fix loop" /></div>}
     </>
   );
 }

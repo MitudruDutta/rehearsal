@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Inspector } from "@/components/inspector";
-import { ActivityFeed, NowCaption, PageHeader, PhaseStepper, StatusBadge } from "@/components/rh";
+import { ActivityFeed, ModelsByRole, NowCaption, PageHeader, PhaseStepper, StatusBadge } from "@/components/rh";
 import { post, useEvents, useResource, type RhEvent } from "../api";
 import { go, routes } from "../nav";
 import type { Selection } from "../stage/Stage";
@@ -77,6 +77,7 @@ export function Build({ jobId }: { jobId: string }) {
         </div>
         <ActivityFeed events={events} onPick={(id) => pick({ kind: "actor", id })} height="calc(min(54vw, 60vh) + 70px)" />
       </div>
+      {j?.result?.models && <div className="mt-6"><ModelsByRole models={j.result.models} what="build" /></div>}
       <Inspector open={!!selection} onOpenChange={(o) => !o && setSelection(null)} selection={selection} mode="compiler" events={events} />
     </>
   );
