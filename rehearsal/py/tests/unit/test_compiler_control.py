@@ -470,3 +470,18 @@ def test_a_long_rejection_keeps_its_reason_in_the_build_log():
     out = _excerpt(text)
     assert out.startswith("seed step 0 (exec manage.py) failed") and out.endswith("missing 1 required argument: 'password'") and len(out) <= 603
     assert _excerpt("short") == "short"
+
+
+def test_tools_text_with_line_breaks_in_a_query_and_a_missing_brace_is_still_read():
+    """Multi-line GraphQL queries arrive with raw line breaks inside JSON strings; together with a } left out after a
+    nested example, that defeated the repair and the adapter was refused until the build stopped."""
+    from rehearsal.compiler.agent import Rejected, _unstring
+
+    q = "mutation($input: ProductCreateInput!) {\n  productCreate(input: $input) { product { id } }\n}"
+    one = '{"name": "create_product", "graphql": {"query": "%s", "example_args": {"input": {"name": "Sample", "productTypeId": "U::2"}}}' % q
+    two = '{"name": "update_product", "graphql": {"query": "%s"}, "example_args": {"id": "U::3"}}' % q
+    tools = _unstring({"tools": f"[{one}, {two}]"}, {"properties": {"tools": {"type": "array"}}})["tools"]
+    assert [t["name"] for t in tools] == ["create_product", "update_product"] and "\n" in tools[1]["graphql"]["query"]
+    with pytest.raises(Rejected) as refused:
+        _unstring({"tools": '[{"name": "x" "y"}]'}, {"properties": {"tools": {"type": "array"}}})
+    assert refused.value.data == {"text": '[{"name": "x" "y"}]'}  # kept for the build log

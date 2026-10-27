@@ -73,6 +73,11 @@ def _excerpt(text: str, limit: int = 600) -> str:
     return text if len(text) <= limit else f"{text[:limit // 2]} … {text[-(limit // 2):]}"
 
 
+def _loads(text: str) -> Any:
+    """JSON as models write it: raw line breaks and tabs inside strings (a multi-line query) are accepted."""
+    return json.loads(text, strict=False)
+
+
 def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dict[str, Any]:
     """Some models send nested arrays/objects as JSON text ("tools": "[{...}]"); validators expect the value. For a
     field the schema declares as an object or array, text that does not parse is refused with the parse error, so the
@@ -82,7 +87,7 @@ def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dic
     for k, v in args.items():
         if isinstance(v, str) and v.lstrip()[:1] in ("[", "{"):
             try:
-                out[k] = json.loads(v)
+                out[k] = _loads(v)
             except json.JSONDecodeError as exc:
                 if k not in structured:
                     continue
@@ -91,14 +96,16 @@ def _unstring(args: dict[str, Any], schema: dict[str, Any] | None = None) -> dic
                 # would move each one to the end of its list. The first repair that parses is used.
                 for repair in (_balance, lambda t: _balance(_reclose(t)), lambda t: _reclose(_balance(t))):
                     try:
-                        out[k] = json.loads(repair(v))
+                        out[k] = _loads(repair(v))
                         break
                     except json.JSONDecodeError:
                         pass
                 else:
                     near = v[max(0, exc.pos - 80):exc.pos + 20]
-                    raise Rejected(f"'{k}' was sent as text that is not valid JSON: {exc.msg} at character {exc.pos}, near ...{near}... "
-                                   f"Send '{k}' as a JSON value, not as a string, and check its brackets.") from exc
+                    rejected = Rejected(f"'{k}' was sent as text that is not valid JSON: {exc.msg} at character {exc.pos}, near ...{near}... "
+                                        f"Send '{k}' as a JSON value, not as a string, and check its brackets.")
+                    rejected.data = {"text": v[:20000]}  # the build log keeps what could not be read, so the next repair can be written
+                    raise rejected from exc
     return out
 
 
@@ -108,7 +115,7 @@ def _reclose(text: str, limit: int = 20) -> str:
     result is only used when it parses, and the submit validator still checks its shape."""
     for _ in range(limit):
         try:
-            json.loads(text)
+            _loads(text)
             return text
         except json.JSONDecodeError as exc:
             comma = text.rfind(",", 0, exc.pos)
@@ -205,12 +212,12 @@ def run_agent(
                     repeats = repeats + 1 if key == re.sub(r"\d+", "#", last_reason)[:200] else 1
                     last_reason = str(exc)
                     if repeats >= STUCK_AFTER:  # more tries would spend budget on the same wall; another attempt would too
-                        log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts})
+                        log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts, **getattr(exc, "data", {})})
                         stuck = CompilerAgentError(f"{role}: the same problem came back {repeats} times in a row; last reason: {exc}", run)
                         stuck.terminal = True
                         raise stuck from exc
                     out = f"REJECTED: {exc}\nFix the problems and call {submit.name} again."
-                    log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts})
+                    log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts, **getattr(exc, "data", {})})
                     if run.attempts >= max_submits:
                         raise CompilerAgentError(f"{role}: output rejected {run.attempts} times; last reason: {exc}", run) from exc
             else:
