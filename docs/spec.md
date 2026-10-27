@@ -4,7 +4,7 @@
 |---|---|
 | **Project** | Rehearsal |
 | **Document** | Technical specification (step 3 of 3: [scope](scope.md) → [PRD](prd.md) → spec) |
-| **Version** | 0.1.2 |
+| **Version** | 0.1.3 |
 | **Status** | Describes the system as built; planned work is marked |
 | **Last updated** | 2026-10-27 |
 

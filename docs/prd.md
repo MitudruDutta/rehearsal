@@ -4,7 +4,7 @@
 |---|---|
 | **Project** | Rehearsal |
 | **Document** | Product requirements (step 2 of 3: [scope](scope.md) → PRD → [spec](spec.md)) |
-| **Version** | 0.1.2 (`rehearsal-kit` on PyPI) |
+| **Version** | 0.1.3 (`rehearsal-kit` on PyPI and npm) |
 | **Status** | Implemented, except where a requirement says "planned" |
 | **Last updated** | 2026-10-27 |
 
@@ -172,7 +172,7 @@ This document turns the [scope](scope.md) into requirements. The [spec](spec.md)
 |---|---|
 | World Compiler, validation, evaluation, verdict, improvement, comparison | Shipped |
 | Fix loop, Agent Factory, pull request checks, failure causes, model usage by role, web research for builds | Shipped (October 2026) |
-| CLI, SDK, MCP server, agent plugin, console, docs | Shipped (`rehearsal-kit` 0.1.2) |
+| CLI, SDK, MCP server, agent plugin, console, docs | Shipped (`rehearsal-kit` 0.1.3) |
 | Hosted service with plans and live payments | Shipped (rehearsalkit.xyz) |
 | Weight training, world bundle replay | Planned (`rehearsal train` and `rehearsal run-bundle` report "not implemented") |
 | Browser-only worlds, per-job VM isolation | Planned |
