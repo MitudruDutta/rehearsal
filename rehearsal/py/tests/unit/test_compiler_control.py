@@ -485,3 +485,17 @@ def test_tools_text_with_line_breaks_in_a_query_and_a_missing_brace_is_still_rea
     with pytest.raises(Rejected) as refused:
         _unstring({"tools": '[{"name": "x" "y"}]'}, {"properties": {"tools": {"type": "array"}}})
     assert refused.value.data == {"text": '[{"name": "x" "y"}]'}  # kept for the build log
+
+
+def test_tools_text_from_a_real_build_with_both_kinds_of_missing_brace_is_read():
+    """Shaped like the Saleor adapter's text: each tool lacks its own }, and one variable's schema lacks the } before
+    the ] that ends its list. Both are closed where they belong, in one pass."""
+    from rehearsal.compiler.agent import _unstring
+
+    var = '{"name": "input", "schema": {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "string"}}}}'
+    tool = ('{"name": "%s", "service": "saleor", "graphql": {"document": "mutation { x }", "mutating": true, '
+            '"variables": [%s], "example_args": {"input": {"ids": ["U::1"]}}}')
+    text = "[" + ", ".join([tool % ("one", var + "}"), tool % ("two", var), tool % ("three", var + "}")]) + "}]"
+    tools = _unstring({"tools": text}, {"properties": {"tools": {"type": "array"}}})["tools"]
+    assert [t["name"] for t in tools] == ["one", "two", "three"]
+    assert all(t["graphql"]["variables"][0]["schema"]["properties"]["ids"]["items"] == {"type": "string"} for t in tools)
