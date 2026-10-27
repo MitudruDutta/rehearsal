@@ -562,7 +562,12 @@ class Compiler:
             f"Call submit_research with {{\"brief\": ...}} in this shape:\n{dumps(shape)}"
         )
         submit = Tool("submit_research", "Submit the research brief.", params({"brief": {"type": "object"}}), accept)
-        research = self.agent(role="researcher", system=system, user=user, tools=web.tools(seen, self.add_cost), submit=submit, max_steps=18)
+        try:
+            research = self.agent(role="researcher", system=system, user=user, tools=web.tools(seen, self.add_cost), submit=submit, max_steps=18)
+        except CompilerAgentError as exc:  # research only enriches jobs: an app with little on the web, or Tavily down, must still build
+            self.ck["research"] = {"skipped": f"web research did not finish, so jobs are planned from the source alone: {str(exc)[:300]}"}
+            self.log("compiler.research", "web research did not finish; planning jobs from the source alone", {"error": str(exc)[:600]})
+            return
         self.ck["research"] = research
         self.log("compiler.research", f"{len(research['requests'])} real requests, {len(research['rules'])} rules and "
                  f"{len(research['pitfalls'])} pitfalls from {len(research['sources'])} web pages", {"sources": research["sources"]})

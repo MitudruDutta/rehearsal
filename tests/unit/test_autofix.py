@@ -20,6 +20,12 @@ def test_better_needs_more_verified_and_no_new_problems():
     assert not autofix.better(agg(None, finished=0), base)  # nothing scored (environment errors)
 
 
+def test_better_compares_problems_per_episode_when_runs_differ_in_size():
+    base = agg(0.5, finished=12, violations=2)  # the starting run: two attempts per job
+    assert autofix.better(agg(0.67, finished=6, violations=1), base)  # same share of episodes with a violation
+    assert not autofix.better(agg(0.67, finished=6, violations=2), base)  # same count, twice the share
+
+
 class Loop:
     """A fake world: proposals, rehearsals and scores scripted per version, with a recorded checkpoint."""
 

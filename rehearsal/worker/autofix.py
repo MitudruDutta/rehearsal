@@ -26,12 +26,17 @@ PRACTICE = ("train", "dev")
 
 
 def better(new: dict[str, Any], best: dict[str, Any]) -> bool:
-    """A version is kept only if it verifies more episodes and adds no rule violation or false completion."""
+    """A version is kept only if it verifies more episodes and adds no rule violation or false completion. Problems are
+    compared per finished episode: the starting run (two attempts per job by default) and a round can differ in size."""
     if new.get("success_rate") is None:
         return False
+
+    def rate(score: dict[str, Any], key: str) -> float:
+        return score[key] / score["finished"] if score.get("finished") else 0.0
+
     return (new["success_rate"] > (best.get("success_rate") or 0)
-            and new["hard_violation_episodes"] <= best["hard_violation_episodes"]
-            and new["false_completions"] <= best["false_completions"])
+            and rate(new, "hard_violation_episodes") <= rate(best, "hard_violation_episodes")
+            and rate(new, "false_completions") <= rate(best, "false_completions"))
 
 
 def _new_run(ctx: JobContext, wv_id: str, profile_ids: list[str], splits: tuple[str, ...], repeats: int, purpose: str) -> str | None:

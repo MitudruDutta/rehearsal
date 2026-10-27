@@ -146,3 +146,19 @@ def test_the_builder_can_look_up_documented_commands_only_with_a_key(monkeypatch
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
     assert [t.name for t in c._docs_tools()] == ["web_search", "read_page"]
     assert "(15)" in c._builder_system() and "official documentation" in c._builder_system()
+
+
+def test_research_that_cannot_finish_skips_instead_of_failing_the_build(monkeypatch, tmp_path):
+    from rehearsal.compiler.agent import AgentRun, CompilerAgentError
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    c = Compiler(app=AppInput("internal", tmp_path, {}, "", {}), checkpoint={"inspection": {"summary": "an internal tool"}},
+                 workdir=tmp_path / "build", chain="local:m", log=lambda *a: None, save=lambda *a: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+
+    def stuck(**kw):  # an app with almost nothing on the web: the brief never reaches five real requests
+        raise CompilerAgentError("researcher: the same problem came back 3 times in a row", AgentRun())
+
+    c.agent = stuck
+    c.phase_research()
+    assert "skipped" in c.ck["research"] and web.digest(c.ck["research"]) == ""
