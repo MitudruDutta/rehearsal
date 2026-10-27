@@ -28,7 +28,7 @@ jobs:
           POSTGRES_USER: rehearsal
           POSTGRES_PASSWORD: rehearsal
           POSTGRES_DB: rehearsal
-        ports: ["5433:5432"]  # tests/conftest.py uses 127.0.0.1:5433, like `rehearsal up`
+        ports: ["5433:5432"]  # rehearsal/py/tests/conftest.py uses 127.0.0.1:5433, like `rehearsal up`
         options: >-
           --health-cmd "pg_isready -U rehearsal"
           --health-interval 5s --health-timeout 5s --health-retries 20
@@ -51,13 +51,13 @@ jobs:
       - name: Install package with test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev,mcp]' langchain langchain-openai
+          python -m pip install -e './rehearsal/py[dev,mcp]' langchain langchain-openai
       - name: Unit tests
         run: >-
-          python -B -m pytest tests/unit --confcutdir=tests/unit
+          python -B -m pytest rehearsal/py/tests/unit --confcutdir=rehearsal/py/tests/unit
           -p no:cacheprovider -p pytest_asyncio.plugin -q
       - name: Integration tests against PostgreSQL
-        run: python -B -m pytest tests/integration -p no:cacheprovider -p pytest_asyncio.plugin -q -rs
+        run: python -B -m pytest rehearsal/py/tests/integration -p no:cacheprovider -p pytest_asyncio.plugin -q -rs
       - name: Agent plugin files match their sources
         run: python scripts/build_agent_plugin.py --check
 

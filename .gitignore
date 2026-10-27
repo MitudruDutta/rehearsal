@@ -10,7 +10,9 @@ __pycache__/
 var/
 web/node_modules/
 web/dist/
-rehearsal/api/static/
+rehearsal/py/rehearsal/api/static/
+rehearsal/py/build/
+rehearsal/py/dist/
 
 web/.next/
 web/out/

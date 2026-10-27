@@ -51,6 +51,11 @@ dev = ["rehearsal-kit[server]", "pytest>=8", "pytest-asyncio>=0.23", "build>=1.2
 [project.scripts]
 rehearsal = "rehearsal.sdk.cli:main"
 
+# An explicit root makes an editable install a plain path entry: from the repository root, the folder rehearsal/
+# (which holds py/ and ts/) is then never imported in place of this package.
+[tool.setuptools.package-dir]
+"" = "."
+
 [tool.setuptools.packages.find]
 include = ["rehearsal*"]
 

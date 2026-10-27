@@ -12,7 +12,7 @@ COPY web/ ./
 ARG NEXT_PUBLIC_CONTACT_EMAIL="" NEXT_PUBLIC_CONTACT_URL=""
 # where the landing page's "Docs" link leads: the address of the documentation site (docs/). Empty: the API reference at /docs
 ARG NEXT_PUBLIC_DOCS_URL=""
-RUN mkdir -p ../rehearsal/api && pnpm build
+RUN mkdir -p ../rehearsal/py/rehearsal/api && pnpm build
 
 FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 REHEARSAL_DATA_DIR=/var/lib/rehearsal
@@ -23,13 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv/rehearsal
-COPY pyproject.toml ./
-COPY PACKAGE.md ./
-COPY rehearsal/ rehearsal/
+# the Python package (rehearsal/py); the npm package in rehearsal/ts is a client and is not part of the server
+COPY rehearsal/py/pyproject.toml rehearsal/py/PACKAGE.md rehearsal/py/LICENSE ./
+COPY rehearsal/py/rehearsal/ rehearsal/
 COPY examples/ examples/
 # Supabase's public root CA, for REHEARSAL_DATABASE_URL=...?sslmode=verify-full&sslrootcert=/srv/rehearsal/infra/certs/...
 COPY infra/certs/ infra/certs/
-COPY --from=console /src/rehearsal/api/static rehearsal/api/static
+COPY --from=console /src/rehearsal/py/rehearsal/api/static rehearsal/api/static
 # the client wheel is served at /downloads so users can install the CLI straight from this server
 RUN pip install ".[server]" && pip wheel --no-deps -w /srv/rehearsal/downloads . \
     && useradd --create-home rehearsal && mkdir -p /var/lib/rehearsal && chown rehearsal /var/lib/rehearsal

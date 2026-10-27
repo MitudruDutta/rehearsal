@@ -234,7 +234,7 @@ Add `--profile public` with `REHEARSAL_DOMAIN` set to serve HTTPS. The worker co
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-python -m pip install -e '.[server,dev]'
+python -m pip install -e './rehearsal/py[server,dev]'
 cp .env.example .env                                     # set REHEARSAL_SESSION_SECRET and NEBIUS_API_KEY
 (cd web && pnpm install --frozen-lockfile && pnpm build) # build the console once
 
@@ -273,17 +273,26 @@ Every setting, with its default, is in the [configuration reference](https://doc
 
 ```bash
 # Unit tests, no services needed
-python -m pytest tests/unit -q
+python -m pytest rehearsal/py/tests/unit -q
 
 # Integration tests: need `rehearsal up` and, for the sandbox test, Docker
-python -m pytest tests/integration
+python -m pytest rehearsal/py/tests/integration
 
 # Console: dev server on http://localhost:3000, proxying the API on port 7800
 cd web && pnpm dev
 cd web && pnpm typecheck
 ```
 
-`pnpm build` writes the console's static export to `web/out` and copies it to `rehearsal/api/static`, where the API serves it. The documentation site lives in [docs/](docs/).
+`pnpm build` writes the console's static export to `web/out` and copies it to `rehearsal/py/rehearsal/api/static`, where the API serves it. The documentation site lives in [docs/](docs/).
+
+The repository holds two packages, released together under one version:
+
+| Folder | Package | What it is |
+|---|---|---|
+| [rehearsal/py/](rehearsal/py/) | `rehearsal-kit` on PyPI | The server, workers and World Compiler, plus the Python SDK, CLI and MCP server. Its tests are in `rehearsal/py/tests/` |
+| [rehearsal/ts/](rehearsal/ts/) | `rehearsal-kit` on npm | The TypeScript SDK, CLI and MCP server, for the same API. The server stays Python |
+
+Run the TypeScript package's tests with `pnpm --dir rehearsal/ts install --frozen-lockfile && pnpm --dir rehearsal/ts test`.
 
 ## Planning docs
 

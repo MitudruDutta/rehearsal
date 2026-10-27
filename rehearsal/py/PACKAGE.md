@@ -81,13 +81,13 @@ Hosted billing retains a top-up's credits while its invoice line remains partly 
 
 ## Build packages from source
 
-Build the console before creating a release; `rehearsal/api/static/` is generated and ignored by Git. Run these commands from the repository root:
+This package lives in `rehearsal/py/` of the repository; the npm package is in `rehearsal/ts/`. Build the console before creating a release; `rehearsal/py/rehearsal/api/static/` is generated and ignored by Git. Run these commands from the repository root:
 
 ```bash
 pnpm --dir web install --frozen-lockfile
 pnpm --dir web build
-python -m build
-python -m twine check --strict dist/*
+python -m build rehearsal/py
+python -m twine check --strict rehearsal/py/dist/*
 ```
 
 Both the wheel and source distribution must include the console export, application catalog, Compose file, agent skill, and Alembic migration files and template. Building from a checkout without the console export produces a server package without the console.

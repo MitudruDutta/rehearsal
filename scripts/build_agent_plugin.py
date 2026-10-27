@@ -1,10 +1,10 @@
 """Generate every client-specific file of the Rehearsal agent plugin from its sources.
 
 Sources (edit these):
-    agent-plugin/plugin.json          Agent Plugins 1.0.0 manifest; its version must equal pyproject.toml's
+    agent-plugin/plugin.json          Agent Plugins 1.0.0 manifest; its version must equal rehearsal/py/pyproject.toml's
     agent-plugin/mcp.json             Agent Plugins 1.0.0 MCP config (the stdio server, started with uvx from PyPI)
     agent-plugin/overlays/claude.json Claude Code extras: display name, optional user options and the env they fill
-    rehearsal/assets/skill/           the Rehearsal skill, also shipped in the Python package
+    rehearsal/py/rehearsal/assets/skill/  the Rehearsal skill, also shipped in the Python and npm packages
 
 Generated (never edit by hand):
     agent-plugin/skills/rehearsal/                  copy of the skill
@@ -36,7 +36,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "agent-plugin"
-SKILL = ROOT / "rehearsal" / "assets" / "skill"
+PY = ROOT / "rehearsal" / "py"  # the Python package
+SKILL = PY / "rehearsal" / "assets" / "skill"
 
 
 def _read(path: Path) -> dict:
@@ -51,9 +52,9 @@ def _json(value: dict) -> str:
 
 def outputs() -> dict[Path, str]:
     plugin, mcp, claude = _read(PLUGIN / "plugin.json"), _read(PLUGIN / "mcp.json"), _read(PLUGIN / "overlays" / "claude.json")
-    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    version = tomllib.loads((PY / "pyproject.toml").read_text())["project"]["version"]
     if plugin["version"] != version:
-        raise SystemExit(f"agent-plugin/plugin.json version {plugin['version']} must equal pyproject.toml version {version}")
+        raise SystemExit(f"agent-plugin/plugin.json version {plugin['version']} must equal rehearsal/py/pyproject.toml version {version}")
     common = {k: plugin[k] for k in ("name", "version", "description", "author", "homepage", "repository", "license", "keywords")}
     servers = {name: {k: v for k, v in s.items() if k != "type"} for name, s in mcp["mcpServers"].items()}
     portable = {"mcpServers": {name: {"type": "stdio", **s} for name, s in servers.items()}}

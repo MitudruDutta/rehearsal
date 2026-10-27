@@ -6,14 +6,15 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]  # the repository; the Python package is rehearsal/py
 spec = importlib.util.spec_from_file_location("check_release", ROOT / ".github" / "scripts" / "check-release.py")
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 
 
 def _repo(tmp_path: Path, version: str, changelog: str | None = None, plugin: str | None = None) -> Path:
-    (tmp_path / "pyproject.toml").write_text(f'[project]\nname = "rehearsal-kit"\nversion = "{version}"\n')
+    (tmp_path / "rehearsal" / "py").mkdir(parents=True)
+    (tmp_path / "rehearsal" / "py" / "pyproject.toml").write_text(f'[project]\nname = "rehearsal-kit"\nversion = "{version}"\n')
     (tmp_path / "CHANGELOG.md").write_text(changelog if changelog is not None else f"# Changelog\n\n## {version}\n\n- change\n")
     (tmp_path / "agent-plugin").mkdir()
     (tmp_path / "agent-plugin" / "plugin.json").write_text(json.dumps({"version": plugin or version}))
@@ -68,8 +69,8 @@ def test_files_the_package_and_image_build_from_exist():
     """A moved file only warns in `python -m build` (PyPI then shows an empty page) and breaks `docker build`."""
     import tomllib
 
-    readme = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["readme"]
-    assert (ROOT / readme).is_file(), f"pyproject.toml readme {readme} does not exist"
+    readme = tomllib.loads((ROOT / "rehearsal/py/pyproject.toml").read_text())["project"]["readme"]
+    assert (ROOT / "rehearsal/py" / readme).is_file(), f"rehearsal/py/pyproject.toml readme {readme} does not exist"
     for line in (ROOT / "Dockerfile").read_text().splitlines():
         parts = line.split()
         if parts[:1] == ["COPY"] and not any(p.startswith("--from") for p in parts):

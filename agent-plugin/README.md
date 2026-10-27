@@ -85,4 +85,4 @@ python scripts/build_agent_plugin.py --check   # CI: fails when generated files 
 claude plugin validate ./agent-plugin          # Claude Code's own manifest check
 ```
 
-The plugin's `version` must equal the package version in `pyproject.toml`; the release workflow refuses a release otherwise.
+The plugin's `version` must equal the package version in `rehearsal/py/pyproject.toml`; the release workflow refuses a release otherwise.

@@ -1,7 +1,7 @@
 """Release gates for rehearsal-kit.
 
     python check-release.py --version-only   # before building: version, tag, PyPI, changelog, agent plugin, npm package
-    python check-release.py                  # after `python -m build`: the tag again, plus archive contents
+    python check-release.py                  # after `python -m build rehearsal/py`: the tag again, plus archive contents
 
 The version gate is strict for a published GitHub Release (GITHUB_EVENT_NAME=release). On a manual dry run it
 reports problems as warnings, so the rest of the pipeline can still be exercised.
@@ -21,16 +21,17 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 PYPI_JSON = "https://pypi.org/pypi/{name}/json"
+PY = Path("rehearsal/py")  # the Python package; rehearsal/ts is the npm package
 
 
 def project(root: Path) -> dict:
-    return tomllib.loads((root / "pyproject.toml").read_text())["project"]
+    return tomllib.loads((root / PY / "pyproject.toml").read_text())["project"]
 
 
 def check_tag(version: str) -> None:
     tag = os.environ.get("RELEASE_TAG")
     if tag and tag != f"v{version}":
-        raise ValueError(f"Release tag {tag!r} must match pyproject.toml: v{version}")
+        raise ValueError(f"Release tag {tag!r} must match rehearsal/py/pyproject.toml: v{version}")
 
 
 def published_versions(name: str) -> list[str]:
@@ -53,16 +54,16 @@ def version_problems(root: Path) -> list[str]:
     try:
         new = Version(version)
     except InvalidVersion:
-        return [f"pyproject.toml version {version!r} is not a valid PEP 440 version"]
+        return [f"rehearsal/py/pyproject.toml version {version!r} is not a valid PEP 440 version"]
     if str(new) != version:
         problems.append(f"write the version in normalized form: {new} (not {version})")
     tag = os.environ.get("RELEASE_TAG")
     if tag and tag != f"v{version}":
-        problems.append(f"release tag {tag!r} does not match pyproject.toml version: expected v{version}")
+        problems.append(f"release tag {tag!r} does not match rehearsal/py/pyproject.toml version: expected v{version}")
 
     existing = published_versions(meta["name"])
     if version in existing:
-        problems.append(f"{meta['name']} {version} is already on PyPI; raise the version in pyproject.toml")
+        problems.append(f"{meta['name']} {version} is already on PyPI; raise the version in rehearsal/py/pyproject.toml")
     parsed = []
     for v in existing:
         try:
@@ -125,10 +126,10 @@ def check_archives(root: Path) -> None:
         "rehearsal/api/static/fonts/Instrument-Sans-OFL.txt",
     }
     # every migration in the source tree must ship, or `rehearsal migrate` stops short on installed servers
-    required |= {f"rehearsal/db/migrations/versions/{p.name}" for p in (root / "rehearsal/db/migrations/versions").glob("[0-9]*.py")}
-    archives = list((root / "dist").glob("*.whl")) + list((root / "dist").glob("*.tar.gz"))
+    required |= {f"rehearsal/db/migrations/versions/{p.name}" for p in (root / PY / "rehearsal/db/migrations/versions").glob("[0-9]*.py")}
+    archives = list((root / PY / "dist").glob("*.whl")) + list((root / PY / "dist").glob("*.tar.gz"))
     if len(archives) != 2 or sum(p.suffix == ".whl" for p in archives) != 1:
-        raise ValueError("Expected exactly one wheel and one source archive in dist/")
+        raise ValueError("Expected exactly one wheel and one source archive in rehearsal/py/dist/")
     for archive in archives:
         if not archive.name.startswith(f"{meta['name'].replace('-', '_')}-{meta['version']}"):
             raise ValueError(f"{archive.name} does not carry version {meta['version']}")

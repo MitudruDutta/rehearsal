@@ -6,7 +6,7 @@ import re
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]  # the repository; the Python package is rehearsal/py
 
 
 def _module(path: Path, name: str):
@@ -23,7 +23,7 @@ def test_generated_plugin_files_match_their_sources():
 
 
 def test_plugin_version_is_the_package_version():
-    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    version = tomllib.loads((ROOT / "rehearsal/py/pyproject.toml").read_text())["project"]["version"]
     for manifest in ["agent-plugin/plugin.json", "agent-plugin/.claude-plugin/plugin.json", "agent-plugin/.codex-plugin/plugin.json"]:
         assert json.loads((ROOT / manifest).read_text())["version"] == version, manifest
 

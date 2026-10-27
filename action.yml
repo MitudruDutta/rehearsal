@@ -63,7 +63,7 @@ runs:
         python-version: "3.12"
     - name: Install the Rehearsal client
       shell: bash
-      run: python -m pip install --quiet "$GITHUB_ACTION_PATH"
+      run: python -m pip install --quiet "$GITHUB_ACTION_PATH/rehearsal/py"
     - name: Rehearse and judge
       shell: bash
       env:

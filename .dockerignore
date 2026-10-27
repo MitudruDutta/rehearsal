@@ -6,5 +6,9 @@ var/
 web/node_modules
 web/.next
 web/out
-rehearsal/api/static
+rehearsal/py/rehearsal/api/static
+rehearsal/py/build
+rehearsal/py/dist
+rehearsal/ts/node_modules
+rehearsal/ts/dist
 *.egg-info

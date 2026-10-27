@@ -15,7 +15,7 @@ OPTIONS = ["--privileged", "-v/:/host", "--volume=/:/host", "-", "img --privileg
 
 
 def catalog_images() -> list[str]:
-    data = yaml.safe_load(Path("rehearsal/assets/catalog.yaml").read_text())
+    data = yaml.safe_load(Path(__file__).resolve().parents[2].joinpath("rehearsal/assets/catalog.yaml").read_text())
     return [ref for app in data["applications"] for ref in app.get("images", {}).values()]
 
 

@@ -213,7 +213,7 @@ def test_destroy_tolerates_missing_outer_bridge(instance, monkeypatch):
 
 
 def test_compose_passes_each_workers_container_identity(tmp_path):
-    compose = yaml.safe_load((Path(__file__).resolve().parents[2] / "infra/compose.full.yaml").read_text())
+    compose = yaml.safe_load((Path(__file__).resolve().parents[4] / "infra/compose.full.yaml").read_text())
     worker = compose["services"]["worker"]
     assert worker.get("network_mode") != "host"
     # Run the Compose shell command with a fake executable, never the real worker.

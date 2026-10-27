@@ -12,7 +12,7 @@ pytest.importorskip("langchain_openai")
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel  # noqa: E402
 from langchain_core.messages import AIMessage  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("langgraph_react", pathlib.Path(__file__).parents[2] / "examples" / "agents" / "langgraph_react.py")
+spec = importlib.util.spec_from_file_location("langgraph_react", pathlib.Path(__file__).parents[4] / "examples" / "agents" / "langgraph_react.py")
 lg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lg)
 

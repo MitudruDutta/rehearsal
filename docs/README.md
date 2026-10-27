@@ -79,18 +79,18 @@ python docs/scripts/check_samples.py                # every `rehearsal ...` comm
 
 | Page | Comes from |
 |---|---|
-| `reference/cli.mdx` | The argparse parser in `rehearsal/sdk/cli.py` |
-| `reference/api.mdx` | The API schema, and the access rule in `rehearsal/api/auth.py` |
-| `reference/python-sdk.mdx` | `rehearsal/sdk/client.py` |
+| `reference/cli.mdx` | The argparse parser in `rehearsal/py/rehearsal/sdk/cli.py` |
+| `reference/api.mdx` | The API schema, and the access rule in `rehearsal/py/rehearsal/api/auth.py` |
+| `reference/python-sdk.mdx` | `rehearsal/py/rehearsal/sdk/client.py` |
 | `reference/configuration.mdx` | Every environment variable the package reads |
 | `reference/errors.mdx` | The CLI's hints, and messages that are checked against the files they come from |
 | `reference/plans-and-limits.mdx` | `billing.PLANS` |
-| `ai-assistants/mcp-tools.mdx` | The tools in `rehearsal/sdk/mcp.py` |
+| `ai-assistants/mcp-tools.mdx` | The tools in `rehearsal/py/rehearsal/sdk/mcp.py` |
 
 The script reads definitions only. It never reads `.env`, and it never connects to a database. It stops when the
 code has a command, an argument, a tool, an operation or a setting that its tables do not describe, so a change in
 the product cannot be published without its description. `lib/generated/product.json` holds the version in the
-header, which comes from `pyproject.toml`.
+header, which comes from `rehearsal/py/pyproject.toml`.
 
 ## Settings
 

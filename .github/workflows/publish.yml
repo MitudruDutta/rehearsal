@@ -1,6 +1,6 @@
 name: Build and publish packages (PyPI and npm)
 
-# Publishing happens only from a published GitHub Release whose tag is v<version from pyproject.toml>. Before any
+# Publishing happens only from a published GitHub Release whose tag is v<version from rehearsal/py/pyproject.toml>. Before any
 # upload, every gate below must pass on that exact commit:
 #   1. the whole test suite (tests.yml: unit, integration against PostgreSQL, console build, plugin drift)
 #   2. the version: matches the tag, is valid, is higher than every version on PyPI, has a changelog entry,
@@ -85,14 +85,14 @@ jobs:
           pnpm --dir web build
       - name: Build distributions and check metadata and contents
         run: |
-          python -m build
-          python -m twine check --strict dist/*
+          python -m build rehearsal/py
+          python -m twine check --strict rehearsal/py/dist/*
           python .github/scripts/check-release.py
       - name: Installed MCP server answers over stdio
         working-directory: ${{ runner.temp }}
         run: |
           python -m venv mcp-smoke
-          mcp-smoke/bin/python -m pip install --quiet "$(ls "$GITHUB_WORKSPACE"/dist/*.whl)[mcp]"
+          mcp-smoke/bin/python -m pip install --quiet "$(ls "$GITHUB_WORKSPACE"/rehearsal/py/dist/*.whl)[mcp]"
           mcp-smoke/bin/python -m pip check
           mcp-smoke/bin/python "$GITHUB_WORKSPACE/.github/scripts/smoke-mcp.py" "$PWD/mcp-smoke/bin/rehearsal"
       - name: Save verified distributions
@@ -100,8 +100,8 @@ jobs:
         with:
           name: python-distributions
           path: |
-            dist/*.whl
-            dist/*.tar.gz
+            rehearsal/py/dist/*.whl
+            rehearsal/py/dist/*.tar.gz
           if-no-files-found: error
 
   client-install:
@@ -112,7 +112,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python: ["3.11", "3.12", "3.13", "3.14"]  # every version pyproject.toml advertises
+        python: ["3.11", "3.12", "3.13", "3.14"]  # every version rehearsal/py/pyproject.toml advertises
     steps:
       - uses: actions/setup-python@v6
         with:

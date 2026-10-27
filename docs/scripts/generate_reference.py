@@ -8,15 +8,15 @@ Run it with the repository's Python environment (the one that has rehearsal-kit[
 
 What comes from where:
 
-    content/reference/cli.mdx               the argparse parser in rehearsal/sdk/cli.py
-    content/ai-assistants/mcp-tools.mdx     the tools in rehearsal/sdk/mcp.py, the cost table in the skill
+    content/reference/cli.mdx               the argparse parser in rehearsal/py/rehearsal/sdk/cli.py
+    content/ai-assistants/mcp-tools.mdx     the tools in rehearsal/py/rehearsal/sdk/mcp.py, the cost table in the skill
     content/reference/plans-and-limits.mdx  billing.PLANS, billing.ITEMS and the budget constants
     content/reference/errors.mdx            the CLI's hints, and messages checked against the files they come from
-    content/reference/api.mdx               the API schema, and the access rule in rehearsal/api/auth.py
-    content/reference/python-sdk.mdx        the classes and methods of rehearsal/sdk/client.py
+    content/reference/api.mdx               the API schema, and the access rule in rehearsal/py/rehearsal/api/auth.py
+    content/reference/python-sdk.mdx        the classes and methods of rehearsal/py/rehearsal/sdk/client.py
     content/reference/typescript-sdk.mdx    the classes and methods of rehearsal/ts/src/sdk/client.ts
     content/reference/configuration.mdx     every environment variable the package reads, and the provider table
-    lib/generated/product.json              the version in pyproject.toml, and counts
+    lib/generated/product.json              the version in rehearsal/py/pyproject.toml, and counts
 
 The words that the code cannot supply (what an argument means, what a tool returns, an example) are in the
 tables below. The script stops when the code has a command, an argument or a tool that those tables do not
@@ -38,12 +38,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
+PY = ROOT / "rehearsal" / "py"  # the Python package; rehearsal/ts is the npm package
 
 # Never read a developer's .env, and never touch a real data folder or database: this script only reads definitions.
 os.environ["REHEARSAL_ENV_FILE"] = str(Path(tempfile.gettempdir()) / "rehearsal-docs-no-env-file")
 os.environ["REHEARSAL_DATA_DIR"] = tempfile.mkdtemp(prefix="rehearsal-docs-")
 os.environ["REHEARSAL_DATABASE_URL"] = "postgresql+psycopg://unused:unused@127.0.0.1:1/unused"
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(PY))
 
 
 def fail(message: str) -> None:
@@ -477,7 +478,7 @@ TYPES = {"str": "string", "int": "integer", "float": "number", "bool": "boolean"
 
 def mcp_tools() -> tuple[str, list[dict[str, Any]]]:
     """Reads the tools from the source file itself, so the docs build needs no MCP package and starts no server."""
-    tree = ast.parse((ROOT / "rehearsal" / "sdk" / "mcp.py").read_text(encoding="utf-8"))
+    tree = ast.parse((PY / "rehearsal" / "sdk" / "mcp.py").read_text(encoding="utf-8"))
     instructions = ""
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "INSTRUCTIONS" for t in node.targets):
@@ -509,7 +510,7 @@ def mcp_tools() -> tuple[str, list[dict[str, Any]]]:
 
 def skill_costs() -> dict[str, tuple[str, str]]:
     """The cost table in the skill that assistants read: tool -> (typical cost, time)."""
-    text = (ROOT / "rehearsal" / "assets" / "skill" / "SKILL.md").read_text(encoding="utf-8")
+    text = (PY / "rehearsal" / "assets" / "skill" / "SKILL.md").read_text(encoding="utf-8")
     section = text.split("## Money: ask before you spend", 1)[1].split("\nRules:", 1)[0]
     costs = {}
     for line in section.splitlines():
@@ -809,10 +810,10 @@ def errors_page() -> str:
         fail(f"STATUS_MEANING does not match the statuses in cli.HINTS: {sorted(set(hints) ^ set(STATUS_MEANING))}")
     sources: dict[str, str] = {}
     for _, shown, part, file, _ in MESSAGES:
-        text = sources.setdefault(file, (ROOT / file).read_text(encoding="utf-8"))
+        text = sources.setdefault(file, (PY / file).read_text(encoding="utf-8"))
         if part not in text:
             fail(f"the message '{shown[:60]}' is no longer in {file}; update MESSAGES")
-    cli_source = (ROOT / "rehearsal" / "sdk" / "cli.py").read_text(encoding="utf-8")
+    cli_source = (PY / "rehearsal" / "sdk" / "cli.py").read_text(encoding="utf-8")
     for shown, part, _ in CLI_MESSAGES:
         if part not in cli_source:
             fail(f"the CLI message '{shown[:60]}' is no longer in rehearsal/sdk/cli.py; update CLI_MESSAGES")
@@ -1692,7 +1693,7 @@ def config_page() -> str:
     from rehearsal.pricing import price_source
 
     read: set[str] = set()
-    for path in (ROOT / "rehearsal").rglob("*.py"):
+    for path in (PY / "rehearsal").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         read |= set(re.findall(r"(?:environ\.get|getenv|\benv|_env)\(\s*\"([A-Z][A-Z0-9_]+)\"", text))
     provider_keys = {key for _, key in PROVIDERS.values()}
@@ -1773,7 +1774,7 @@ def config_page() -> str:
 
 def main() -> None:
     check = "--check" in sys.argv[1:]
-    version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    version = tomllib.loads((PY / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     cli_text, cli_count = cli_page()
     parser = capture_parser()
     cli_commands = set(next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction)).choices)

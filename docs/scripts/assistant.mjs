@@ -31,7 +31,7 @@ const contentDir = join(docsRoot, "content");
 
 // ---- Settings
 
-/** KEY=VALUE lines, read the way the server reads its .env (rehearsal/config.py). A missing file is empty. */
+/** KEY=VALUE lines, read the way the server reads its .env (rehearsal/py/rehearsal/config.py). A missing file is empty. */
 function dotenv(path) {
   const out = {};
   if (!existsSync(path)) return out;
@@ -44,14 +44,14 @@ function dotenv(path) {
   return out;
 }
 
-// the chain the server falls back to when nothing is set, from rehearsal/config.py
+// the chain the server falls back to when nothing is set, from rehearsal/py/rehearsal/config.py
 const SERVER_DEFAULT_CHAIN = "groq:openai/gpt-oss-120b,openai:gpt-5-mini,anthropic:claude-haiku-4-5,google:gemini-2.5-flash,openrouter:openai/gpt-oss-120b";
 
 export function settings(env = process.env) {
   const files = { ...dotenv(env.REHEARSAL_ENV_FILE ?? resolve(docsRoot, "..", ".env")), ...dotenv(join(docsRoot, ".env.local")) };
   const get = (name) => env[name] || files[name] || "";
   const modal = [get("MODAL_PROXY_TOKEN_ID"), get("MODAL_PROXY_TOKEN_SECRET")];
-  // where each provider answers and which key it takes: the same table as PROVIDERS in rehearsal/agents/llm.py
+  // where each provider answers and which key it takes: the same table as PROVIDERS in rehearsal/py/rehearsal/agents/llm.py
   const providers = {
     nebius: { base: "https://api.tokenfactory.nebius.com/v1", key: get("NEBIUS_API_KEY") },
     openrouter: { base: "https://openrouter.ai/api/v1", key: get("OPENROUTER_API_KEY") },

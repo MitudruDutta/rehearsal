@@ -4,7 +4,7 @@ import product from "./generated/product.json";
 export const site = {
   name: "Rehearsal",
   tagline: "Test your AI agent on a copy of your real application.",
-  /** the product version the site describes, read from pyproject.toml by scripts/generate_reference.py */
+  /** the product version the site describes, read from rehearsal/py/pyproject.toml by scripts/generate_reference.py */
   version: product.version,
   repo: "https://github.com/MitudruDutta/rehearsal",
   /** where the page sources live in the repository, for "Edit this page" */

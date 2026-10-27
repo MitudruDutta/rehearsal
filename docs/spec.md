@@ -31,6 +31,8 @@ One database holds control flow (jobs) and domain state, so there is one source 
 
 ## 2. Code layout
 
+The Python package is in `rehearsal/py/` (the paths below are inside it, and its tests are in `rehearsal/py/tests/`); the npm package is in `rehearsal/ts/`.
+
 | Package | Responsibility |
 |---|---|
 | `rehearsal/core/` | Typed contracts: world manifest, services, tools, roles, scenarios, checks (immutable once published) |
@@ -45,6 +47,7 @@ One database holds control flow (jobs) and domain state, so there is one source 
 | `rehearsal/billing.py`, `rehearsal/pricing.py` | Plans and Dodo Payments; model price catalog and spend caps |
 | `rehearsal/redaction.py` | Secret masking for everything stored or shown |
 | `rehearsal/sdk/` | Python client, CLI (31 commands), MCP server (20 tools) |
+| `rehearsal/ts/` (repository) | The npm package: TypeScript client, CLI and MCP server with the same commands and tools |
 | `web/` | Console (Next.js static export, served by the API) |
 | `docs/` | Documentation site (Fumadocs) and these planning documents |
 | `infra/` | Docker Compose stack, Caddy, AWS CloudFormation |
