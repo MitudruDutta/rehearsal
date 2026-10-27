@@ -321,6 +321,22 @@ def test_a_bracket_slip_in_long_json_is_balanced_once_and_still_validated():
     assert _balance('{"a": "brackets ] } inside a string"}') == '{"a": "brackets ] } inside a string"}'
 
 
+def test_objects_left_open_in_a_list_are_closed_where_they_end():
+    """The slip seen building Saleor: a service's } left out in the middle of the list, with more keys after the list.
+    Balancing alone would put the } at the end of the list and swallow the services after it."""
+    import json
+
+    from rehearsal.compiler.agent import _unstring
+    runtime = {"services": [{"name": "api", "env": {"URL": "http://api.world.test:8000, x"}}, {"name": "db", "image": "postgres"},
+                            {"name": "redis", "image": "redis"}], "secrets": ["DB_PASSWORD"], "state_probes": [{"service": "db"}]}
+    text = json.dumps(runtime)
+    schema = {"properties": {"runtime": {"type": "object"}}}
+    one = text.replace('8000, x"}}, {', '8000, x"}, {')  # api's } left out after a nested object
+    two = one.replace('"postgres"}, {', '"postgres", {')  # and db's
+    for slip in (one, two, two[:-2]):  # also cut off at the end
+        assert slip != text and _unstring({"runtime": slip}, schema)["runtime"] == runtime
+
+
 def test_a_flattening_copy_is_allowed_when_a_later_line_restores_the_folder(tmp_path):
     from rehearsal.compiler.pipeline import copy_problems
     (tmp_path / ".yarn" / "releases").mkdir(parents=True)

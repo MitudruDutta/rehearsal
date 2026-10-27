@@ -24,7 +24,8 @@ section, so write it before tagging.
   (`REHEARSAL_MODEL_REASONER` is new); a chain entry can end in `#think` or `#nothink`. Builds, runs and fix loops
   show model usage by role.
 - Builds survive more real applications: bounded API descriptions and source reads, a repair loop that keeps the
-  runtime that got furthest across restarts, and host-check refusals repaired with the real host names.
+  runtime that got furthest across restarts, host-check refusals repaired with the real host names, and long JSON
+  from a model repaired when an object in a list is left without its closing `}`.
 - The `telemetry` extra and third-party tracing are removed; secrets are masked in one place.
 - In the repository, the Python package moved to `rehearsal/py` and the npm package is in `rehearsal/ts`. From a
   checkout, install with `pip install -e './rehearsal/py[server,dev]'`.
