@@ -482,6 +482,8 @@ def get_job(job_id: str, p: Principal = Depends(principal)) -> dict[str, Any]:
         j = _get(s, Job, job_id, p)
         out = _cols(j, ("checkpoint",))
         out["completed_phases"] = (j.checkpoint or {}).get("done", [])
+        if j.kind == "autofix":  # the loop's rounds so far: versions, reasons and scores, nothing private
+            out["autofix"] = (j.checkpoint or {}).get("autofix")
         return out
 
 
@@ -494,6 +496,9 @@ def _reopen_owner(s: Any, job: Job) -> None:
     elif job.kind == "evaluation":
         run = s.get(Run, job.payload.get("run_id"))
         if run and run.status in ("failed", "cancelled"):
+            run.status, run.finished_at = "running", None
+    elif job.kind == "autofix":  # the rehearsal it stopped in resumes from the loop's checkpoint
+        for run in s.scalars(select(Run).where(Run.job_id == job.id, Run.status.in_(("failed", "cancelled")))):
             run.status, run.finished_at = "running", None
 
 

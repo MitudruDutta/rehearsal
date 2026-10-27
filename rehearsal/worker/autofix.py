@@ -118,7 +118,7 @@ def handle(ctx: JobContext) -> dict[str, Any]:
             _rehearse(ctx, cur["run_id"])
             sc = improve.score(cur["run_id"], cur["profile_id"], PRACTICE)
             kept = better(sc, best["score"])
-            st["rounds"].append({**cur, "round": st["round"], "score": sc, "accepted": kept, "compared_with": {"version": best["version"], "score": best["score"]}})
+            st["rounds"].append({**cur, "round": st["round"], "score": sc, "accepted": kept, "compared_with": {"profile_id": best["profile_id"], "version": best["version"], "score": best["score"]}})
             if kept:
                 st["best"] = {**cur, "score": sc}
             ctx.log("autofix.round", f"round {st['round']}: v{cur['version']} verified {_pct(sc)} vs {_pct(best['score'])}: {'kept' if kept else 'discarded'}",

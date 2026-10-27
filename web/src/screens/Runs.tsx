@@ -84,7 +84,7 @@ export function Runs({ world }: { world: string | null }) {
               <TableBody>
                 {runs.data?.map((r) => (
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => go(routes.run(r.id))}>
-                    <TableCell><div className="font-mono text-xs">{r.id}</div><div className="text-xs text-muted-foreground">{(r.config.splits || []).join(", ")} ×{r.config.repeats}</div></TableCell>
+                    <TableCell><div className="font-mono text-xs">{r.id}</div><div className="text-xs text-muted-foreground">{(r.config.splits || []).join(", ")} ×{r.config.repeats}{r.config.purpose ? `, ${r.config.purpose}` : ""}</div></TableCell>
                     <TableCell className="text-sm">{(r.config.profiles || []).join(", ")}</TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">{pct(r.summary?.overall?.success_rate)}</TableCell>

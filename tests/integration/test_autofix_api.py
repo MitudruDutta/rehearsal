@@ -50,6 +50,9 @@ def test_autofix_checks_its_inputs_and_queues_one_job(db):
     with session() as s:
         job = s.get(Job, made.json()["job_id"])
         assert job.kind == "autofix" and job.payload["world_version_id"] == wv and job.budget_usd > 0
+        job.checkpoint = {"autofix": {"phase": "rehearse", "round": 1}, "instance": {"secret": "x"}}
+    shown = client.get(f"/v1/jobs/{made.json()['job_id']}", headers=auth).json()
+    assert shown["autofix"] == {"phase": "rehearse", "round": 1} and "checkpoint" not in shown  # progress only, never the sandbox
 
     external = client.post("/v1/agent-profiles", headers=auth, json={"name": "mine", "driver": "external"}).json()["id"]
     assert client.post("/v1/autofix", headers=auth, json={**body, "profile_id": external}).status_code == 422
@@ -80,3 +83,7 @@ def test_loop_runs_belong_to_the_job_and_fail_with_it(db):
         _mark_owner_failed(s, s.get(Job, ctx.job_id), "boom")
     with session() as s:
         assert s.get(Run, run_id).status == "failed"
+        s.get(Job, ctx.job_id).status = "failed"
+    assert client.post(f"/v1/jobs/{ctx.job_id}/commands", headers=auth, json={"command": "retry"}).status_code == 200
+    with session() as s:
+        assert s.get(Run, run_id).status == "running"  # retry reopens the rehearsal the loop stopped in

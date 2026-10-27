@@ -116,6 +116,62 @@ function Intervene({ episodeId, goals }: { episodeId: string; goals: any[] }) {
   );
 }
 
+function FixAgent({ runId, worldVersionId, profiles }: { runId: string; worldVersionId: string; profiles: { id: string; name: string }[] }) {
+  const [profile, setProfile] = useState(profiles[0]?.id ?? "");
+  const [rounds, setRounds] = useState("3");
+  const [busy, setBusy] = useState(false);
+  const scenarios = useResource<any[]>(`/v1/world-versions/${worldVersionId}/scenarios`);
+  const count = (split: string) => (scenarios.data || []).filter((s) => s.status === "approved" && s.split === split).length;
+  const practice = count("train") + count("dev");
+  const most = Number(rounds) * practice + 2 * count("holdout");
+  const start = async () => {
+    setBusy(true);
+    try {
+      const res = await post("/v1/autofix", { profile_id: profile, run_id: runId, rounds: Number(rounds) });
+      go(routes.fix(res.job_id));
+    } catch (e) {
+      toast.error((e as Error).message);
+      setBusy(false);
+    }
+  };
+  const improve = async () => {
+    try {
+      const res = await post("/v1/improvements", { profile_id: profile, run_id: runId });
+      toast.success(`Improvement job ${res.job_id} started; the new version appears on the Agents page.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  return (
+    <Dialog>
+      <DialogTrigger asChild><Button variant="outline"><Sparkles /> Fix my agent</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Fix an agent from this run</DialogTitle>
+          <DialogDescription>Each round writes a new version from the failed train and dev episodes and rehearses it on every train and dev job. It is kept only if it verifies more without breaking a rule. The best version is then proved against the original on held-out jobs.</DialogDescription>
+        </DialogHeader>
+        {profiles.length > 1 && (
+          <div className="grid gap-2">
+            <Label>Agent</Label>
+            <Select value={profile} onValueChange={setProfile}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+          </div>
+        )}
+        <div className="grid gap-2">
+          <Label>Rounds</Label>
+          <Select value={rounds} onValueChange={setRounds}><SelectTrigger className="w-28"><SelectValue /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {scenarios.data ? `At most ${most} episodes, about $${(most * 0.02).toFixed(2)}: ${rounds} × ${practice} train and dev jobs, then 2 × ${count("holdout")} held-out jobs. It stops early when every job passes.` : "Counting the jobs…"}
+        </p>
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={improve}>Only propose one version</Button>
+          <Button disabled={!profile || !practice || busy} onClick={start}>Start {rounds} {rounds === "1" ? "round" : "rounds"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function RunView({ runId, episodeId }: { runId: string; episodeId?: string }) {
   const run = useResource<any>(`/v1/runs/${runId}`, 4000);
   const episodes = useResource<any[]>(`/v1/runs/${runId}/episodes`, 4000);
@@ -140,11 +196,7 @@ export function RunView({ runId, episodeId }: { runId: string; episodeId?: strin
     await post(`/v1/runs/${runId}/commands`, { command: c });
     run.reload();
   };
-  const improve = async (profileId: string) => {
-    const res = await post("/v1/improvements", { profile_id: profileId, run_id: runId });
-    toast.success(`Improvement job ${res.job_id} started; the new version appears on the Agents page.`);
-  };
-  const profileIds = [...new Set((episodes.data || []).map((e) => e.profile_id))];
+  const profiles = [...new Map((episodes.data || []).map((e) => [e.profile_id, { id: e.profile_id, name: e.profile }])).values()];
   return (
     <>
       <PageHeader
@@ -155,7 +207,8 @@ export function RunView({ runId, episodeId }: { runId: string; episodeId?: strin
             {selected && ep.data?.status === "running" && <Intervene episodeId={selected} goals={ep.data?.scenario?.goals || []} />}
             {r?.status === "running" && <Button variant="outline" onClick={() => command("pause")}><Pause /> Pause</Button>}
             {(r?.status === "running" || r?.status === "queued") && <Button variant="outline" className="text-destructive" onClick={() => command("stop")}><Square /> Stop</Button>}
-            {r?.status === "finished" && profileIds.map((pid) => <Button key={pid} variant="outline" onClick={() => improve(pid)}><Sparkles /> Improve {episodes.data?.find((e) => e.profile_id === pid)?.profile}</Button>)}
+            {r?.config?.autofix_job && <Button variant="outline" onClick={() => go(routes.fix(r.config.autofix_job))}>Back to the fix loop</Button>}
+            {r?.status === "finished" && !r.config?.autofix_job && profiles.length > 0 && <FixAgent runId={runId} worldVersionId={r.world_version_id} profiles={profiles} />}
             {r?.status === "finished" && <Button onClick={() => go(routes.compare(runId))}><GitCompareArrows /> Compare</Button>}
           </>
         }

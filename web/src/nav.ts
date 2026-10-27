@@ -33,6 +33,7 @@ export const routes = {
   agents: "/app/agents/",
   runs: (world?: string) => `/app/runs/${world ? `?world=${world}` : ""}`,
   run: (id: string, episode?: string) => `/app/run/?id=${id}${episode ? `&episode=${episode}` : ""}`,
+  fix: (job: string) => `/app/fix/?job=${job}`,
   compare: (a?: string, b?: string) => `/app/compare/${a ? `?a=${a}${b ? `&b=${b}` : ""}` : ""}`,
   apiKeys: "/app/api-keys/",
   settings: "/app/settings/",
