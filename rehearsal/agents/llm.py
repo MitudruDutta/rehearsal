@@ -129,20 +129,25 @@ def _row() -> dict[str, Any]:
     return {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0, "latency_ms": 0, "models": {}}
 
 
-def _record(role: str | None, reply: "LLMReply") -> None:
-    """Adds one answered call to the running job's per-role usage (compiler lanes share one dict across threads)."""
+def record_call(role: str | None, name: str, *, prompt_tokens: int = 0, completion_tokens: int = 0, cost_usd: float = 0.0, latency_ms: int = 0) -> None:
+    """Adds one call to the running job's per-role usage (compiler lanes share one dict across threads). `name` is
+    `provider:model[#think|#nothink]` for a model, or a service such as `tavily:search`."""
     acc = usage.get()
     if acc is None or not role:
         return
     with _usage_lock:
         row = acc.setdefault(role, _row())
         row["calls"] += 1
-        row["prompt_tokens"] += reply.prompt_tokens
-        row["completion_tokens"] += reply.completion_tokens
-        row["cost_usd"] = round(row["cost_usd"] + reply.cost_usd, 6)
-        row["latency_ms"] += reply.latency_ms
-        name = f"{reply.provider}:{reply.model}" + ("" if reply.thinking is None else "#think" if reply.thinking else "#nothink")
+        row["prompt_tokens"] += prompt_tokens
+        row["completion_tokens"] += completion_tokens
+        row["cost_usd"] = round(row["cost_usd"] + cost_usd, 6)
+        row["latency_ms"] += latency_ms
         row["models"][name] = row["models"].get(name, 0) + 1
+
+
+def _record(role: str | None, reply: "LLMReply") -> None:
+    name = f"{reply.provider}:{reply.model}" + ("" if reply.thinking is None else "#think" if reply.thinking else "#nothink")
+    record_call(role, name, prompt_tokens=reply.prompt_tokens, completion_tokens=reply.completion_tokens, cost_usd=reply.cost_usd, latency_ms=reply.latency_ms)
 
 
 def merge_usage(parts: Any) -> dict[str, dict[str, Any]]:

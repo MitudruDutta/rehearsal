@@ -95,6 +95,12 @@ starts only when the server knows the price of its models, so that spending limi
 OpenAI-compatible address. When a provider's source has no price for a model, add one to `pricing.yaml` or
 `REHEARSAL_PRICES`. `rehearsal prices` shows the price the server uses for each configured model.
 
+## Web research
+
+| Setting | Default | What it changes |
+|---|---|---|
+| `TAVILY_API_KEY` |  | A Tavily key. With it, each world build first researches how real people use the application (its documentation, forums and issue trackers) and bases at least half its jobs on what it finds, citing the pages. Without it, that step is skipped. See [Build a practice world](/guides/build-a-practice-world). |
+
 ## Workers and sandboxes
 
 | Setting | Default | What it changes |

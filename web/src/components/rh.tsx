@@ -58,24 +58,26 @@ export function ActorAvatar({ id, className }: { id: string | null; className?: 
   );
 }
 
-export const PHASES = ["Read the source", "Plan the runtime", "Start the sandbox", "Find the API", "Seed fictional data", "Choose agent tools", "Write scenarios", "Validate and repair", "Publish"];
-export const PHASE_KEYS = ["inspect", "plan", "materialize", "discover", "seed", "adapt", "author", "validate", "package"];
+export const PHASES = ["Read the source", "Research real use", "Plan the runtime", "Start the sandbox", "Find the API", "Seed fictional data", "Choose agent tools", "Write scenarios", "Validate and repair", "Publish"];
+export const PHASE_KEYS = ["inspect", "research", "plan", "materialize", "discover", "seed", "adapt", "author", "validate", "package"];
 
 export function PhaseStepper({ done, active, failed, compact }: { done: Set<string> | string[]; active?: string; failed?: boolean; compact?: boolean }) {
   const d = new Set(done);
   return (
     // each step shares the list's rows (bar, name, status), so a name that wraps to two lines keeps every status level
-    <ol className={cn("grid gap-x-1.5", compact ? "grid-cols-9" : "grid-cols-3 md:grid-cols-9")} aria-label="Compiler phases">
+    <ol className={cn("grid gap-x-1.5", compact ? "grid-cols-10" : "grid-cols-3 md:grid-cols-10")} aria-label="Compiler phases">
       {PHASES.map((label, i) => {
         const key = PHASE_KEYS[i];
-        const state = d.has(key) ? "done" : active === key ? (failed ? "failed" : "active") : "todo";
+        // a phase that never ran while later ones did (web research on a build from before it existed) was skipped
+        const later = PHASE_KEYS.slice(i + 1).some((k) => d.has(k) || active === k);
+        const state = d.has(key) ? "done" : active === key ? (failed ? "failed" : "active") : later ? "skipped" : "todo";
         return (
           <li key={key} className={cn("min-w-0", !compact && "row-span-3 grid grid-rows-subgrid pb-2.5 md:pb-0")}>
-            <div className={cn("h-1.5 rounded-full", state === "done" ? "bg-success" : state === "active" ? "animate-pulse bg-primary" : state === "failed" ? "bg-destructive" : "bg-muted")} />
+            <div className={cn("h-1.5 rounded-full", state === "done" ? "bg-success" : state === "active" ? "animate-pulse bg-primary" : state === "failed" ? "bg-destructive" : state === "skipped" ? "bg-muted-foreground/25" : "bg-muted")} />
             {!compact && (
               <>
-                <div className={cn("mt-2 text-[13px] font-medium leading-snug text-pretty", state === "todo" && "text-muted-foreground")}>{i + 1}. {label}</div>
-                <div className="text-xs text-muted-foreground">{state === "done" ? "done" : state === "active" ? (failed ? "stopped" : "in progress") : "waiting"}</div>
+                <div className={cn("mt-2 text-[13px] font-medium leading-snug text-pretty", (state === "todo" || state === "skipped") && "text-muted-foreground")}>{i + 1}. {label}</div>
+                <div className="text-xs text-muted-foreground">{state === "done" ? "done" : state === "active" ? (failed ? "stopped" : "in progress") : state === "skipped" ? "skipped" : "waiting"}</div>
               </>
             )}
           </li>
@@ -136,8 +138,8 @@ export function NowCaption({ ev, fallback }: { ev: RhEvent | null; fallback: str
   );
 }
 
-const ROLES: Record<string, string> = { agent: "Agent under test", customer: "Simulated customer", improver: "Improvement step", "compiler.auditor": "Compiler: live audit" };
-const PROVIDERS: Record<string, string> = { nebius: "Nebius Token Factory", openrouter: "OpenRouter", litellm: "LiteLLM", groq: "Groq", local: "local", custom: "custom endpoint" };
+const ROLES: Record<string, string> = { agent: "Agent under test", customer: "Simulated customer", improver: "Improvement step", "compiler.auditor": "Compiler: live audit", "research.web": "Web research" };
+const PROVIDERS: Record<string, string> = { tavily: "Tavily", nebius: "Nebius Token Factory", openrouter: "OpenRouter", litellm: "LiteLLM", groq: "Groq", local: "local", custom: "custom endpoint" };
 
 /** Model calls, average time, tokens and spend for each role of a job or run, from its `models` usage record. */
 export function ModelsByRole({ models, what }: { models?: Record<string, any> | null; what: string }) {

@@ -46,6 +46,7 @@ The scope was set in a flipped-interaction session: the coding agent asked, the 
 | D8 | What is the product, in one line? | **CI for AI agents**: rehearse on a copy of the real application, fix what fails, and check every change before it merges. |
 | D9 | When does an automatic fix count? | Only when it verifies more episodes on train and dev **without** a new rule violation or false "done", and the best version is then proved on held-out jobs no round has seen. A tie is not a fix. |
 | D10 | Which model for which role? | Each role gets its own Nemotron chain: Ultra with reasoning for the roles that judge (designing and auditing jobs, improving agents), Super for the agent and most compiler work, Nano without reasoning for the simulated customer. |
+| D11 | How do jobs stay realistic? | The compiler researches real use of the application on the web (Tavily) before planning jobs; findings are frozen into the world, so runs stay reproducible. |
 
 ## 5. In scope
 

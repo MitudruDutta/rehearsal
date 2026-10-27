@@ -65,7 +65,7 @@ def publish(ctx: JobContext, pkg: dict, payload: dict) -> None:
         wv.manifest = pkg["manifest"]
         wv.private = {"secrets": pkg["secrets"], "vars": pkg["vars"]}
         wv.capabilities = pkg["capabilities"]
-        wv.validation = {"reports": pkg["reports"], "repairs": pkg["repairs"], "rejected": pkg["rejected"], "isolation": pkg["isolation"], "inspection": pkg["inspection"]}
+        wv.validation = {"reports": pkg["reports"], "repairs": pkg["repairs"], "rejected": pkg["rejected"], "isolation": pkg["isolation"], "inspection": pkg["inspection"], "research": pkg.get("research")}
         job_row = s.get(Job, ctx.job_id)
         wv.provenance = {**pkg["provenance"], "spent_usd": round(ctx.spent, 6), "tokens": job_row.tokens if job_row else None}
         wv.content_hash = pkg["content_hash"]

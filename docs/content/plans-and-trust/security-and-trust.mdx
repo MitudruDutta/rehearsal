@@ -82,11 +82,15 @@ the server removes the values of its own secrets from it: every setting whose na
 | Goes to | What | When |
 |---|---|---|
 | Your model provider | The prompts of the World Compiler, the simulated customer and the agents: parts of the application's source, the fictional data, and the conversation | During a build, a run, an improvement and a re-check |
-| A tracing service | Traces of the same calls | Only when the operator sets a tracing key. Off by default |
+| Tavily (web search) | Search queries the World Compiler writes about the application (its name, what it does, its workflows) and the addresses of public pages to read. Never the source, the data or any secret | During a build, only when the server has a `TAVILY_API_KEY` |
 | A payment provider | The workspace owner's email address, the organisation's name, and what you buy | Only on a server with plans turned on, when you buy a plan or a top-up |
 
 The source of your application is sent to the model provider in parts, because the World Compiler reads it to
 build the world. If your source must not go to a model provider, run your own server with a model that you host.
+
+Web pages that the research step reads are treated as data, never as instructions: the researcher can only search
+and read, cannot reach the sandbox or any secret, and may cite only pages it was shown. Every job it inspired still
+passes the same validation as any other.
 
 ## AI assistants
 

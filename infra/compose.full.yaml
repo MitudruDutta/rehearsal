@@ -30,6 +30,7 @@ x-worker-env: &worker_env
   NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
   LITELLM_BASE_URL: ${LITELLM_BASE_URL:-https://litellm.vision.aivar.app/v1}
   NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+  TAVILY_API_KEY: ${TAVILY_API_KEY:-}
   OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
   LITELLM_API_KEY: ${LITELLM_API_KEY:-}
   # A shared server bounds what one workspace runs at once, so one account cannot fill the workers.

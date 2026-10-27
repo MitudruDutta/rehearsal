@@ -31,6 +31,7 @@ Rehearsal tests the agent where it will actually work: on your application, thro
 ## Features
 
 - **World Compiler.** Point it at a repository and its published container images. It reads the source, starts the application in an isolated sandbox, seeds fictional data, chooses the tools each role may use, and writes jobs it proves can be passed and failed.
+- **Grounded in real use.** Before it writes jobs, the compiler searches the web with Tavily for how real people use the application (its docs, forums and issue trackers) and bases at least half the jobs on the requests, rules and pitfalls it finds. Each job links the pages it came from.
 - **Database-verified outcomes.** Every episode ends with read-only checks on the application's own records: goal reached, no duplicate side effects, claims that match the data.
 - **Simulated customers.** Customers revise their request mid-task, so an agent that finishes the old request gets caught.
 - **Failures on purpose.** Requests time out after the change already went through, so blind retries show up as duplicates.
@@ -81,12 +82,22 @@ Every model call in Rehearsal goes to an NVIDIA Nemotron open model served by [N
 - **Measured per role.** Every call records its role, model, tokens, time and cost. The console shows a "Models by role" table for each build, run and fix loop, and `rehearsal prices` shows the price used for each configured model.
 - **Tool calls on every size.** Tool calling works on Nemotron 3 Nano, Super and Ultra; the agent under test and the compiler roles depend on it.
 
+### How Rehearsal uses Tavily
+
+Jobs written from source code alone can drift from what users really do. So every build now has a research phase: a researcher role (on Nemotron) searches the web with the [Tavily](https://tavily.com) Search API and reads the best pages with the Extract API, then writes a brief of real user requests, documented rules and known pitfalls, each with its URL. The job planner must base at least half the jobs on that brief and may cite only pages the researcher was shown.
+
+- **Reproducible.** Pages are read once, at build time, and frozen into the world version. Episodes never touch the live web, so the same world gives comparable results.
+- **Visible.** The world page has a "Real-world research" tab, each job lists the pages it is based on, and Tavily calls and credits appear in the "Models by role" table and count against the build's spend cap.
+- **Safe with untrusted pages.** Page text is data, never instructions; the researcher can only search and read, cannot reach the sandbox or any secret, and every job it inspired passes the same five validation gates.
+- **Optional.** Without `TAVILY_API_KEY`, the research phase is skipped and builds work as before.
+
 ### What changed in October 2026
 
 - **Nemotron on Nebius Token Factory became the default for every role.** Before, production ran on models behind a LiteLLM proxy and every World Compiler role shared one chain. Now each role has its own Nemotron chain with a reasoning switch, the hardest compiler roles run on Ultra, and usage is recorded per role.
 - **Fix my agent.** Before, the improvement step proposed one new version and left the checking to you. Now an `autofix` job runs rounds of propose, rehearse on train and dev, and keep only if better (more verified, no new rule violation or false completion), feeds rejected ideas to the next round, and proves the best version against the original on held-out jobs. It resumes from its checkpoint after a worker restart. API `POST /v1/autofix`, CLI `rehearsal autofix`, SDK `rh.profiles.autofix`, MCP tool `fix_agent`, and a console page with each round, its reason, its score, and the sentences it changed.
 - **Pull request checks.** `rehearsal gate` and a GitHub Action (`action.yml`) rehearse a changed agent next to the version on `main` and fail on a broken rule or a regression, with a Markdown report in the job summary.
 - **Models by role** in the console, for builds, runs and fix loops.
+- **Grounded worlds.** A new research phase uses Tavily to base jobs on how real people use the application, with the sources on every job.
 - **Cleanup.** Third-party tracing was removed; secret masking now lives in one module. Secret settings no longer appear in printed configuration. Next.js was upgraded to 16.4.2.
 
 ### Feedback on Nebius and NVIDIA tools
@@ -218,7 +229,9 @@ Settings come from the environment, or from `.env` in the working directory. The
 | `REHEARSAL_DATABASE_URL` | local PostgreSQL on port 5433 | Control-plane database |
 | `REHEARSAL_SESSION_SECRET` | development value | Signs console session cookies; set your own |
 | `REHEARSAL_MODEL_COMPILER`, `_REASONER`, `_AGENT`, `_PARTICIPANT`, `_IMPROVER` | NVIDIA Nemotron on Nebius Token Factory, routed by role | Model chains, `provider:model[#think\|#nothink][,...]` |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ... | none | One key for each provider the chains name |
+| `NEBIUS_API_KEY` | none | Nebius Token Factory, for the default Nemotron models |
+| `TAVILY_API_KEY` | none | Web research during builds; without it the research phase is skipped |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ... | none | One key for each other provider the chains name |
 | `REHEARSAL_SIGNUP` | `open` | `closed` stops new workspaces from the sign-in page |
 | `REHEARSAL_MONTHLY_ALLOWANCE_USD` | `0` (no limit) | Model spend a workspace may use per month |
 | `REHEARSAL_URL`, `REHEARSAL_API_KEY` | `https://rehearsalkit.xyz`, none | Where the CLI and SDK connect |
@@ -259,6 +272,7 @@ Rehearsal is in early release (0.1.x). World builds, evaluations, the fix loop, 
 
 - [NVIDIA Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) open models (Nano, Super and Ultra) run every role in Rehearsal.
 - [Nebius Token Factory](https://nebius.com/token-factory) serves them.
+- [Tavily](https://tavily.com) Search and Extract ground every world in how real people use the application.
 - FastAPI, SQLAlchemy and PostgreSQL for the control plane; Docker for sandboxes; Next.js for the console and documentation.
 
 ## Contributing

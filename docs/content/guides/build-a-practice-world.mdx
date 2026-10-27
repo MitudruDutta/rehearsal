@@ -79,12 +79,13 @@ The answer has four ids: `job_id` (the build), `world_id`, `world_version_id` an
 | Phase | What happens | Typical time |
 |---|---|---|
 | `inspect` | Reads the repository: services, configuration, roles and workflows | 2 to 5 minutes |
+| `research` | Searches the web with Tavily for how real people use the application: its documentation, forums and issue trackers. Skipped when the server has no `TAVILY_API_KEY` | 1 to 3 minutes |
 | `plan` | Writes how to run the application in the sandbox | 3 to 10 minutes |
 | `materialize` | Starts the application, and repairs the configuration until it is healthy | 1 to 25 minutes |
 | `discover` | Finds the description of the API | under 1 minute |
 | `seed` | Creates fictional data, and one account with a lasting API credential for each role | 7 to 80 minutes |
 | `adapt` | Turns API operations into agent tools, and tests each one live | 10 to 70 minutes |
-| `author` | Plans the jobs, then writes them: the customer, the changes, the faults, the checks, a reference solution and wrong solutions | 5 to 20 minutes |
+| `author` | Plans the jobs, then writes them: the customer, the changes, the faults, the checks, a reference solution and wrong solutions. With research, at least half the jobs are based on real requests, rules or pitfalls it found | 5 to 20 minutes |
 | `validate` | Proves each job is fair, and repairs or keeps out the ones that are not | 10 to 60 minutes |
 | `package` | Saves a snapshot of the world and publishes the version | under 5 minutes |
 
@@ -170,6 +171,9 @@ When the status is `succeeded`, the world version is published.
 
 - The world page lists the jobs with their split and stress category. A world with 6 to 8 approved jobs over
   `train`, `dev` and `holdout` is normal. Fewer is fine when some jobs were kept out as unfair.
+- The **Real-world research** tab shows what the compiler found on the web (real requests, rules and pitfalls, each with
+  its page) and how many jobs it based on them. A job's details list the pages it is based on. The pages were read
+  once, during the build: episodes never use the live web, so results stay repeatable.
 - The version is pinned: its content hash, its images and its data. Results on the same version stay comparable.
 - When your application has a new release, add the new commit and images, and build a new version. Old results stay
   attached to the old version.

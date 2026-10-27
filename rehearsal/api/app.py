@@ -1093,7 +1093,7 @@ def download_artifact(art_id: str, p: Principal = Depends(principal)) -> FileRes
 
 # --------------------------------------------------------------------------- dashboard
 
-PHASE_ORDER = ["inspect", "plan", "materialize", "discover", "seed", "adapt", "author", "validate", "package"]
+PHASE_ORDER = ["inspect", "research", "plan", "materialize", "discover", "seed", "adapt", "author", "validate", "package"]
 
 
 @app.get("/v1/dashboard")

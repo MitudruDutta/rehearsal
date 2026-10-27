@@ -110,10 +110,11 @@ export function MetaRow({ time, cost, needs }: { time?: string; cost?: string; n
   );
 }
 
-/* ---- The nine build phases, with the names and order the console's build view shows ---- */
+/* ---- The ten build phases, with the names and order the console's build view shows ---- */
 
 const PHASES: [key: string, label: string][] = [
   ["inspect", "Read the source"],
+  ["research", "Research real use"],
   ["plan", "Plan the runtime"],
   ["materialize", "Start the sandbox"],
   ["discover", "Find the API"],
@@ -127,7 +128,7 @@ const PHASES: [key: string, label: string][] = [
 export function PhaseStrip({ at }: { at?: string }) {
   const current = PHASES.findIndex(([key]) => key === at);
   return (
-    <ol aria-label="The nine build phases" className="not-prose my-6 grid max-w-(--rh-column) grid-cols-3 gap-x-2 gap-y-4 md:grid-cols-9">
+    <ol aria-label="The ten build phases" className="not-prose my-6 grid max-w-(--rh-column) grid-cols-3 gap-x-2 gap-y-4 md:grid-cols-10">
       {PHASES.map(([key, label], i) => (
         <li key={key} className="min-w-0">
           <div className={`h-1.5 rounded-full ${current < 0 || i < current ? "bg-success" : i === current ? "bg-primary" : "bg-muted"}`} />

@@ -490,6 +490,7 @@ class ScenarioSpec(Strict):
     max_customer_contacts: int = 3
     contact_tools: list[str] = Field(default_factory=list)  # app tools that count as contacting the customer
     stress: str = ""  # what the job attacks (changed_request, unknown_outcome, social_engineering, ...); see compiler.stress
+    sources: list[str] = Field(default_factory=list)  # web pages about real use of the application that the job is based on
 
     @field_validator("id")
     @classmethod

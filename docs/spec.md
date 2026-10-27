@@ -66,21 +66,24 @@ Every project-owned row carries `project_id`, and every API lookup filters on it
 
 ## 4. World Compiler
 
-Phases, each checkpointed before the next starts: **inspect → plan → materialize → discover → seed → adapt → author → validate (+ repair) → package**.
+Phases, each checkpointed before the next starts: **inspect → research → plan → materialize → discover → seed → adapt → author → validate (+ repair) → package**.
 
 | Phase | Output |
 |---|---|
 | Inspect | Evidence-linked model of the application: services, routes, schema, roles |
+| Research | With `TAVILY_API_KEY`: real user requests, documented rules and known pitfalls from the web (Tavily Search and Extract), each with its URL; skipped otherwise |
 | Plan | Typed runtime manifest: services, images or builds, ports, data paths, state probe |
 | Materialize | The application running in a fresh sandbox; outside services redirected to stand-ins |
 | Discover | API operations from OpenAPI, Swagger, GraphQL introspection or source |
 | Seed | Fictional, relationally consistent data and role credentials; a base snapshot |
 | Adapt | Typed tools per role that call the application's real routes |
-| Author | Jobs: goal, scheduled events, checks, a reference trajectory, negative trajectories, split |
+| Author | Jobs: goal, scheduled events, checks, a reference trajectory, negative trajectories, split; with research, at least half based on it, with `sources` |
 | Validate and repair | The five gates (§5), then a live agent tries each job; failures go back to the model as evidence |
 | Package | An immutable world version with manifest, snapshot, capability report and content hash |
 
-Roles (inspector, builder, scenario designer, validation investigator) share one tool loop: a role finishes only by calling its submit tool **and** passing a deterministic validator, whose feedback returns to the model as the tool result. Builder tools act only inside the build sandbox. Image references the model writes must be owner-supplied or pinned by a real `sha256` digest.
+Roles (inspector, researcher, builder, scenario designer, validation investigator) share one tool loop: a role finishes only by calling its submit tool **and** passing a deterministic validator, whose feedback returns to the model as the tool result. Builder tools act only inside the build sandbox. Image references the model writes must be owner-supplied or pinned by a real `sha256` digest.
+
+The researcher's only tools are `web_search` and `read_page`; its brief is refused if it cites a page it was not shown, and the plan is refused if fewer than half its briefs cite the research or any brief cites another page. Page text is treated as data. The brief is stored in the checkpoint and in the world version's `validation.research`, so episodes never use the live web. Tavily credits are recorded as the `research.web` usage row and charged to the build's spend cap.
 
 Every world must cover several stress categories: changed request, unknown outcome (a write times out after it succeeded), failure recovery, permission boundary, social engineering, injected instructions, missing information, privacy, conflict. Jobs are split into train, dev and held-out by family.
 

@@ -96,7 +96,7 @@ function Reveal({ on, children, className = "" }: { on: boolean; children: React
 
 /* ---------------------------------------------------------------------------------------------- World Compiler */
 
-const PHASES = ["Read the source", "Plan the runtime", "Start the sandbox", "Find the API", "Seed fictional data", "Choose agent tools", "Write jobs", "Validate", "Publish"];
+const PHASES = ["Read the source", "Research real use", "Plan the runtime", "Start the sandbox", "Find the API", "Seed fictional data", "Choose agent tools", "Write jobs", "Validate", "Publish"];
 const PHASE_LOG = [
   "inspector · read docker-compose.yml",
   "planner · 3 services, PostgreSQL 16",
@@ -114,7 +114,7 @@ export function CompilerScene() {
   const done = Math.min(s.step, PHASES.length);
   return (
     <div ref={s.ref} {...s.hold}>
-      <Pane label="world build · gitea" aside={<span className="flex items-center gap-2"><Held on={s.held} /><span className="tabular-nums">{done === PHASES.length ? "published" : `${done} of 9`}</span></span>} className="mx-auto max-w-xl">
+      <Pane label="world build · gitea" aside={<span className="flex items-center gap-2"><Held on={s.held} /><span className="tabular-nums">{done === PHASES.length ? "published" : `${done} of ${PHASES.length}`}</span></span>} className="mx-auto max-w-xl">
         <ol className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px] sm:grid-cols-3">
           {PHASES.map((p, i) => (
             <li key={p} className="flex min-w-0 items-center gap-2">

@@ -1516,6 +1516,7 @@ CONFIG: list[tuple[str, str, str, str]] = [
     ("Models", "REHEARSAL_MODEL_IMPROVER", "the reasoner's chain", "The model chain that proposes a better agent."),
     ("Models", "REHEARSAL_PRICES", "`{}`", "Prices for models whose provider reports none: JSON of `provider:model` to `[input, output]` in US dollars for a million tokens."),
     ("Models", "REHEARSAL_PRICING_FILE", "`pricing.yaml`", "A file of the same prices, each with its source and date."),
+    ("Web research", "TAVILY_API_KEY", "", "A Tavily key. With it, each world build first researches how real people use the application (its documentation, forums and issue trackers) and bases at least half its jobs on what it finds, citing the pages. Without it, that step is skipped. See [Build a practice world](/guides/build-a-practice-world)."),
     ("Workers and sandboxes", "REHEARSAL_RUN_PARALLEL", "`4`", "Into how many parts a run is cut. Each part needs one free worker and one sandbox."),
     ("Workers and sandboxes", "REHEARSAL_BUILD_PARALLEL", "`4`", "How many jobs a build writes and validates at once. Each one being validated runs its own copy of the world."),
     ("Workers and sandboxes", "REHEARSAL_MAX_ACTIVE_BUILDS", "`0`, no limit", "Builds that one project may have in progress."),

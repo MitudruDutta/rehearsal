@@ -62,6 +62,13 @@ function ScenarioSheet({ sc, onClose, onChange }: { sc: any | null; onClose: () 
                     {!v.live.passed && v.live.evidence && <p className="text-muted-foreground">{v.live.evidence}</p>}
                   </section>
                 )}
+                {spec.sources?.length > 0 && (
+                  <section className="space-y-1.5 rounded-md border p-3">
+                    <h3 className="font-semibold">Based on real use</h3>
+                    <p className="text-muted-foreground">The compiler found this kind of request on the web before writing the job.</p>
+                    <ul className="space-y-1">{spec.sources.map((u: string) => <li key={u} className="truncate"><a href={u} target="_blank" rel="noopener noreferrer nofollow" className="text-primary underline-offset-2 hover:underline">{u}</a></li>)}</ul>
+                  </section>
+                )}
                 <section className="space-y-2">
                   <h3 className="font-semibold">The customer</h3>
                   <p><span className="font-medium">{spec.participant.name}</span>: &ldquo;{spec.participant.opening_message}&rdquo;</p>
@@ -122,6 +129,44 @@ function ScenarioSheet({ sc, onClose, onChange }: { sc: any | null; onClose: () 
   );
 }
 
+const FINDINGS: [string, string, string][] = [["requests", "request", "What real users ask for"], ["rules", "rule", "Rules the application enforces"], ["pitfalls", "pitfall", "Where people go wrong"]];
+
+/** What the World Compiler learned about real use of the application from the web (Tavily), and which jobs it grounds. */
+function Research({ research, jobs }: { research?: any; jobs: any[] }) {
+  if (!research?.requests) {
+    return (
+      <Card><CardContent className="pt-6 text-sm text-muted-foreground">
+        {research?.skipped ? "This world was built without web research: the server has no Tavily key, so its jobs come from the source alone."
+          : "This world was built before web research existed: its jobs come from the source alone. Build a new version to ground them in real use."}
+      </CardContent></Card>
+    );
+  }
+  const grounded = jobs.filter((j) => j.spec.sources?.length).length;
+  const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+  return (
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Grounded in {research.sources.length} web pages</CardTitle>
+          <CardDescription>Before writing jobs, the compiler searched the web with Tavily for how real people use this application, and based {grounded} of {jobs.length} jobs on what it found. Pages were read once, at build time; episodes never touch the live web.</CardDescription>
+        </CardHeader>
+      </Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {FINDINGS.map(([key, field, title]) => (
+          <Card key={key}>
+            <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+            <CardContent>
+              <ul className="space-y-3 text-sm">{(research[key] || []).map((f: any, i: number) => (
+                <li key={i}>{f[field]} <a href={f.source} target="_blank" rel="noopener noreferrer nofollow" className="whitespace-nowrap text-xs text-primary underline-offset-2 hover:underline">{host(f.source)}</a></li>
+              ))}</ul>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function World({ worldVersionId }: { worldVersionId: string }) {
   const wv = useResource<any>(`/v1/world-versions/${worldVersionId}`);
   const checks = useResource<any[]>("/v1/jobs?kind=world_validate", 5000);
@@ -166,6 +211,7 @@ export function World({ worldVersionId }: { worldVersionId: string }) {
       <Tabs defaultValue="scenarios">
         <TabsList>
           <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
+          <TabsTrigger value="research">Real-world research</TabsTrigger>
           <TabsTrigger value="tools">Tools and roles</TabsTrigger>
           <TabsTrigger value="caps">Capabilities</TabsTrigger>
           <TabsTrigger value="prov">Provenance</TabsTrigger>
@@ -199,6 +245,7 @@ export function World({ worldVersionId }: { worldVersionId: string }) {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="research"><Research research={validation.research} jobs={scenarios.data || []} /></TabsContent>
         <TabsContent value="tools" className="grid gap-4">
           <Card>
             <CardHeader><CardTitle>Roles</CardTitle></CardHeader>
