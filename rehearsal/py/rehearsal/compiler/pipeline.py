@@ -179,6 +179,10 @@ class RuntimeChangeNeeded(BaseException):
     tool error to show the model."""
 
 
+# Errors that come from running the application (its output, its HTTP answers), as opposed to Rehearsal's own checks.
+APP_ERROR = re.compile(r"(seed step \d+ |These example calls|one-shot \w+ |service \w+ exited|image build for|the application )", re.I)
+
+
 def rejection_kind(text: str) -> str:
     """What a rejection is about, without its particulars (numbers, quoted values, commands), so repeats group together."""
     line = (text.strip().splitlines() or [""])[0]
@@ -719,8 +723,8 @@ class Compiler:
     def _web_advice(self, text: str, repeats: int | None = None) -> str:
         """The second time a kind of error comes back in a step, what a web search for it finds (once per kind). The fix
         for a setup or API error is usually written down somewhere; the model should not have to think to look."""
-        if not web.enabled() or not self._phase:
-            return ""
+        if not web.enabled() or not self._phase or not APP_ERROR.match(text.strip()):
+            return ""  # Rehearsal's own format checks say what to change; only the application's errors are worth a search
         kind = rejection_kind(text)
         seen = repeats if repeats is not None else self.ck.get("stuck", {}).get(self._phase, {}).get(kind, {}).get("count", 0)
         advised = self.ck.setdefault("advised", [])

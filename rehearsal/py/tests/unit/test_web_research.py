@@ -187,6 +187,10 @@ def test_a_repeated_error_is_looked_up_once_with_its_telling_line(tmp_path, monk
     assert asked == ["gitea modules/setting/setting.go:108:MustInstalled() [F] Unable to load config file for a installed Gitea instance"]
     assert c._web_advice(error) == ""  # one lookup per kind
     assert c._web_advice("one-shot setup exited 1: missing --config", repeats=2)  # runtime starts pass their own count
+    own = "1 validation error for ScenarioSpec\n  Value error, goal v1 has no checks"
+    c.log("compiler.submit.rejected", own, {"role": "scenario_author"})
+    c.log("compiler.submit.rejected", own, {"role": "scenario_author"})
+    assert c._web_advice(own) == ""  # Rehearsal's own format checks are not looked up
     monkeypatch.delenv("TAVILY_API_KEY")
     assert c._web_advice("anything else", repeats=5) == ""  # no key, no lookups
 
