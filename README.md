@@ -88,14 +88,30 @@ Every model call in Rehearsal goes to an NVIDIA Nemotron open model served by [N
 - **Measured per role.** Every call records its role, model, tokens, time and cost. The console shows a "Models by role" table for each build, run and fix loop, and `rehearsal prices` shows the price used for each configured model.
 - **Tool calls on every size.** Tool calling works on Nemotron 3 Nano, Super and Ultra; the agent under test and the compiler roles depend on it.
 
+### Where Token Factory sped up the work
+
+- **One provider entry instead of a migration.** Rehearsal already spoke the OpenAI chat format, so moving every role to Nemotron was a base URL, a key and five model chains. No prompt or tool schema had to change.
+- **Fast turns where speed matters.** The simulated customer talks on every turn of every episode. Nano with reasoning off answers in about 0.5 s and 28 output tokens instead of 2.7 s and 191 with reasoning on, so a rehearsal spends its time on the agent under test, not on the customer.
+- **Three sizes, one family, one key.** Ultra, Super and Nano share one API, one key and one tool-calling format. Routing a role to a bigger or smaller model is a one-line chain change, and a failing model hands over to the next one in its chain.
+- **Prices known before a job starts.** Per-token prices for each model let every build, evaluation and fix loop carry a spend cap from the first call, and let the console show what each build step and each role cost.
+
 ### How Rehearsal uses Tavily
 
-Jobs written from source code alone can drift from what users really do. So every build now has a research phase: a researcher role (on Nemotron) searches the web with the [Tavily](https://tavily.com) Search API and reads the best pages with the Extract API, then writes a brief of real user requests, documented rules and known pitfalls, each with its URL. The job planner must base at least half the jobs on that brief and may cite only pages the researcher was shown.
+[Tavily](https://tavily.com), the agentic search API that is now part of Nebius, is used in three places.
+
+1. **Research before jobs are written.** Jobs written from source code alone can drift from what users really do. So every build has a research phase: a researcher role (on Nemotron) searches the web with the Tavily Search API and reads the best pages with the Extract API, then writes a brief of real user requests, documented rules and known pitfalls, each with its URL. The job planner must base at least half the jobs on that brief and may cite only pages the researcher was shown. For Gitea, 8 pages grounded 5 of the 9 jobs.
+2. **Setup notes from the application's own docs.** Before the runtime is planned, the compiler finds the application's documentation site from its README and asks Tavily, limited to that site, how the project says to run it in Docker. The builder and the seeder can also search and read docs pages themselves.
+3. **Errors that keep coming back.** When the same application error repeats during a build step (a failed start, a seed step, an image build), the compiler searches for that error the way a person would paste it into a search engine and hands what it finds to the model's next try. Rehearsal's own validation messages are never searched.
 
 - **Reproducible.** Pages are read once, at build time, and frozen into the world version. Episodes never touch the live web, so the same world gives comparable results.
-- **Visible.** The world page has a "Real-world research" tab, each job lists the pages it is based on, and Tavily calls and credits appear in the "Models by role" table and count against the build's spend cap.
+- **Visible.** The world page has a "Real-world research" tab, each job lists the pages it is based on, error lookups appear in the build log, and Tavily calls and credits appear in the "Models by role" table and count against the build's spend cap.
 - **Safe with untrusted pages.** Page text is data, never instructions; the researcher can only search and read, cannot reach the sandbox or any secret, and every job it inspired passes the same five validation gates.
-- **Optional.** Without `TAVILY_API_KEY`, the research phase is skipped and builds work as before.
+- **Optional.** Without `TAVILY_API_KEY`, research and lookups are skipped and builds work as before.
+
+### Other Nebius tools
+
+- **Tavily** (above) is Nebius's agentic search product; Rehearsal uses its Search and Extract APIs.
+- **Serverless AI Jobs** were evaluated for running world builds; the feedback below explains why builds stay on a VM with Docker for now.
 
 ### What changed in October 2026
 
@@ -104,7 +120,7 @@ Jobs written from source code alone can drift from what users really do. So ever
 - **Pull request checks.** `rehearsal gate` and a GitHub Action (`action.yml`) rehearse a changed agent next to the version on `main` and fail on a broken rule or a regression, with a Markdown report in the job summary.
 - **Models by role** in the console, for builds, runs and fix loops.
 - **Agent Factory.** A `factory` job drafts an agent from a published world, rehearses it, hardens it with the fix loop, proves it on held-out jobs and packages a runnable agent with its proof report. API `POST /v1/factory`, CLI `rehearsal factory`, SDK `rh.worlds.make_agent`, MCP tool `make_agent`, and a **Make an agent** button on the world page.
-- **Grounded worlds.** A new research phase uses Tavily to base jobs on how real people use the application, with the sources on every job.
+- **Grounded worlds.** A new research phase uses Tavily to base jobs on how real people use the application, with the sources on every job. Later in the month Tavily also started reading setup notes from the application's docs and looking up application errors that repeat during a build.
 - **Failure analysis.** Named causes for every failed episode, on the run page, in `rehearsal runs failures`, in the MCP `run_results` tool, in the CI gate's report, and as input to the fix loop (train and dev only).
 - **Test any agent by URL, incidents, world library.** An agent profile can name your own agent's OpenAI-compatible endpoint (its key stored sealed, internal addresses refused); `POST /v1/world-versions/{id}/incidents` turns a production incident into a validated job; `REHEARSAL_LIBRARY_PROJECT` shares a project's worlds with every workspace.
 - **Builds that stop wasting money.** Tools verified one at a time, a no-progress brake that pauses a stuck step, spend per step and "why it is stuck" on the build page, early checks for host settings and unfinished installs, and workers that hand jobs back on restart.
@@ -324,7 +340,7 @@ Rehearsal is in early release (0.1.x). World builds, evaluations, the fix loop, 
 
 - [NVIDIA Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) open models (Nano, Super and Ultra) run every role in Rehearsal.
 - [Nebius Token Factory](https://nebius.com/token-factory) serves them.
-- [Tavily](https://tavily.com) Search and Extract ground every world in how real people use the application.
+- [Tavily](https://tavily.com), part of Nebius, grounds every world in how real people use the application and helps builds past setup errors.
 - FastAPI, SQLAlchemy and PostgreSQL for the control plane; Docker for sandboxes; Next.js for the console and documentation.
 
 ## Contributing
@@ -333,4 +349,4 @@ Issues and pull requests are welcome. Run the unit tests and the console typeche
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT, an OSI-approved open source license. See [LICENSE](LICENSE).
