@@ -22,4 +22,3 @@ web/*.tsbuildinfo
 infra/deploy.env
 # internal notes, plans and runbooks: kept locally, not published
 handbook/
-brag-output-2026-10-11-203928/
