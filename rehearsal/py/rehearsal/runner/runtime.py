@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import os
 import secrets as pysecrets
 import shutil
@@ -306,8 +307,12 @@ class WorldInstance:
                 except subprocess.TimeoutExpired as exc:  # a slow setup step is a fact for the builder, not a crash of the build
                     so_far = self.logs(svc.name, 60)
                     _run(["docker", "rm", "-f", f"{self.prefix}-{svc.name}"], check=False)
-                    raise RuntimeError_(f"one-shot {svc.name} did not finish within {svc.health.timeout_s} s (its health.timeout_s). "
-                                        f"Raise health.timeout_s for a slow setup step such as migrations, or make the step do less. "
+                    serving = re.search(r"listen(ing)?\b|serving on|server (started|running)|starting (new )?(web )?server|running on http", so_far, re.I)
+                    advice = (f"Its output shows it started a server, which never exits: a one-shot must run a command that finishes "
+                              f"(a migration, a setup or create command). Run the server in the long-running service, and give {svc.name} "
+                              f"only the setup command." if serving else
+                              "Raise health.timeout_s for a slow setup step such as migrations, or make the step do less.")
+                    raise RuntimeError_(f"one-shot {svc.name} did not finish within {svc.health.timeout_s} s (its health.timeout_s). {advice} "
                                         f"Output so far:\n{so_far[-3000:]}") from exc
                 out = (proc.stdout + proc.stderr)[-3000:]
                 if proc.returncode != 0:
