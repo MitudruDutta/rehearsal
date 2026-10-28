@@ -15,6 +15,7 @@ const WARN_AT = 3;
 export function Stuck({ stuck, phase, status, guard, onPause }: {
   stuck?: Record<string, Record<string, Kind>>; phase?: string; status?: string; guard?: string | null; onPause: () => void;
 }) {
+  if (status === "succeeded") return null;  // a finished build is not stuck; its history stays in the activity feed
   const step = phase && stuck?.[phase] ? phase : Object.keys(stuck || {}).at(-1);
   const kinds = Object.entries((step && stuck?.[step]) || {}).sort(([, a], [, b]) => b.count - a.count);
   if (!kinds.length) return null;
