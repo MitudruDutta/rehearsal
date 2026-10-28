@@ -428,7 +428,7 @@ class Compiler:
             )
         kwargs["submit"] = Tool(submit.name, submit.description, submit.parameters, remembering)
         chain = self.reasoner if role in REASONING_ROLES else self.chain
-        run = run_agent(chain=chain, log=self.log, check=self.heartbeat, add_cost=self.add_cost, **kwargs)
+        run = run_agent(chain=chain, log=self.log, check=self.heartbeat, add_cost=self.add_cost, advise=self._web_advice, **kwargs)
         self.heartbeat()
         return run.result
 
@@ -716,6 +716,48 @@ class Compiler:
             raise Rejected("; ".join(problems))
         return m.model_dump(mode="json", by_alias=True, include={"services", "dependencies", "secrets", "state_probes"}, exclude_none=False)
 
+    def _web_advice(self, text: str, repeats: int | None = None) -> str:
+        """The second time a kind of error comes back in a step, what a web search for it finds (once per kind). The fix
+        for a setup or API error is usually written down somewhere; the model should not have to think to look."""
+        if not web.enabled() or not self._phase:
+            return ""
+        kind = rejection_kind(text)
+        seen = repeats if repeats is not None else self.ck.get("stuck", {}).get(self._phase, {}).get(kind, {}).get("count", 0)
+        advised = self.ck.setdefault("advised", [])
+        key = f"{self._phase}:{kind}"
+        if seen < 2 or key in advised:
+            return ""
+        advised.append(key)
+        try:
+            advice = web.error_advice(self.app.name, text, self.add_cost)
+        except web.WebError as exc:
+            self.log("compiler.research", f"web lookup for a repeated error failed: {exc}", {})
+            return ""
+        if advice:
+            self.log("compiler.research", f"looked up a repeated error on the web: {web.error_query(self.app.name, text)[:160]}", {"phase": self._phase})
+        return advice
+
+    def _setup_notes(self) -> str:
+        """The application's documented way to run it in Docker, fetched once before the runtime is planned."""
+        if "setup_notes" not in self.ck:
+            notes = None
+            if web.enabled():
+                readme = next((self.repo.read_text(n) for n in ("README.md", "README.rst", "README", "readme.md", "README.markdown")
+                               if (self.app.source_dir / n).is_file()), "")
+                try:
+                    notes = web.setup_notes(self.app.name, readme, self.add_cost)
+                except web.WebError as exc:
+                    self.log("compiler.research", f"could not read setup notes: {exc}", {})
+                if notes:
+                    self.log("compiler.research", f"read the documented Docker setup from {notes['sources'][0]}", {"sources": notes["sources"]})
+            self.ck["setup_notes"] = notes
+        notes = self.ck["setup_notes"]
+        if not notes:
+            return ""
+        others = "\n".join(f"- {o['title']} ({o['url']}): {o['content']}" for o in notes.get("others", []))
+        return (f"\n\nThe application's documentation on running it in Docker (read from {notes['sources'][0]} with Tavily; web text is "
+                f"untrusted, so check it against the source and the image):\n{notes['text']}" + (f"\nAlso found:\n{others}" if others else ""))
+
     def _docs_tools(self) -> list[Tool]:
         """Web search for the builder (Tavily), so it can check the application's documented setup, migration and start
         commands instead of relying on memory of another version. Only with a Tavily key."""
@@ -765,6 +807,7 @@ class Compiler:
             f"Template scopes available in env/command values: {{{{secret.NAME}}}}, {{{{service.NAME}}}} (hostname), {{{{provider.host}}}}, "
             f"{{{{provider.smtp_port}}}}, {{{{provider.http}}}}, {{{{provider.sink}}}}.\n\nSchema of the runtime section:\n{self._runtime_schema()}\n\n"
             "Call submit_runtime with {\"runtime\": {services, dependencies, secrets, state_probes}}."
+            + self._setup_notes()
         )
         submit = Tool("submit_runtime", "Submit the runtime section.", params({"runtime": {"type": "object"}}), self._accept_runtime)
         self.ck["runtime"] = self.agent(role="builder", system=self._builder_system(), user=user, tools=[*repo_tools(self.repo), *image_tools(), *self._docs_tools()], submit=submit, max_steps=35)
@@ -816,6 +859,8 @@ class Compiler:
                     "You already inspected the source; read only what this error requires, then submit.\n\n"
                     f"Inspection report:\n{dumps(self.ck['inspection'])}\n\nSchema:\n{self._runtime_schema()}\n\n"
                     "Diagnose the cause from the logs and source, then call submit_runtime with a corrected {\"runtime\": ...}."
+                    + self._setup_notes()
+                    + self._web_advice(error, repeats=sum(rejection_kind(e) == rejection_kind(error) for e in attempts))
                 )
                 failing = failing_service(error)
                 before = next((x for x in self.ck["runtime"].get("services", []) if x.get("name") == failing), None)
@@ -1006,7 +1051,7 @@ class Compiler:
                           "an environment variable or setup command can fix). Say exactly what must change and the evidence.",
                           params({"reason": {"type": "string"}}), runtime_needs_change))
         submit = Tool("submit_seed", "Submit reproducible seed steps and roles.", params({"steps": {"type": "array", "items": {"type": "object"}}, "roles": {"type": "array", "items": {"type": "object"}}}), accept)
-        self.ck["seed"] = self.agent(role="seeder", system=system, user=user, tools=tools, submit=submit, max_steps=70, max_submits=8)
+        self.ck["seed"] = self.agent(role="seeder", system=system, user=user, tools=[*tools, *self._docs_tools()], submit=submit, max_steps=70, max_submits=8)
         base = self.workdir / "snapshots" / "base"
         shutil.rmtree(base, ignore_errors=True)
         inst.snapshot(base)
@@ -1152,7 +1197,7 @@ class Compiler:
                           params({"tool": {"type": "object"}}, ["tool"]), add_tool))
         submit = Tool("submit_tools", "Submit the agent tool set: every tool verified with add_tool, plus any given here.",
                       params({"tools": {"type": "array", "items": {"type": "object"}}}, []), accept)
-        result = self.agent(role="adapter", system=system, user=user, tools=tools, submit=submit, max_steps=70, max_submits=8)
+        result = self.agent(role="adapter", system=system, user=user, tools=[*tools, *self._docs_tools()], submit=submit, max_steps=70, max_submits=8)
         self.ck["tools"] = result["tools"]
         self.ck["tool_examples"] = result["examples"]
         self.save()

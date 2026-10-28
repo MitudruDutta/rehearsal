@@ -176,6 +176,7 @@ def run_agent(
     temperature: float = 0.2,
     check: Callable[[], None] | None = None,
     add_cost: Callable[[float, int], None] | None = None,
+    advise: Callable[[str], str] | None = None,  # extra context for a rejection, such as what the web says about its error
 ) -> AgentRun:
     run = AgentRun()
     catalog = {t.name: t for t in [*tools, submit]}
@@ -230,7 +231,7 @@ def run_agent(
                         stuck = CompilerAgentError(f"{role}: the same problem came back {repeats} times in a row; last reason: {exc}", run)
                         stuck.terminal = True
                         raise stuck from exc
-                    out = f"REJECTED: {exc}\nFix the problems and call {submit.name} again."
+                    out = f"REJECTED: {exc}{advise(str(exc)) if advise else ''}\nFix the problems and call {submit.name} again."
                     log("compiler.submit.rejected", _excerpt(str(exc)), {"role": role, "attempt": run.attempts, **getattr(exc, "data", {})})
                     if run.attempts >= max_submits:
                         raise CompilerAgentError(f"{role}: output rejected {run.attempts} times; last reason: {exc}", run) from exc

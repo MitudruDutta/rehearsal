@@ -162,3 +162,53 @@ def test_research_that_cannot_finish_skips_instead_of_failing_the_build(monkeypa
     c.agent = stuck
     c.phase_research()
     assert "skipped" in c.ck["research"] and web.digest(c.ck["research"]) == ""
+
+
+def test_a_repeated_error_is_looked_up_once_with_its_telling_line(tmp_path, monkeypatch):
+    """The second time a kind of error comes back in a step, the compiler searches the web for it itself; the fix for a
+    setup error is usually written down, and the model should not have to think to look."""
+    from rehearsal.compiler import pipeline, web
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+    asked = []
+    monkeypatch.setattr(web, "search", lambda q, add_cost=None, max_results=6, include_domains=None: asked.append(q) or
+                        [{"title": "Install with Docker", "url": "https://docs.gitea.com/installation/install-with-docker", "content": "set INSTALL_LOCK"}])
+    c = Compiler(app=AppInput("gitea", tmp_path, {}, "", {}), checkpoint={"done": []}, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: None, save=lambda d: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    c._phase = "seed"
+    error = ("seed step 0 (exec [...]) failed: exit 1: 2026/10/27 22:46:59 modules/setting/setting.go:108:MustInstalled() [F] Unable to load "
+             "config file for a installed Gitea instance")
+    c.log("compiler.submit.rejected", error, {"role": "seeder"})
+    assert c._web_advice(error) == ""  # once is not a pattern
+    c.log("compiler.submit.rejected", error, {"role": "seeder"})
+    advice = c._web_advice(error)
+    assert "docs.gitea.com/installation/install-with-docker" in advice and "untrusted" in advice
+    assert asked == ["gitea modules/setting/setting.go:108:MustInstalled() [F] Unable to load config file for a installed Gitea instance"]
+    assert c._web_advice(error) == ""  # one lookup per kind
+    assert c._web_advice("one-shot setup exited 1: missing --config", repeats=2)  # runtime starts pass their own count
+    monkeypatch.delenv("TAVILY_API_KEY")
+    assert c._web_advice("anything else", repeats=5) == ""  # no key, no lookups
+
+
+def test_setup_notes_come_from_the_apps_own_docs_site(tmp_path, monkeypatch):
+    from rehearsal.compiler import web
+    from rehearsal.compiler.pipeline import AppInput, Compiler
+
+    (tmp_path / "README.md").write_text("Docs: https://docs.gitea.com/ . Build: https://github.com/go-gitea/gitea ![](https://img.shields.io/x)")
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+    seen = {}
+
+    def search(q, add_cost=None, max_results=6, include_domains=None):
+        seen["domains"] = include_domains
+        return [{"title": "Docker", "url": "https://docs.gitea.com/installation/install-with-docker", "content": "..."},
+                {"title": "Config cheat sheet", "url": "https://docs.gitea.com/administration/config-cheat-sheet", "content": "INSTALL_LOCK"}]
+
+    monkeypatch.setattr(web, "search", search)
+    monkeypatch.setattr(web, "extract", lambda url, focus=None, add_cost=None: {"url": url, "text": "GITEA__security__INSTALL_LOCK=true skips the installer"})
+    c = Compiler(app=AppInput("gitea", tmp_path, {}, "", {}), checkpoint={"done": []}, workdir=tmp_path / "b", chain="local:m",
+                 log=lambda *a: None, save=lambda d: None, heartbeat=lambda: None, add_cost=lambda *a: None)
+    notes = c._setup_notes()
+    assert seen["domains"] == ["docs.gitea.com"] and "INSTALL_LOCK=true skips the installer" in notes and "config-cheat-sheet" in notes
+    monkeypatch.setattr(web, "search", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read once")))
+    assert c._setup_notes() == notes  # kept in the checkpoint
